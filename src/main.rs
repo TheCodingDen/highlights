@@ -1,27 +1,31 @@
+mod commands;
+pub mod util;
+
+pub mod db;
+use db::{Follow, Keyword};
+
 use automate::{
 	gateway::{Message, MessageCreateDispatch, ReadyDispatch},
 	http::{CreateMessage, Recipient},
 	listener, stateless, Configuration, Context, Error, ShardManager,
 	Snowflake,
 };
-use futures::stream::StreamExt;
-use once_cell::sync::{OnceCell, Lazy};
-use sqlx::{
-	query,
-	sqlite::{SqliteConnectOptions, SqlitePool},
-};
+use once_cell::sync::{Lazy, OnceCell};
+use r2d2::{Pool, PooledConnection};
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::OpenFlags;
 
-use std::{convert::TryInto, env, str::FromStr};
+use std::{convert::TryInto, env};
 
-mod commands;
-pub mod util;
+pub const MAX_KEYWORDS: u32 = 100;
 
-pub const MAX_KEYWORDS: i64 = 100;
+static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
 
-static POOL: OnceCell<SqlitePool> = OnceCell::new();
-
-pub fn pool() -> &'static SqlitePool {
-	POOL.get().expect("Database pool was not initialized")
+pub fn connection() -> PooledConnection<SqliteConnectionManager> {
+	POOL.get()
+		.expect("Database pool was not initialized")
+		.get()
+		.expect("Failed to obtain database connection")
 }
 
 static BOT_MENTION: OnceCell<String> = OnceCell::new();
@@ -44,10 +48,21 @@ fn bot_nick_mention() -> &'static str {
 static OWNER_ID: Lazy<Snowflake> = Lazy::new(|| {
 	const DEFAULT: u64 = 257711607096803328;
 
-	let id = env::var("DISCORD_OWNER_ID").and_then(|s| s.parse().ok()).unwrap_or(DEFAULT);
+	let id = env::var("DISCORD_OWNER_ID")
+		.ok()
+		.and_then(|s| s.parse().ok())
+		.unwrap_or(DEFAULT);
 
 	Snowflake(id)
 });
+
+static LOG_CHANNEL_ID: OnceCell<Snowflake> = OnceCell::new();
+
+fn log_channel_id() -> Snowflake {
+	*LOG_CHANNEL_ID
+		.get()
+		.expect("Log channel id was not initialized")
+}
 
 pub async fn question(
 	ctx: &mut Context,
@@ -75,18 +90,35 @@ pub async fn error<S: Into<String>>(
 	)
 	.await?;
 
-	return Ok(());
+	Ok(())
 }
 
 #[listener]
 async fn ready_listener(
-	_: &mut Context,
+	ctx: &mut Context,
 	data: &ReadyDispatch,
 ) -> Result<(), Error> {
 	let id = data.user.id.0;
 
 	BOT_MENTION.set(format!("<@{}>", id)).unwrap();
 	BOT_NICK_MENTION.set(format!("<@!{}>", id)).unwrap();
+
+	let log_channel_id = match ctx
+		.create_dm::<Message>(Recipient {
+			recipient_id: *OWNER_ID,
+		})
+		.await
+	{
+		Ok(channel) => channel.id,
+		Err(_) => {
+			ctx.channel(*OWNER_ID)
+				.await
+				.expect("Failed to get owner ID DM or text channel")
+				.id
+		}
+	};
+
+	LOG_CHANNEL_ID.set(log_channel_id).unwrap();
 
 	Ok(())
 }
@@ -112,6 +144,24 @@ async fn message_listener(
 		}
 		None => handle_keywords(ctx, message, content).await,
 	};
+
+	if let Err(e) = &result {
+		let msg = format!(
+			"Error in {} by {}: {}",
+			message.channel_id, message.author.id, e
+		);
+		let _ = ctx
+			.create_message(
+				log_channel_id(),
+				CreateMessage {
+					content: Some(msg),
+					..CreateMessage::default()
+				},
+			)
+			.await;
+	}
+
+	result
 }
 
 async fn handle_command(
@@ -153,29 +203,20 @@ async fn handle_keywords(
 	message: &Message,
 	content: &str,
 ) -> Result<(), Error> {
-	let guild_id: i64 = match message.guild_id {
-		Some(id) => id.0.try_into().unwrap(),
+	let guild_id = match message.guild_id {
+		Some(id) => id,
 		None => return Ok(()),
 	};
 
-	let channel_id: i64 = message.channel_id.0.try_into().unwrap();
+	let channel_id = message.channel_id;
 
-	let mut rows = query!(
-		"SELECT keywords.keyword, keywords.user_id
-		FROM keywords
-		INNER JOIN follows
-		ON keywords.user_id = follows.user_id
-		WHERE keywords.server_id = ? AND follows.channel_id = ?",
-		guild_id,
-		channel_id,
-	)
-	.fetch(pool());
+	let keywords = Keyword::get_relevant_keywords(guild_id, channel_id)
+		.await
+		.map_err(|err| Error {
+		msg: format!("Failed to get keywords: {}", err),
+	})?;
 
-	while let Some(result) = rows.next().await {
-		let result = result.map_err(|e| Error {
-			msg: format!("Failed to get keyword: {}", e),
-		})?;
-
+	for result in keywords {
 		let user_id: u64 = result.user_id.try_into().unwrap();
 
 		if content.contains(&result.keyword) {
@@ -208,28 +249,16 @@ async fn main() {
 		.register(stateless!(ready_listener));
 
 	let pool = {
-		let url = env::var("DATABASE_URL")
-			.unwrap_or(String::from("sqlite://./data.db"));
-		let db_options = SqliteConnectOptions::from_str(&url)
-			.expect("Failed to parse connection options")
-			.create_if_missing(true);
-
-		SqlitePool::connect_with(db_options)
-			.await
-			.expect("Failed to open database pool")
+		let manager = SqliteConnectionManager::file("data.db").with_flags(
+			OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_READ_WRITE,
+		);
+		Pool::new(manager).expect("Failed to open database pool")
 	};
 
-	query!("CREATE TABLE IF NOT EXISTS follows (user_id INTEGER NOT NULL, channel_id INTEGER NOT NULL, PRIMARY KEY (user_id, channel_id))")
-		.execute(&pool)
-		.await
-		.expect("Failed to create follows table");
-
-	query!("CREATE TABLE IF NOT EXISTS keywords (keyword TEXT NOT NULL, user_id INTEGER NOT NULL, server_id INTEGER NOT NULL, PRIMARY KEY (keyword, user_id, server_id))")
-		.execute(&pool)
-		.await
-		.expect("Failed to create keywords table");
-
 	POOL.set(pool).unwrap();
+
+	Follow::create_table();
+	Keyword::create_table();
 
 	ShardManager::with_config(config)
 		.await

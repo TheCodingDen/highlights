@@ -3,6 +3,7 @@ use automate::{
 	Snowflake,
 };
 use smallvec::SmallVec;
+use tokio::task::spawn_blocking;
 
 pub fn member_can_read_channel(
 	user_id: Snowflake,
@@ -37,7 +38,7 @@ pub fn member_can_read_channel(
 			let apply = matches!(
 				overwrite,
 				Overwrite { id, _type: OverwriteType::Role, .. }
-					if roles.iter().find(|role| role.id == *id).is_some()
+					if roles.iter().any(|role| role.id == *id)
 			) || matches!(
 				overwrite,
 				Overwrite { id, _type: OverwriteType::Member, .. }
@@ -53,4 +54,12 @@ pub fn member_can_read_channel(
 		});
 
 	permissions & Permission::ViewChannel as u32 != 0
+}
+
+pub async fn spawn_blocking_expect<F, R>(task: F) -> R
+where
+	F: FnOnce() -> R + Send + 'static,
+	R: Send + 'static,
+{
+	spawn_blocking(task).await.expect("Failed to join task")
 }

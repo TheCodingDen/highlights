@@ -1,16 +1,17 @@
 use automate::{
-	gateway::{Channel, ChannelType, Guild, Message},
+	gateway::{Channel, ChannelType, Message},
 	http::CreateMessage,
 	Context, Error, Snowflake,
 };
-use futures::stream::StreamExt;
 use once_cell::sync::Lazy;
-use sqlx::{query, FromRow};
 
-use std::{convert::TryInto, collections::HashMap};
+use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-	error, pool, question, util::member_can_read_channel, MAX_KEYWORDS,
+	db::{Follow, Keyword},
+	error, question,
+	util::member_can_read_channel,
+	MAX_KEYWORDS,
 };
 
 pub async fn add(
@@ -47,25 +48,18 @@ pub async fn add(
 
 	let guild_id: i64 = guild_id.0.try_into().unwrap();
 
+	let keyword = Keyword {
+		keyword: args.to_owned(),
+		user_id,
+		server_id: guild_id,
+	};
+
 	{
-		let mut rows =
-			sqlx::query("SELECT COUNT(*) FROM keywords WHERE user_id = ?")
-				.bind(user_id)
-				.fetch(pool());
-
-		let row = rows
-			.next()
+		let keyword_count = Keyword::user_keyword_count(user_id)
 			.await
-			.ok_or_else(|| Error {
-				msg: String::from("No keyword count"),
-			})?
-			.map_err(|e| Error {
-				msg: format!("Failed to get keywords: {}", e),
+			.map_err(|err| Error {
+				msg: format!("Failed to count user keywords: {}", err),
 			})?;
-
-		let (keyword_count,) = <(i64,)>::from_row(&row).map_err(|e| Error {
-			msg: format!("Failed to get i64 from row: {}", e),
-		})?;
 
 		if keyword_count >= MAX_KEYWORDS {
 			static MSG: Lazy<String, fn() -> String> = Lazy::new(|| {
@@ -77,31 +71,17 @@ pub async fn add(
 	}
 
 	{
-		let existing = sqlx::query!(
-			"SELECT keyword FROM keywords WHERE keyword = ? AND user_id = ? AND server_id = ?",
-			args,
-			user_id,
-			guild_id
-		)
-		.fetch_optional(pool())
-		.await
-		.map_err(|e| Error { msg: format!("Failed to query existing keyword: {}", e) })?;
+		let exists = keyword.clone().exists().await.map_err(|err| Error {
+			msg: format!("Failed to check for keyword existence: {}", err),
+		})?;
 
-		if let Some(_) = existing {
+		if exists {
 			return error(ctx, message, "You already added that keyword!")
 				.await;
 		}
 	}
 
-	sqlx::query!(
-		"INSERT INTO keywords (keyword, user_id, server_id) VALUES (?, ?, ?)",
-		args,
-		user_id,
-		guild_id,
-	)
-	.execute(pool())
-	.await
-	.map_err(|e| Error {
+	keyword.insert().await.map_err(|e| Error {
 		msg: format!("Failed to insert keyword: {}", e),
 	})?;
 
@@ -132,12 +112,16 @@ pub async fn follow(
 			return channels.get(&Snowflake(id));
 		}
 
-		let mut iter = channels.iter().map(|(_, channel)| channel).filter(|channel| {
-				channel.name.as_ref().unwrap().eq_ignore_ascii_case(arg)
-		});
+		let mut iter =
+			channels
+				.iter()
+				.map(|(_, channel)| channel)
+				.filter(|channel| {
+					channel.name.as_ref().unwrap().eq_ignore_ascii_case(arg)
+				});
 
 		if let Some(first) = iter.next() {
-			if let None = iter.next() {
+			if iter.next().is_none() {
 				return Some(first);
 			}
 		}
@@ -193,31 +177,26 @@ pub async fn follow(
 					let user_id: i64 = user_id.0.try_into().unwrap();
 					let channel_id: i64 = channel.id.0.try_into().unwrap();
 
-					let existing = query!(
-						"SELECT channel_id FROM follows WHERE user_id = ? AND channel_id = ?",
+					let follow = Follow {
 						user_id,
 						channel_id,
-					)
-					.fetch_optional(pool())
-					.await
-					.map_err(|e| Error {
-						msg: format!("Failed to query existing follow: {}", e),
-					})?;
+					};
 
-					if let Some(_) = existing {
+					let exists = {
+						follow.clone().exists().await.map_err(|err| Error {
+							msg: format!(
+								"Failed to check for follow existence: {}",
+								err
+							),
+						})?
+					};
+
+					if exists {
 						already_followed.push(format!("<#{}>", channel_id));
 					} else {
 						followed.push(format!("<#{}>", channel.id));
-
-						query!(
-							"INSERT INTO follows (user_id, channel_id) VALUES (?, ?)",
-							user_id,
-							channel_id,
-						)
-						.execute(pool())
-						.await
-						.map_err(|e| Error {
-							msg: format!("Failed to insert keyword: {}", e),
+						follow.insert().await.map_err(|e| Error {
+							msg: format!("Failed to insert follow: {}", e),
 						})?;
 					}
 				}
