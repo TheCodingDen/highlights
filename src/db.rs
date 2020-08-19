@@ -65,7 +65,7 @@ impl Keyword {
 
 			conn.query_row(
 				"SELECT COUNT(*) FROM keywords
-			WHERE keyword = ? AND user_id = ? AND server_id = ?",
+				WHERE keyword = ? AND user_id = ? AND server_id = ?",
 				params![&self.keyword, self.user_id, self.server_id],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			)
@@ -92,7 +92,7 @@ impl Keyword {
 
 			conn.execute(
 				"INSERT INTO keywords (keyword, user_id, server_id)
-			VALUES (?, ?, ?)",
+				VALUES (?, ?, ?)",
 				params![&self.keyword, self.user_id, self.server_id],
 			)?;
 
@@ -128,7 +128,7 @@ impl Follow {
 
 			conn.query_row(
 				"SELECT COUNT(*) FROM follows
-			WHERE user_id = ? AND channel_id = ?",
+				WHERE user_id = ? AND channel_id = ?",
 				params![self.user_id, self.channel_id],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			)
@@ -142,7 +142,7 @@ impl Follow {
 
 			conn.execute(
 				"INSERT INTO follows (user_id, channel_id)
-			VALUES (?, ?)",
+				VALUES (?, ?)",
 				params![self.user_id, self.channel_id],
 			)?;
 
