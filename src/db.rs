@@ -1,9 +1,33 @@
-use crate::connection;
-
-use rusqlite::{params, Error};
+use once_cell::sync::OnceCell;
+use r2d2::{Pool, PooledConnection};
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, Error, OpenFlags};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 
 use std::convert::TryInto;
+
+pub fn init() {
+	let pool = {
+		let manager = SqliteConnectionManager::file("data.db").with_flags(
+			OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_READ_WRITE,
+		);
+		Pool::new(manager).expect("Failed to open database pool")
+	};
+
+	POOL.set(pool).unwrap();
+
+	Follow::create_table();
+	Keyword::create_table();
+}
+
+static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
+
+pub fn connection() -> PooledConnection<SqliteConnectionManager> {
+	POOL.get()
+		.expect("Database pool was not initialized")
+		.get()
+		.expect("Failed to obtain database connection")
+}
 
 macro_rules! await_db {
 	(|$conn:ident| $body:block) => {

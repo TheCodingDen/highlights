@@ -1,15 +1,15 @@
 mod commands;
 
-pub mod util;
-use util::{get_channel_for_owner_id, report_error};
-
 pub mod db;
-use db::{Follow, Keyword};
+use db::Keyword;
 
-use once_cell::sync::{Lazy, OnceCell};
-use r2d2::{Pool, PooledConnection};
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Error as RusqliteError, OpenFlags};
+pub mod global;
+use global::{log_channel_id, bot_mention, bot_nick_mention, init_mentions, init_log_channel_id};
+
+pub mod util;
+use util::{error, question, report_error};
+
+use rusqlite::Error as RusqliteError;
 use serenity::{model::prelude::*, prelude::*};
 
 use std::{convert::TryInto, env, error::Error as StdError, fmt::Display};
@@ -34,71 +34,6 @@ impl Display for Error {
 	}
 }
 
-pub const MAX_KEYWORDS: u32 = 100;
-
-static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
-
-pub fn connection() -> PooledConnection<SqliteConnectionManager> {
-	POOL.get()
-		.expect("Database pool was not initialized")
-		.get()
-		.expect("Failed to obtain database connection")
-}
-
-static BOT_MENTION: OnceCell<String> = OnceCell::new();
-static BOT_NICK_MENTION: OnceCell<String> = OnceCell::new();
-
-fn bot_mention() -> &'static str {
-	BOT_MENTION
-		.get()
-		.expect("Bot mention was not initialized")
-		.as_str()
-}
-
-fn bot_nick_mention() -> &'static str {
-	BOT_NICK_MENTION
-		.get()
-		.expect("Bot nick mention was not initialized")
-		.as_str()
-}
-
-pub static OWNER_ID: Lazy<u64> = Lazy::new(|| {
-	const DEFAULT: u64 = 257711607096803328;
-
-	env::var("DISCORD_OWNER_ID")
-		.ok()
-		.and_then(|s| s.parse().ok())
-		.unwrap_or(DEFAULT)
-});
-
-static LOG_CHANNEL_ID: OnceCell<ChannelId> = OnceCell::new();
-
-fn log_channel_id() -> ChannelId {
-	*LOG_CHANNEL_ID
-		.get()
-		.expect("Log channel id was not initialized")
-}
-
-pub async fn question(ctx: &Context, message: &Message) -> Result<(), Error> {
-	message.react(ctx, '❓').await?;
-
-	Ok(())
-}
-
-pub async fn error<S: Display>(
-	ctx: &Context,
-	message: &Message,
-	response: S,
-) -> Result<(), Error> {
-	let _ = message.react(ctx, '❌').await;
-
-	message
-		.channel_id
-		.send_message(ctx, |m| m.content(response))
-		.await?;
-
-	Ok(())
-}
 
 struct Handler;
 
@@ -127,14 +62,9 @@ impl EventHandler for Handler {
 	}
 
 	async fn ready(&self, ctx: Context, ready: Ready) {
-		let id = ready.user.id;
+		init_mentions(ready.user.id).await;
 
-		BOT_MENTION.set(format!("<@{}>", id)).unwrap();
-		BOT_NICK_MENTION.set(format!("<@!{}>", id)).unwrap();
-
-		LOG_CHANNEL_ID
-			.set(get_channel_for_owner_id(&ctx).await)
-			.unwrap();
+		init_log_channel_id(&ctx).await;
 	}
 }
 
@@ -230,17 +160,7 @@ async fn main() {
 
 	let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
 
-	let pool = {
-		let manager = SqliteConnectionManager::file("data.db").with_flags(
-			OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_READ_WRITE,
-		);
-		Pool::new(manager).expect("Failed to open database pool")
-	};
-
-	POOL.set(pool).unwrap();
-
-	Follow::create_table();
-	Keyword::create_table();
+	db::init();
 
 	let mut client = Client::new(token)
 		.event_handler(Handler)

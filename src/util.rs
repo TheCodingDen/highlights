@@ -1,38 +1,13 @@
 use serenity::{
 	client::Context,
+	model::channel::Message,
 	model::id::{ChannelId, UserId},
 };
 
-use crate::{log_channel_id, OWNER_ID};
+use crate::{log_channel_id, Error};
 use std::fmt::Display;
 
-pub async fn get_channel_for_owner_id(ctx: &Context) -> ChannelId {
-	if let Some(u) = ctx.cache.user(*OWNER_ID).await {
-		return u
-			.create_dm_channel(ctx)
-			.await
-			.expect("Failed to open DM channel")
-			.id;
-	}
 
-	if let Some(c) = ctx.cache.channel(*OWNER_ID).await {
-		return c.id();
-	}
-
-	if let Ok(u) = ctx.http.get_user(*OWNER_ID).await {
-		return u
-			.create_dm_channel(ctx)
-			.await
-			.expect("Failed to open DM channel")
-			.id;
-	}
-
-	ctx.http
-		.get_channel(*OWNER_ID)
-		.await
-		.expect("Failed to find channel or user with OWNER_ID")
-		.id()
-}
 
 pub async fn report_error<E: Display>(
 	ctx: &Context,
@@ -50,4 +25,25 @@ pub async fn report_error<E: Display>(
 		.await;
 
 	log::error!("Error in {} by {}: {}", channel_id, user_id, error);
+}
+
+pub async fn question(ctx: &Context, message: &Message) -> Result<(), Error> {
+	message.react(ctx, '❓').await?;
+
+	Ok(())
+}
+
+pub async fn error<S: Display>(
+	ctx: &Context,
+	message: &Message,
+	response: S,
+) -> Result<(), Error> {
+	let _ = message.react(ctx, '❌').await;
+
+	message
+		.channel_id
+		.send_message(ctx, |m| m.content(response))
+		.await?;
+
+	Ok(())
 }

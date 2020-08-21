@@ -11,7 +11,8 @@ use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
 	db::{Follow, Keyword},
-	error, question, Error, MAX_KEYWORDS,
+	util::{error, question},
+	Error, global::MAX_KEYWORDS,
 };
 
 pub async fn add(
