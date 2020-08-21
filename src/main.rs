@@ -10,12 +10,24 @@ use global::{
 };
 
 pub mod util;
-use util::{error, question, report_error};
+use util::{error, notify_keyword, question, report_error};
 
 use rusqlite::Error as RusqliteError;
 use serenity::{model::prelude::*, prelude::*};
+use tokio::task;
 
 use std::{convert::TryInto, env, error::Error as StdError, fmt::Display};
+
+#[derive(Debug)]
+struct SimpleError(String);
+
+impl Display for SimpleError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		Display::fmt(&self.0, f)
+	}
+}
+
+impl StdError for SimpleError {}
 
 pub struct Error(Box<dyn StdError + Send + Sync + 'static>);
 
@@ -28,6 +40,18 @@ impl From<SerenityError> for Error {
 impl From<RusqliteError> for Error {
 	fn from(e: RusqliteError) -> Self {
 		Self(Box::new(e))
+	}
+}
+
+impl From<String> for Error {
+	fn from(e: String) -> Self {
+		Self(Box::new(SimpleError(e)))
+	}
+}
+
+impl From<&'_ str> for Error {
+	fn from(e: &str) -> Self {
+		Self(Box::new(SimpleError(e.to_owned())))
 	}
 }
 
@@ -64,7 +88,7 @@ impl EventHandler for Handler {
 	}
 
 	async fn ready(&self, ctx: Context, ready: Ready) {
-		init_mentions(ready.user.id).await;
+		init_mentions(ready.user.id);
 
 		init_log_channel_id(&ctx).await;
 	}
@@ -122,12 +146,14 @@ async fn handle_keywords(
 		Keyword::get_relevant_keywords(guild_id, channel_id, message.author.id)
 			.await?;
 
-	for result in keywords {
-		if !content.contains(&result.keyword) {
-			continue;
-		}
+	for keyword in keywords {
+		let start = match content.to_lowercase().find(&keyword.keyword) {
+			Some(i) => i,
+			None => continue,
+		};
+		let end = start + keyword.keyword.len();
 
-		let user_id = UserId(result.user_id.try_into().unwrap());
+		let user_id = UserId(keyword.user_id.try_into().unwrap());
 		let channel = match ctx.cache.guild_channel(channel_id).await {
 			Some(c) => c,
 			None => {
@@ -136,23 +162,24 @@ async fn handle_keywords(
 			}
 		};
 
-		if content.contains(&result.keyword)
-			&& channel
-				.permissions_for_user(ctx, user_id)
-				.await?
-				.read_messages()
+		if channel
+			.permissions_for_user(ctx, user_id)
+			.await?
+			.read_messages()
 		{
-			user_id
-				.create_dm_channel(ctx)
-				.await?
-				.say(
-					ctx,
-					format!(
-						"Your keyword {} was seen in <#{}>: {}",
-						result.keyword, channel_id, content
-					),
-				)
-				.await?;
+			let formatted_content = format!(
+				"{}__**{}**__{}",
+				&content[..start],
+				&content[start..end],
+				&content[end..]
+			);
+			let ctx = ctx.clone();
+			task::spawn(notify_keyword(
+				ctx,
+				formatted_content,
+				keyword,
+				message.clone(),
+			));
 		}
 	}
 

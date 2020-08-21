@@ -5,7 +5,7 @@ authors = ["Benjamin Scherer <ThatsNoMoon.Alderaan@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-tokio = { version = "0.2", features = ["macros", "blocking"] }
+tokio = { version = "0.2", features = ["macros", "blocking", "time"] }
 rusqlite = { version = "0.23", features = ["bundled"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.16"
@@ -21,9 +21,9 @@ features = [
     "builder",
     "cache",
     "client",
+    "collector",
     "gateway",
     "http",
     "model",
-    "utils",
     "rustls_backend",
 ]

@@ -4,9 +4,11 @@ use serenity::{
 	model::id::{ChannelId, UserId},
 };
 
-use std::env;
+use std::{env, time::Duration};
 
 pub const MAX_KEYWORDS: u32 = 100;
+
+pub const PATIENCE_DURATION: Duration = Duration::from_secs(60 * 2);
 
 static BOT_MENTION: OnceCell<String> = OnceCell::new();
 static BOT_NICK_MENTION: OnceCell<String> = OnceCell::new();
@@ -25,7 +27,7 @@ pub fn bot_nick_mention() -> &'static str {
 		.as_str()
 }
 
-pub async fn init_mentions(bot_id: UserId) {
+pub fn init_mentions(bot_id: UserId) {
 	BOT_MENTION.set(format!("<@{}>", bot_id)).unwrap();
 	BOT_NICK_MENTION.set(format!("<@!{}>", bot_id)).unwrap();
 }
@@ -44,7 +46,7 @@ pub async fn init_log_channel_id(ctx: &Context) {
 		.unwrap();
 }
 
-pub async fn get_channel_for_owner_id(ctx: &Context) -> ChannelId {
+async fn get_channel_for_owner_id(ctx: &Context) -> ChannelId {
 	let owner_id = {
 		const DEFAULT: u64 = 257711607096803328;
 

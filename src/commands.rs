@@ -59,7 +59,7 @@ pub async fn add(
 	}
 
 	let keyword = Keyword {
-		keyword: args.to_owned(),
+		keyword: args.to_lowercase(),
 		user_id: message.author.id.0.try_into().unwrap(),
 		server_id: guild_id.0.try_into().unwrap(),
 	};
