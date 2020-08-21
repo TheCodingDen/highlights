@@ -1,65 +1,53 @@
-use automate::{
-	gateway::{Channel, Guild, Overwrite, OverwriteType, Permission},
-	Snowflake,
+use serenity::{
+	client::Context,
+	model::id::{ChannelId, UserId},
 };
-use smallvec::SmallVec;
-use tokio::task::spawn_blocking;
 
-pub fn member_can_read_channel(
-	user_id: Snowflake,
-	member_roles: &[Snowflake],
-	channel: &Channel,
-	guild: &Guild,
-) -> bool {
-	if guild.owner_id == user_id {
-		return true;
+use crate::{log_channel_id, OWNER_ID};
+use std::fmt::Display;
+
+pub async fn get_channel_for_owner_id(ctx: &Context) -> ChannelId {
+	if let Some(u) = ctx.cache.user(*OWNER_ID).await {
+		return u
+			.create_dm_channel(ctx)
+			.await
+			.expect("Failed to open DM channel")
+			.id;
 	}
 
-	let roles = guild
-		.roles
-		.iter()
-		.filter(|role| member_roles.contains(&role.id))
-		.collect::<SmallVec<[_; 8]>>();
-
-	let permissions = roles
-		.iter()
-		.fold(0, |perms, role| (perms | role.permissions));
-
-	if permissions & Permission::Administrator as u32 != 0 {
-		return true;
+	if let Some(c) = ctx.cache.channel(*OWNER_ID).await {
+		return c.id();
 	}
 
-	let permissions = channel
-		.permission_overwrites
-		.as_ref()
-		.into_iter()
-		.flatten()
-		.fold(permissions, |mut perms, overwrite| {
-			let apply = matches!(
-				overwrite,
-				Overwrite { id, _type: OverwriteType::Role, .. }
-					if roles.iter().any(|role| role.id == *id)
-			) || matches!(
-				overwrite,
-				Overwrite { id, _type: OverwriteType::Member, .. }
-					if user_id == *id
-			);
+	if let Ok(u) = ctx.http.get_user(*OWNER_ID).await {
+		return u
+			.create_dm_channel(ctx)
+			.await
+			.expect("Failed to open DM channel")
+			.id;
+	}
 
-			if apply {
-				perms &= !overwrite.deny;
-				perms |= overwrite.allow;
-			}
-
-			perms
-		});
-
-	permissions & Permission::ViewChannel as u32 != 0
+	ctx.http
+		.get_channel(*OWNER_ID)
+		.await
+		.expect("Failed to find channel or user with OWNER_ID")
+		.id()
 }
 
-pub async fn spawn_blocking_expect<F, R>(task: F) -> R
-where
-	F: FnOnce() -> R + Send + 'static,
-	R: Send + 'static,
-{
-	spawn_blocking(task).await.expect("Failed to join task")
+pub async fn report_error<E: Display>(
+	ctx: &Context,
+	channel_id: ChannelId,
+	user_id: UserId,
+	error: E,
+) {
+	let _ = log_channel_id()
+		.send_message(&ctx, |m| {
+			m.content(format!(
+				"Error in {} by {}: {}",
+				channel_id, user_id, error
+			))
+		})
+		.await;
+
+	log::error!("Error in {} by {}: {}", channel_id, user_id, error);
 }

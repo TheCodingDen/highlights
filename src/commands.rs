@@ -1,21 +1,21 @@
-use automate::{
-	gateway::{Channel, ChannelType, Message},
-	http::CreateMessage,
-	Context, Error, Snowflake,
-};
 use once_cell::sync::Lazy;
+use serenity::{
+	client::Context,
+	model::{
+		channel::{ChannelType, GuildChannel, Message},
+		id::ChannelId,
+	},
+};
 
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
 	db::{Follow, Keyword},
-	error, question,
-	util::member_can_read_channel,
-	MAX_KEYWORDS,
+	error, question, Error, MAX_KEYWORDS,
 };
 
 pub async fn add(
-	ctx: &mut Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
@@ -44,22 +44,15 @@ pub async fn add(
 		.await;
 	}
 
-	let user_id: i64 = message.author.id.0.try_into().unwrap();
-
-	let guild_id: i64 = guild_id.0.try_into().unwrap();
-
 	let keyword = Keyword {
 		keyword: args.to_owned(),
-		user_id,
-		server_id: guild_id,
+		user_id: message.author.id.0.try_into().unwrap(),
+		server_id: guild_id.0.try_into().unwrap(),
 	};
 
 	{
-		let keyword_count = Keyword::user_keyword_count(user_id)
-			.await
-			.map_err(|err| Error {
-				msg: format!("Failed to count user keywords: {}", err),
-			})?;
+		let keyword_count =
+			Keyword::user_keyword_count(message.author.id).await?;
 
 		if keyword_count >= MAX_KEYWORDS {
 			static MSG: Lazy<String, fn() -> String> = Lazy::new(|| {
@@ -71,9 +64,7 @@ pub async fn add(
 	}
 
 	{
-		let exists = keyword.clone().exists().await.map_err(|err| Error {
-			msg: format!("Failed to check for keyword existence: {}", err),
-		})?;
+		let exists = keyword.clone().exists().await?;
 
 		if exists {
 			return error(ctx, message, "You already added that keyword!")
@@ -81,27 +72,24 @@ pub async fn add(
 		}
 	}
 
-	keyword.insert().await.map_err(|e| Error {
-		msg: format!("Failed to insert keyword: {}", e),
-	})?;
+	keyword.insert().await?;
 
-	ctx.create_reaction(message.channel_id, message.id, &"✅")
-		.await?;
+	message.react(ctx, '✅').await?;
 
 	Ok(())
 }
 
 pub async fn follow(
-	ctx: &mut Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
 	fn get_channel_from_arg<'c>(
-		channels: &'c HashMap<Snowflake, Channel>,
+		channels: &HashMap<&ChannelId, &'c GuildChannel>,
 		arg: &str,
-	) -> Option<&'c Channel> {
+	) -> Option<&'c GuildChannel> {
 		if let Ok(id) = arg.parse::<u64>() {
-			return channels.get(&Snowflake(id));
+			return channels.get(&ChannelId(id)).copied();
 		}
 
 		if let Some(id) = arg
@@ -109,16 +97,13 @@ pub async fn follow(
 			.and_then(|arg| arg.strip_suffix(">"))
 			.and_then(|arg| arg.parse::<u64>().ok())
 		{
-			return channels.get(&Snowflake(id));
+			return channels.get(&ChannelId(id)).copied();
 		}
 
-		let mut iter =
-			channels
-				.iter()
-				.map(|(_, channel)| channel)
-				.filter(|channel| {
-					channel.name.as_ref().unwrap().eq_ignore_ascii_case(arg)
-				});
+		let mut iter = channels
+			.iter()
+			.map(|(_, channel)| channel)
+			.filter(|channel| channel.name.as_str().eq_ignore_ascii_case(arg));
 
 		if let Some(first) = iter.next() {
 			if iter.next().is_none() {
@@ -147,15 +132,13 @@ pub async fn follow(
 
 	let user_id = message.author.id;
 	let member = message.member.as_ref().unwrap();
-	let user_roles = member.roles.as_slice();
+	let _user_roles = member.roles.as_slice();
 
-	let guild = ctx.guild(guild_id).await.unwrap();
-	let channels = ctx
-		.channels(guild_id)
-		.await?
-		.into_iter()
-		.filter(|channel| matches!(channel._type, ChannelType::GuildText))
-		.map(|channel| (channel.id, channel))
+	let guild = ctx.cache.guild(guild_id).await.unwrap();
+	let channels = guild
+		.channels
+		.iter()
+		.filter(|(_, channel)| matches!(channel.kind, ChannelType::Text))
 		.collect::<HashMap<_, _>>();
 
 	let mut followed = vec![];
@@ -169,9 +152,11 @@ pub async fn follow(
 		match channel {
 			None => not_found.push(arg),
 			Some(channel) => {
-				if !member_can_read_channel(
-					user_id, user_roles, &channel, &guild,
-				) {
+				if !channel
+					.permissions_for_user(ctx, user_id)
+					.await?
+					.read_messages()
+				{
 					forbidden.push(arg);
 				} else {
 					let user_id: i64 = user_id.0.try_into().unwrap();
@@ -182,22 +167,11 @@ pub async fn follow(
 						channel_id,
 					};
 
-					let exists = {
-						follow.clone().exists().await.map_err(|err| Error {
-							msg: format!(
-								"Failed to check for follow existence: {}",
-								err
-							),
-						})?
-					};
-
-					if exists {
+					if follow.clone().exists().await? {
 						already_followed.push(format!("<#{}>", channel_id));
 					} else {
 						followed.push(format!("<#{}>", channel.id));
-						follow.insert().await.map_err(|e| Error {
-							msg: format!("Failed to insert follow: {}", e),
-						})?;
+						follow.insert().await?;
 					}
 				}
 			}
@@ -210,8 +184,7 @@ pub async fn follow(
 		msg.push_str("Followed channels: ");
 		msg.push_str(&followed.join(", "));
 
-		ctx.create_reaction(message.channel_id, message.id, &"✅")
-			.await?;
+		message.react(ctx, '✅').await?;
 	}
 
 	if !already_followed.is_empty() {
@@ -221,8 +194,7 @@ pub async fn follow(
 		msg.push_str("Channels already followed: ");
 		msg.push_str(&already_followed.join(", "));
 
-		ctx.create_reaction(message.channel_id, message.id, &"❌")
-			.await?;
+		message.react(ctx, '❌').await?;
 	}
 
 	if !not_found.is_empty() {
@@ -232,8 +204,7 @@ pub async fn follow(
 		msg.push_str("Couldn't find channels: ");
 		msg.push_str(&not_found.join(", "));
 
-		ctx.create_reaction(message.channel_id, message.id, &"❓")
-			.await?;
+		message.react(ctx, '❓').await?;
 	}
 
 	if !forbidden.is_empty() {
@@ -243,18 +214,13 @@ pub async fn follow(
 		msg.push_str("Unable to follow channels: ");
 		msg.push_str(&forbidden.join(", "));
 
-		ctx.create_reaction(message.channel_id, message.id, &"❌")
-			.await?;
+		message.react(ctx, '❌').await?;
 	}
 
-	ctx.create_message(
-		message.channel_id,
-		CreateMessage {
-			content: Some(msg),
-			..Default::default()
-		},
-	)
-	.await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| m.content(msg))
+		.await?;
 
 	Ok(())
 }

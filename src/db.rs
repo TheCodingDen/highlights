@@ -1,9 +1,24 @@
-use crate::{connection, util::spawn_blocking_expect};
+use crate::connection;
 
-use automate::Snowflake;
 use rusqlite::{params, Error};
+use serenity::model::id::{ChannelId, GuildId, UserId};
 
 use std::convert::TryInto;
+
+macro_rules! await_db {
+	(|$conn:ident| $body:block) => {
+		await_db!("database": |$conn| $body)
+	};
+	($name:literal: |$conn:ident| $body:block) => {
+		::tokio::task::spawn_blocking(move || {
+			let $conn = connection();
+
+			$body
+		})
+		.await
+		.expect(concat!("Failed to join ", $name, " task"))
+	};
+}
 
 #[derive(Debug, Clone)]
 pub struct Keyword {
@@ -29,14 +44,13 @@ impl Keyword {
 	}
 
 	pub async fn get_relevant_keywords(
-		guild_id: Snowflake,
-		channel_id: Snowflake,
+		guild_id: GuildId,
+		channel_id: ChannelId,
 	) -> Result<Vec<Keyword>, Error> {
-		spawn_blocking_expect(move || {
+		await_db!("get keywords": |conn| {
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
 			let channel_id: i64 = channel_id.0.try_into().unwrap();
 
-			let conn = connection();
 			let mut stmt = conn.prepare(
 				"SELECT keywords.keyword, keywords.user_id, keywords.server_id
 				FROM keywords
@@ -56,13 +70,10 @@ impl Keyword {
 
 			keywords.collect()
 		})
-		.await
 	}
 
 	pub async fn exists(self) -> Result<bool, Error> {
-		spawn_blocking_expect(move || {
-			let conn = connection();
-
+		await_db!("keyword exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM keywords
 				WHERE keyword = ? AND user_id = ? AND server_id = ?",
@@ -70,26 +81,21 @@ impl Keyword {
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			)
 		})
-		.await
 	}
 
-	pub async fn user_keyword_count(user_id: i64) -> Result<u32, Error> {
-		spawn_blocking_expect(move || {
-			let conn = connection();
-
+	pub async fn user_keyword_count(user_id: UserId) -> Result<u32, Error> {
+		await_db!("count user keywords": |conn| {
+			let user_id: i64 = user_id.0.try_into().unwrap();
 			conn.query_row(
 				"SELECT COUNT(*) FROM keywords WHERE user_id = ?",
 				params![user_id],
 				|row| row.get::<_, u32>(0),
 			)
 		})
-		.await
 	}
 
 	pub async fn insert(self) -> Result<(), Error> {
-		spawn_blocking_expect(move || {
-			let conn = connection();
-
+		await_db!("insert keyword": |conn| {
 			conn.execute(
 				"INSERT INTO keywords (keyword, user_id, server_id)
 				VALUES (?, ?, ?)",
@@ -98,7 +104,17 @@ impl Keyword {
 
 			Ok(())
 		})
-		.await
+	}
+
+	pub async fn delete(self) -> Result<(), Error> {
+		await_db!("delete keyword": |conn| {
+			conn.execute(
+				"DELETE FROM keywords WHERE keyword = ? AND user_id = ? AND server_id = ?",
+				params![&self.keyword, self.user_id, self.server_id],
+			)?;
+
+			Ok(())
+		})
 	}
 }
 
@@ -123,9 +139,7 @@ impl Follow {
 	}
 
 	pub async fn exists(self) -> Result<bool, Error> {
-		spawn_blocking_expect(move || {
-			let conn = connection();
-
+		await_db!("follow exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM follows
 				WHERE user_id = ? AND channel_id = ?",
@@ -133,13 +147,10 @@ impl Follow {
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			)
 		})
-		.await
 	}
 
 	pub async fn insert(self) -> Result<(), Error> {
-		spawn_blocking_expect(move || {
-			let conn = connection();
-
+		await_db!("insert follow": |conn| {
 			conn.execute(
 				"INSERT INTO follows (user_id, channel_id)
 				VALUES (?, ?)",
@@ -148,6 +159,17 @@ impl Follow {
 
 			Ok(())
 		})
-		.await
+	}
+
+	pub async fn delete(self) -> Result<(), Error> {
+		await_db!("delete follow": |conn| {
+			conn.execute(
+				"DELETE FROM follows
+				WHERE user_id = ? AND channel_id = ?",
+				params![self.user_id, self.channel_id],
+			)?;
+
+			Ok(())
+		})
 	}
 }

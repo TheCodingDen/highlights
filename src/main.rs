@@ -1,21 +1,38 @@
 mod commands;
+
 pub mod util;
+use util::{get_channel_for_owner_id, report_error};
 
 pub mod db;
 use db::{Follow, Keyword};
 
-use automate::{
-	gateway::{Message, MessageCreateDispatch, ReadyDispatch},
-	http::{CreateMessage, Recipient},
-	listener, stateless, Configuration, Context, Error, ShardManager,
-	Snowflake,
-};
 use once_cell::sync::{Lazy, OnceCell};
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::OpenFlags;
+use rusqlite::{Error as RusqliteError, OpenFlags};
+use serenity::{model::prelude::*, prelude::*};
 
-use std::{convert::TryInto, env};
+use std::{convert::TryInto, env, error::Error as StdError, fmt::Display};
+
+pub struct Error(Box<dyn StdError + Send + Sync + 'static>);
+
+impl From<SerenityError> for Error {
+	fn from(e: SerenityError) -> Self {
+		Self(Box::new(e))
+	}
+}
+
+impl From<RusqliteError> for Error {
+	fn from(e: RusqliteError) -> Self {
+		Self(Box::new(e))
+	}
+}
+
+impl Display for Error {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		Display::fmt(&self.0, f)
+	}
+}
 
 pub const MAX_KEYWORDS: u32 = 100;
 
@@ -45,127 +62,84 @@ fn bot_nick_mention() -> &'static str {
 		.as_str()
 }
 
-static OWNER_ID: Lazy<Snowflake> = Lazy::new(|| {
+pub static OWNER_ID: Lazy<u64> = Lazy::new(|| {
 	const DEFAULT: u64 = 257711607096803328;
 
-	let id = env::var("DISCORD_OWNER_ID")
+	env::var("DISCORD_OWNER_ID")
 		.ok()
 		.and_then(|s| s.parse().ok())
-		.unwrap_or(DEFAULT);
-
-	Snowflake(id)
+		.unwrap_or(DEFAULT)
 });
 
-static LOG_CHANNEL_ID: OnceCell<Snowflake> = OnceCell::new();
+static LOG_CHANNEL_ID: OnceCell<ChannelId> = OnceCell::new();
 
-fn log_channel_id() -> Snowflake {
+fn log_channel_id() -> ChannelId {
 	*LOG_CHANNEL_ID
 		.get()
 		.expect("Log channel id was not initialized")
 }
 
-pub async fn question(
-	ctx: &mut Context,
-	message: &Message,
-) -> Result<(), Error> {
-	ctx.create_reaction(message.channel_id, message.id, &"❓")
-		.await
+pub async fn question(ctx: &Context, message: &Message) -> Result<(), Error> {
+	message.react(ctx, '❓').await?;
+
+	Ok(())
 }
 
-pub async fn error<S: Into<String>>(
-	ctx: &mut Context,
+pub async fn error<S: Display>(
+	ctx: &Context,
 	message: &Message,
 	response: S,
 ) -> Result<(), Error> {
-	let _ = ctx
-		.create_reaction(message.channel_id, message.id, &"❌")
-		.await;
+	let _ = message.react(ctx, '❌').await;
 
-	ctx.create_message(
-		message.channel_id,
-		CreateMessage {
-			content: Some(response.into()),
-			..Default::default()
-		},
-	)
-	.await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| m.content(response))
+		.await?;
 
 	Ok(())
 }
 
-#[listener]
-async fn ready_listener(
-	ctx: &mut Context,
-	data: &ReadyDispatch,
-) -> Result<(), Error> {
-	let id = data.user.id.0;
+struct Handler;
 
-	BOT_MENTION.set(format!("<@{}>", id)).unwrap();
-	BOT_NICK_MENTION.set(format!("<@!{}>", id)).unwrap();
-
-	let log_channel_id = match ctx
-		.create_dm::<Message>(Recipient {
-			recipient_id: *OWNER_ID,
-		})
-		.await
-	{
-		Ok(channel) => channel.id,
-		Err(_) => {
-			ctx.channel(*OWNER_ID)
-				.await
-				.expect("Failed to get owner ID DM or text channel")
-				.id
+#[serenity::async_trait]
+impl EventHandler for Handler {
+	async fn message(&self, ctx: Context, message: Message) {
+		if message.author.bot {
+			return;
 		}
-	};
 
-	LOG_CHANNEL_ID.set(log_channel_id).unwrap();
+		let content = message.content.as_str();
 
-	Ok(())
-}
+		let result = match content
+			.strip_prefix(bot_mention())
+			.or_else(|| content.strip_prefix(bot_nick_mention()))
+		{
+			Some(command_content) => {
+				handle_command(&ctx, &message, command_content.trim()).await
+			}
+			None => handle_keywords(&ctx, &message, content).await,
+		};
 
-#[listener]
-async fn message_listener(
-	ctx: &mut Context,
-	data: &MessageCreateDispatch,
-) -> Result<(), Error> {
-	let message = &data.0;
-	if let Some(true) = message.author.bot {
-		return Ok(());
+		if let Err(e) = &result {
+			report_error(&ctx, message.channel_id, message.author.id, e).await;
+		}
 	}
 
-	let content = message.content.as_str();
+	async fn ready(&self, ctx: Context, ready: Ready) {
+		let id = ready.user.id;
 
-	let result = match content
-		.strip_prefix(bot_mention())
-		.or_else(|| content.strip_prefix(bot_nick_mention()))
-	{
-		Some(command_content) => {
-			handle_command(ctx, message, command_content.trim()).await
-		}
-		None => handle_keywords(ctx, message, content).await,
-	};
+		BOT_MENTION.set(format!("<@{}>", id)).unwrap();
+		BOT_NICK_MENTION.set(format!("<@!{}>", id)).unwrap();
 
-	if let Err(e) = &result {
-		let msg = format!(
-			"Error in {} by {}: {}",
-			message.channel_id, message.author.id, e
-		);
-		let _ = ctx
-			.create_message(
-				log_channel_id(),
-				CreateMessage {
-					content: Some(msg),
-					..CreateMessage::default()
-				},
-			)
-			.await;
+		LOG_CHANNEL_ID
+			.set(get_channel_for_owner_id(&ctx).await)
+			.unwrap();
 	}
-
-	result
 }
 
 async fn handle_command(
-	ctx: &mut Context,
+	ctx: &Context,
 	message: &Message,
 	content: &str,
 ) -> Result<(), Error> {
@@ -199,7 +173,7 @@ async fn handle_command(
 }
 
 async fn handle_keywords(
-	ctx: &mut Context,
+	ctx: &Context,
 	message: &Message,
 	content: &str,
 ) -> Result<(), Error> {
@@ -210,32 +184,38 @@ async fn handle_keywords(
 
 	let channel_id = message.channel_id;
 
-	let keywords = Keyword::get_relevant_keywords(guild_id, channel_id)
-		.await
-		.map_err(|err| Error {
-		msg: format!("Failed to get keywords: {}", err),
-	})?;
+	let keywords = Keyword::get_relevant_keywords(guild_id, channel_id).await?;
 
 	for result in keywords {
-		let user_id: u64 = result.user_id.try_into().unwrap();
+		if !content.contains(&result.keyword) {
+			continue;
+		}
 
-		if content.contains(&result.keyword) {
-			let channel = ctx
-				.create_dm::<Message>(Recipient {
-					recipient_id: Snowflake(user_id),
-				})
-				.await?;
-			ctx.create_message(
-				channel,
-				CreateMessage {
-					content: Some(format!(
+		let user_id = UserId(result.user_id.try_into().unwrap());
+		let channel = match ctx.cache.guild_channel(channel_id).await {
+			Some(c) => c,
+			None => {
+				log::error!("Channel not cached: {}", channel_id);
+				return Ok(());
+			}
+		};
+
+		if content.contains(&result.keyword)
+			&& channel
+				.permissions_for_user(ctx, user_id)
+				.await?
+				.read_messages()
+		{
+			user_id
+				.create_dm_channel(ctx)
+				.await?
+				.send_message(ctx, |m| {
+					m.content(format!(
 						"Your keyword {} was seen in <#{}>: {}",
 						result.keyword, channel_id, content
-					)),
-					..Default::default()
-				},
-			)
-			.await?;
+					))
+				})
+				.await?;
 		}
 	}
 
@@ -244,9 +224,11 @@ async fn handle_keywords(
 
 #[tokio::main]
 async fn main() {
-	let config = Configuration::from_env("DISCORD_TOKEN")
-		.register(stateless!(message_listener))
-		.register(stateless!(ready_listener));
+	let _ = dotenv::dotenv();
+
+	env_logger::init();
+
+	let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
 
 	let pool = {
 		let manager = SqliteConnectionManager::file("data.db").with_flags(
@@ -260,9 +242,10 @@ async fn main() {
 	Follow::create_table();
 	Keyword::create_table();
 
-	ShardManager::with_config(config)
+	let mut client = Client::new(token)
+		.event_handler(Handler)
 		.await
-		.auto_setup()
-		.launch()
-		.await;
+		.expect("Failed to create client");
+
+	client.start().await.expect("Failed to run client");
 }
