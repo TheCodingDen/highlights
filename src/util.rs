@@ -7,8 +7,6 @@ use serenity::{
 use crate::{log_channel_id, Error};
 use std::fmt::Display;
 
-
-
 pub async fn report_error<E: Display>(
 	ctx: &Context,
 	channel_id: ChannelId,
@@ -16,12 +14,10 @@ pub async fn report_error<E: Display>(
 	error: E,
 ) {
 	let _ = log_channel_id()
-		.send_message(&ctx, |m| {
-			m.content(format!(
-				"Error in {} by {}: {}",
-				channel_id, user_id, error
-			))
-		})
+		.say(
+			&ctx,
+			format!("Error in {} by {}: {}", channel_id, user_id, error),
+		)
 		.await;
 
 	log::error!("Error in {} by {}: {}", channel_id, user_id, error);
@@ -40,10 +36,7 @@ pub async fn error<S: Display>(
 ) -> Result<(), Error> {
 	let _ = message.react(ctx, '❌').await;
 
-	message
-		.channel_id
-		.send_message(ctx, |m| m.content(response))
-		.await?;
+	message.channel_id.say(ctx, response).await?;
 
 	Ok(())
 }

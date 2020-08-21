@@ -1,5 +1,8 @@
-use serenity::{client::Context, model::id::{ChannelId, UserId}};
 use once_cell::sync::OnceCell;
+use serenity::{
+	client::Context,
+	model::id::{ChannelId, UserId},
+};
 
 use std::env;
 

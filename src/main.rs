@@ -4,7 +4,10 @@ pub mod db;
 use db::Keyword;
 
 pub mod global;
-use global::{log_channel_id, bot_mention, bot_nick_mention, init_mentions, init_log_channel_id};
+use global::{
+	bot_mention, bot_nick_mention, init_log_channel_id, init_mentions,
+	log_channel_id,
+};
 
 pub mod util;
 use util::{error, question, report_error};
@@ -33,7 +36,6 @@ impl Display for Error {
 		Display::fmt(&self.0, f)
 	}
 }
-
 
 struct Handler;
 
@@ -89,6 +91,8 @@ async fn handle_command(
 	let result = match command {
 		"add" => commands::add(ctx, message, args).await,
 		"follow" => commands::follow(ctx, message, args).await,
+		"remove" => commands::remove(ctx, message, args).await,
+		"unfollow" => commands::unfollow(ctx, message, args).await,
 		_ => question(ctx, message).await,
 	};
 
@@ -114,7 +118,9 @@ async fn handle_keywords(
 
 	let channel_id = message.channel_id;
 
-	let keywords = Keyword::get_relevant_keywords(guild_id, channel_id).await?;
+	let keywords =
+		Keyword::get_relevant_keywords(guild_id, channel_id, message.author.id)
+			.await?;
 
 	for result in keywords {
 		if !content.contains(&result.keyword) {
@@ -139,12 +145,13 @@ async fn handle_keywords(
 			user_id
 				.create_dm_channel(ctx)
 				.await?
-				.send_message(ctx, |m| {
-					m.content(format!(
+				.say(
+					ctx,
+					format!(
 						"Your keyword {} was seen in <#{}>: {}",
 						result.keyword, channel_id, content
-					))
-				})
+					),
+				)
 				.await?;
 		}
 	}
