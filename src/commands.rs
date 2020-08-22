@@ -4,6 +4,7 @@ use serenity::{
 	model::{
 		channel::{ChannelType, GuildChannel, Message},
 		id::ChannelId,
+		Permissions,
 	},
 };
 
@@ -11,7 +12,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
 	db::{Follow, Keyword},
-	global::MAX_KEYWORDS,
+	global::{EMBED_COLOR, MAX_KEYWORDS},
 	util::{error, question},
 	Error,
 };
@@ -98,7 +99,7 @@ pub async fn remove(
 	check_empty_args!(args, ctx, message);
 
 	let keyword = Keyword {
-		keyword: args.to_owned(),
+		keyword: args.to_lowercase(),
 		user_id: message.author.id.0.try_into().unwrap(),
 		server_id: guild_id.0.try_into().unwrap(),
 	};
@@ -329,4 +330,152 @@ fn get_channel_from_arg<'c>(
 	}
 
 	None
+}
+
+pub async fn help(
+	ctx: &Context,
+	message: &Message,
+	args: &str,
+) -> Result<(), Error> {
+	struct CommandInfo {
+		name: &'static str,
+		short_desc: &'static str,
+		long_desc: String,
+	}
+
+	let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
+
+	let commands = [
+		CommandInfo {
+			name: "add",
+			short_desc: "Add a keyword to highlight in the current server",
+			long_desc: format!(
+"Use `@{name} add [keyword]` to add a keyword to highlight in the current server. All of the text after `add` will be treated as one keyword.
+
+Keywords are case-insensitive.
+
+You're only notified of keywords when they appear in channels you follow. You can follow a channel with `@{name} follow [channel]`; see `@{name} help follow` for more information.
+
+You can remove keywords later with `@{name} remove [keyword]`.
+
+You can list your current keywords with `@{name} keywords`.",
+					name = username
+				)
+		},
+		CommandInfo {
+			name: "follow",
+			short_desc: "Follow a channel to be notified when your keywords appear there",
+			long_desc: format!(
+"Use `@{name} follow [channels]` to follow the specified channel and be notified when your keywords appear there. `[channels]` may be channel mentions, channel names, or channel IDs. You can specify multiple channels, separated by spaces, to follow all of them at once.
+
+You're only notified of your keywords in channels you follow. You can add a keyword with `@{name} add [keyword]`; see `@{name} help add` for more information.
+
+You can unfollow channels later with `@{name} unfollow [channels]`.
+
+You can list your current followed channels with `@{name} follows`.",
+				name = username,
+			)
+		},
+		CommandInfo {
+			name: "remove",
+			short_desc: "Remove a keyword to highlight in the current server",
+			long_desc: format!(
+"Use `@{name} remove [keyword]` to remove a keyword that you previously added with `@{name} add` in the current server. All of the text after `remove` will be treated as one keyword.
+
+Keywords are case-insensitive.
+
+You can list your current keywords with `@{name} keywords`.",
+				name = username,
+			)
+		},
+		CommandInfo {
+			name: "unfollow",
+			short_desc: "Unfollow a channel, stopping notifications about your keywords appearing there",
+			long_desc: format!(
+"Use `@{name} unfollow [channels]` to unfollow channels and stop notifications about your keywords appearing there. `[channels]` may be channel mentions, channel names, or channel IDs. You can specify multiple channels, separated by spaces, to follow all of them at once.
+
+You can list your current followed channels with `@{name} follows`.",
+				name = username,
+			)
+		},
+		CommandInfo {
+			name: "help",
+			short_desc: "Show this help message",
+			long_desc: format!(
+"Use `@{name} help` to see a list of commands and short descriptions.
+Use `@{name} help [command]` to see additional information about the specified command.
+Use `@{name} about` to see information about this bot.",
+				name = username
+			),
+		},
+		CommandInfo {
+			name: "about",
+			short_desc: "Show some information about this bot",
+			long_desc: "Show some information about this bot, like version and source code.".to_owned(),
+		},
+	];
+
+	if args == "" {
+		message
+			.channel_id
+			.send_message(&ctx, |m| {
+				m.embed(|e| 
+					e.title(format!("{} – Help", username))
+						.description(format!("Use `@{} help [command]` to see more information about a specified command", username))
+						.fields(commands.iter().map(|info| (info.name, info.short_desc, true)))
+						.color(EMBED_COLOR)
+				)
+			})
+			.await?;
+	} else {
+		let info = match commands.iter().find(|info| info.name.eq_ignore_ascii_case(args)) {
+			Some(info) => info,
+			None => return question(ctx, &message).await,
+		};
+
+		message.channel_id.send_message(&ctx, |m| {
+			m.embed(|e| {
+				e.title(format!("Help – {}", info.name))
+					.description(&info.long_desc)
+					.color(EMBED_COLOR)	
+			})
+		}).await?;
+	}
+
+	Ok(())
+}
+
+pub async fn about(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	let invite_url = ctx
+		.cache
+		.current_user()
+		.await
+		.invite_url(&ctx, Permissions::empty())
+		.await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.embed(|e| {
+				e.title(concat!(
+					env!("CARGO_PKG_NAME"),
+					" ",
+					env!("CARGO_PKG_VERSION")
+				))
+				.field("Source", env!("CARGO_PKG_REPOSITORY"), true)
+				.field("Author", "ThatsNoMoon#0175", true)
+				.field(
+					"Invite",
+					format!("[Add me to your server]({})", invite_url),
+					true,
+				)
+				.color(EMBED_COLOR)
+			})
+		})
+		.await?;
+
+	Ok(())
 }

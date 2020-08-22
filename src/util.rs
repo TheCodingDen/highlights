@@ -7,14 +7,21 @@ use serenity::{
 	},
 };
 
-use crate::{db::Keyword, global::PATIENCE_DURATION, log_channel_id, Error};
-use std::{convert::TryInto, fmt::Display};
+use crate::{db::Keyword, global::{EMBED_COLOR, PATIENCE_DURATION}, log_channel_id, Error};
+use std::{convert::TryInto, fmt::Display, ops::Range};
+
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
 
 pub async fn notify_keyword(
 	ctx: Context,
-	formatted_content: String,
-	keyword: Keyword,
 	message: Message,
+	keyword_range: Range<usize>,
+	keyword: Keyword,
 ) {
 	let user_id = UserId(keyword.user_id.try_into().unwrap());
 	let channel_id = message.channel_id;
@@ -27,6 +34,14 @@ pub async fn notify_keyword(
 		.timeout(PATIENCE_DURATION);
 	if new_message.await.is_none() {
 		let result: Result<(), Error> = async {
+			let escaped_content = regex!(r"[_*()\[\]~`]").replace_all(&message.content, r"\$0");
+			let formatted_content = format!(
+				"{}__**{}**__{}",
+				&escaped_content[..keyword_range.start],
+				&escaped_content[keyword_range.start..keyword_range.end],
+				&escaped_content[keyword_range.end..]
+			);
+
 			let message_link = format!(
 				"https://discord.com/channels/{}/{}/{}",
 				guild_id, channel_id, message.id
@@ -62,7 +77,7 @@ pub async fn notify_keyword(
 								)
 								.text(message.author.name)
 							})
-							.color(0xefff47)
+							.color(EMBED_COLOR)
 					})
 				})
 				.await?;

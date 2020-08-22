@@ -117,6 +117,8 @@ async fn handle_command(
 		"follow" => commands::follow(ctx, message, args).await,
 		"remove" => commands::remove(ctx, message, args).await,
 		"unfollow" => commands::unfollow(ctx, message, args).await,
+		"help" => commands::help(ctx, message, args).await,
+		"about" => commands::about(ctx, message, args).await,
 		_ => question(ctx, message).await,
 	};
 
@@ -167,18 +169,12 @@ async fn handle_keywords(
 			.await?
 			.read_messages()
 		{
-			let formatted_content = format!(
-				"{}__**{}**__{}",
-				&content[..start],
-				&content[start..end],
-				&content[end..]
-			);
 			let ctx = ctx.clone();
 			task::spawn(notify_keyword(
 				ctx,
-				formatted_content,
-				keyword,
 				message.clone(),
+				start..end,
+				keyword,
 			));
 		}
 	}
