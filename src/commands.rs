@@ -3,17 +3,17 @@ use serenity::{
 	client::Context,
 	model::{
 		channel::{ChannelType, GuildChannel, Message},
-		id::ChannelId,
+		id::{ChannelId, GuildId},
 		Permissions,
 	},
 };
 
-use std::{collections::HashMap, convert::TryInto};
+use std::{collections::HashMap, convert::TryInto, fmt::Write};
 
 use crate::{
 	db::{Follow, Keyword},
 	global::{EMBED_COLOR, MAX_KEYWORDS},
-	util::{error, question},
+	util::{error, question, success},
 	Error,
 };
 
@@ -84,9 +84,7 @@ pub async fn add(
 
 	keyword.insert().await?;
 
-	message.react(ctx, '✅').await?;
-
-	Ok(())
+	success(ctx, message).await
 }
 
 pub async fn remove(
@@ -110,9 +108,32 @@ pub async fn remove(
 
 	keyword.delete().await?;
 
-	message.react(ctx, '✅').await?;
+	success(ctx, message).await
+}
 
-	Ok(())
+pub async fn remove_server(
+	ctx: &Context,
+	message: &Message,
+	args: &str,
+) -> Result<(), Error> {
+	check_empty_args!(args, ctx, message);
+
+	let guild_id = match args.parse() {
+		Ok(id) => GuildId(id),
+		Err(_) => return error(ctx, message, "Invalid server ID!").await,
+	};
+
+	match Keyword::delete_in_server(message.author.id, guild_id).await? {
+		0 => {
+			error(
+				ctx,
+				message,
+				"You didn't have any keywords with that server ID!",
+			)
+			.await
+		}
+		_ => success(ctx, message).await,
+	}
 }
 
 pub async fn follow(
@@ -127,12 +148,11 @@ pub async fn follow(
 	let user_id = message.author.id;
 	let self_id = ctx.cache.current_user_id().await;
 
-	let guild = ctx.cache.guild(guild_id).await.unwrap();
-	let channels = guild
-		.channels
-		.iter()
-		.filter(|(_, channel)| matches!(channel.kind, ChannelType::Text))
-		.collect::<HashMap<_, _>>();
+	let channels = ctx.cache.guild_channels(guild_id).await.unwrap();
+	let channels = channels
+		.into_iter()
+		.filter(|(_, channel)| channel.kind == ChannelType::Text)
+		.collect();
 
 	let mut followed = vec![];
 	let mut already_followed = vec![];
@@ -227,31 +247,53 @@ pub async fn unfollow(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
-	let guild_id = check_guild!(ctx, message);
-
 	check_empty_args!(args, ctx, message);
 
-	let user_id = message.author.id;
+	let channels = match message.guild_id {
+		Some(guild_id) => {
+			ctx.cache.guild_channels(guild_id).await.map(|channels| {
+				channels
+					.into_iter()
+					.filter(|(_, channel)| channel.kind == ChannelType::Text)
+					.collect()
+			})
+		}
+		None => None,
+	};
 
-	let guild = ctx.cache.guild(guild_id).await.unwrap();
-	let channels = guild
-		.channels
-		.iter()
-		.filter(|(_, channel)| matches!(channel.kind, ChannelType::Text))
-		.collect::<HashMap<_, _>>();
+	let user_id = message.author.id.0.try_into().unwrap();
 
 	let mut unfollowed = vec![];
 	let mut not_followed = vec![];
 	let mut not_found = vec![];
 
 	for arg in args.split_whitespace() {
-		let channel = get_channel_from_arg(&channels, arg);
+		let channel = channels
+			.as_ref()
+			.and_then(|channels| get_channel_from_arg(channels, arg));
 
 		match channel {
-			None => not_found.push(arg),
+			None => {
+				if let Ok(channel_id) = arg.parse::<u64>() {
+					let channel_id = channel_id.try_into().unwrap();
+
+					let follow = Follow {
+						user_id,
+						channel_id,
+					};
+
+					if !follow.clone().exists().await? {
+						not_found.push(arg);
+					} else {
+						unfollowed.push(format!("<#{0}> ({0})", channel_id));
+						follow.delete().await?;
+					}
+				} else {
+					not_found.push(arg);
+				}
+			}
 			Some(channel) => {
-				let user_id: i64 = user_id.0.try_into().unwrap();
-				let channel_id: i64 = channel.id.0.try_into().unwrap();
+				let channel_id = channel.id.0.try_into().unwrap();
 
 				let follow = Follow {
 					user_id,
@@ -303,11 +345,11 @@ pub async fn unfollow(
 }
 
 fn get_channel_from_arg<'c>(
-	channels: &HashMap<&ChannelId, &'c GuildChannel>,
+	channels: &'c HashMap<ChannelId, GuildChannel>,
 	arg: &str,
 ) -> Option<&'c GuildChannel> {
 	if let Ok(id) = arg.parse::<u64>() {
-		return channels.get(&ChannelId(id)).copied();
+		return channels.get(&ChannelId(id));
 	}
 
 	if let Some(id) = arg
@@ -315,7 +357,7 @@ fn get_channel_from_arg<'c>(
 		.and_then(|arg| arg.strip_suffix(">"))
 		.and_then(|arg| arg.parse::<u64>().ok())
 	{
-		return channels.get(&ChannelId(id)).copied();
+		return channels.get(&ChannelId(id));
 	}
 
 	let mut iter = channels
@@ -330,6 +372,204 @@ fn get_channel_from_arg<'c>(
 	}
 
 	None
+}
+
+pub async fn keywords(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	match message.guild_id {
+		Some(guild_id) => {
+			let keywords =
+				Keyword::user_keywords_in_server(message.author.id, guild_id)
+					.await?
+					.into_iter()
+					.map(|keyword| keyword.keyword)
+					.collect::<Vec<_>>();
+
+			if keywords.is_empty() {
+				return error(
+					ctx,
+					message,
+					"You haven't added any keywords yet!",
+				)
+				.await;
+			}
+
+			let guild_name = ctx
+				.cache
+				.guild_field(guild_id, |g| g.name.clone())
+				.await
+				.ok_or("Couldn't get guild to list keywords")?;
+
+			let response = format!(
+				"{}'s keywords in {}:\n  - {}",
+				message.author.name,
+				guild_name,
+				keywords.join("\n  - ")
+			);
+
+			message.channel_id.say(ctx, response).await?;
+		}
+		None => {}
+	}
+
+	Ok(())
+}
+
+pub async fn follows(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	match message.guild_id {
+		Some(guild_id) => {
+			let channels = ctx
+				.cache
+				.guild_channels(guild_id)
+				.await
+				.ok_or("Couldn't get guild channels to list follows")?;
+
+			let follows = Follow::user_follows(message.author.id)
+				.await?
+				.into_iter()
+				.filter(|follow| {
+					let channel_id =
+						ChannelId(follow.channel_id.try_into().unwrap());
+					channels.contains_key(&channel_id)
+				})
+				.map(|follow| format!("<#{}>", follow.channel_id))
+				.collect::<Vec<_>>();
+
+			if follows.is_empty() {
+				return error(
+					ctx,
+					message,
+					"You haven't followed any channels yet!",
+				)
+				.await;
+			}
+
+			let guild_name = ctx
+				.cache
+				.guild_field(guild_id, |g| g.name.clone())
+				.await
+				.ok_or("Couldn't get guild to list follows")?;
+
+			let response = format!(
+				"{}'s follows in {}:\n  - {}",
+				message.author.name,
+				guild_name,
+				follows.join("\n  - ")
+			);
+
+			message.channel_id.say(ctx, response).await?;
+		}
+		None => {
+			let follows = Follow::user_follows(message.author.id).await?;
+
+			if follows.is_empty() {
+				return error(
+					ctx,
+					message,
+					"You haven't followed any channels yet!",
+				)
+				.await;
+			}
+
+			let mut follows_by_guild = HashMap::new();
+			let mut not_found = Vec::new();
+
+			for follow in follows {
+				let channel_id =
+					ChannelId(follow.channel_id.try_into().unwrap());
+				let channel = match ctx.cache.guild_channel(channel_id).await {
+					Some(channel) => channel,
+					None => {
+						not_found.push(format!("<#{0}> ({0})", channel_id));
+						continue;
+					}
+				};
+
+				follows_by_guild
+					.entry(channel.guild_id)
+					.or_insert_with(Vec::new)
+					.push(format!("<#{}>", channel_id));
+			}
+
+			let mut response = String::new();
+
+			for (guild_id, channel_ids) in follows_by_guild {
+				if !response.is_empty() {
+					response.push_str("\n\n");
+				}
+
+				let guild_name = ctx
+					.cache
+					.guild_field(guild_id, |g| g.name.clone())
+					.await
+					.ok_or("Couldn't get guild to list follows")?;
+
+				write!(
+					&mut response,
+					"{}'s follows in {}:\n  – {}",
+					message.author.name,
+					guild_name,
+					channel_ids.join("\n  – ")
+				)
+				.unwrap();
+			}
+
+			if !not_found.is_empty() {
+				write!(
+					&mut response,
+					"\n\nCouldn't find (deleted?) followed channels:\n  – {}",
+					not_found.join("\n  – ")
+				)
+				.unwrap();
+			}
+
+			message.channel_id.say(ctx, response).await?;
+		}
+	}
+
+	Ok(())
+}
+
+pub async fn about(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	let invite_url = ctx
+		.cache
+		.current_user()
+		.await
+		.invite_url(&ctx, Permissions::empty())
+		.await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.embed(|e| {
+				e.title(concat!(
+					env!("CARGO_PKG_NAME"),
+					" ",
+					env!("CARGO_PKG_VERSION")
+				))
+				.field("Source", env!("CARGO_PKG_REPOSITORY"), true)
+				.field("Author", "ThatsNoMoon#0175", true)
+				.field(
+					"Invite",
+					format!("[Add me to your server]({})", invite_url),
+					true,
+				)
+				.color(EMBED_COLOR)
+			})
+		})
+		.await?;
+
+	Ok(())
 }
 
 pub async fn help(
@@ -399,6 +639,44 @@ You can list your current followed channels with `@{name} follows`.",
 			)
 		},
 		CommandInfo {
+			name: "keywords",
+			short_desc: "List your current highlighted keywords",
+			long_desc: format!(
+"Use `@{name} keywords` to list your current highlighted keywords.
+
+Using `keywords` in a server will show you only the keywords you've highlighted in that server.
+
+Using `keywords` in DMs with the bot will list keywords you've highlighted across all shared servers, including potentially deleted servers or servers this bot is no longer a member of.
+
+If the bot can't find information about a server you have keywords in, its ID will be in parentheses, so you can remove them with `removeserver` if desired. See `@{name} help removeserver` for more details.",
+				name = username
+			)
+		},
+		CommandInfo {
+			name: "follows",
+			short_desc: "List your current followed channels",
+			long_desc: format!(
+"Use `@{name} follows` to list your current followed channels.
+
+Using `follows` in a server will show you only the channels you've followed in that server.
+
+Using `follows` in DMs with the bot will list channels you've followed across all servers, including deleted channels or channels in servers this bot is no longer a member of.
+
+If the bot can't find information on a channel you previously followed, its ID will be in parentheses, so you can investigate or unfollow.",
+				name = username
+			)
+		},
+		CommandInfo {
+			name: "removeserver",
+			short_desc: "Remove all keywords on a given server",
+			long_desc: format!(
+"Use `@{name} removeserver [server ID]` to remove all keywords on the server with the given ID.
+
+This is normally not necessary, but if you no longer share a server with the bot where you added keywords, you can clean up your keywords list by using `keywords` in DMs to see all keywords, and this command to remove any server IDs the bot can't find.",
+				name = username
+			)
+		},
+		CommandInfo {
 			name: "help",
 			short_desc: "Show this help message",
 			long_desc: format!(
@@ -419,7 +697,7 @@ Use `@{name} about` to see information about this bot.",
 		message
 			.channel_id
 			.send_message(&ctx, |m| {
-				m.embed(|e| 
+				m.embed(|e|
 					e.title(format!("{} – Help", username))
 						.description(format!("Use `@{} help [command]` to see more information about a specified command", username))
 						.fields(commands.iter().map(|info| (info.name, info.short_desc, true)))
@@ -428,54 +706,25 @@ Use `@{name} about` to see information about this bot.",
 			})
 			.await?;
 	} else {
-		let info = match commands.iter().find(|info| info.name.eq_ignore_ascii_case(args)) {
+		let info = match commands
+			.iter()
+			.find(|info| info.name.eq_ignore_ascii_case(args))
+		{
 			Some(info) => info,
 			None => return question(ctx, &message).await,
 		};
 
-		message.channel_id.send_message(&ctx, |m| {
-			m.embed(|e| {
-				e.title(format!("Help – {}", info.name))
-					.description(&info.long_desc)
-					.color(EMBED_COLOR)	
+		message
+			.channel_id
+			.send_message(&ctx, |m| {
+				m.embed(|e| {
+					e.title(format!("Help – {}", info.name))
+						.description(&info.long_desc)
+						.color(EMBED_COLOR)
+				})
 			})
-		}).await?;
+			.await?;
 	}
-
-	Ok(())
-}
-
-pub async fn about(
-	ctx: &Context,
-	message: &Message,
-	_: &str,
-) -> Result<(), Error> {
-	let invite_url = ctx
-		.cache
-		.current_user()
-		.await
-		.invite_url(&ctx, Permissions::empty())
-		.await?;
-	message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.embed(|e| {
-				e.title(concat!(
-					env!("CARGO_PKG_NAME"),
-					" ",
-					env!("CARGO_PKG_VERSION")
-				))
-				.field("Source", env!("CARGO_PKG_REPOSITORY"), true)
-				.field("Author", "ThatsNoMoon#0175", true)
-				.field(
-					"Invite",
-					format!("[Add me to your server]({})", invite_url),
-					true,
-				)
-				.color(EMBED_COLOR)
-			})
-		})
-		.await?;
 
 	Ok(())
 }

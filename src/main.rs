@@ -29,6 +29,7 @@ impl Display for SimpleError {
 
 impl StdError for SimpleError {}
 
+#[derive(Debug)]
 pub struct Error(Box<dyn StdError + Send + Sync + 'static>);
 
 impl From<SerenityError> for Error {
@@ -60,6 +61,9 @@ impl Display for Error {
 		Display::fmt(&self.0, f)
 	}
 }
+
+impl StdError for Error {}
+impl StdError for &'_ Error {}
 
 struct Handler;
 
@@ -116,7 +120,10 @@ async fn handle_command(
 		"add" => commands::add(ctx, message, args).await,
 		"follow" => commands::follow(ctx, message, args).await,
 		"remove" => commands::remove(ctx, message, args).await,
+		"removeserver" => commands::remove_server(ctx, message, args).await,
 		"unfollow" => commands::unfollow(ctx, message, args).await,
+		"keywords" => commands::keywords(ctx, message, args).await,
+		"follows" => commands::follows(ctx, message, args).await,
 		"help" => commands::help(ctx, message, args).await,
 		"about" => commands::about(ctx, message, args).await,
 		_ => question(ctx, message).await,

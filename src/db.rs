@@ -30,15 +30,12 @@ pub fn init() {
 }
 
 macro_rules! await_db {
-	(|$conn:ident| $body:block) => {
-		await_db!("database": |$conn| $body)
-	};
 	($name:literal: |$conn:ident| $body:block) => {
 		::tokio::task::spawn_blocking(move || {
 			let $conn = connection();
 
 			$body
-		})
+			})
 		.await
 		.expect(concat!("Failed to join ", $name, " task"))
 	};
@@ -181,6 +178,21 @@ impl Keyword {
 			Ok(())
 		})
 	}
+
+	pub async fn delete_in_server(
+		user_id: UserId,
+		guild_id: GuildId,
+	) -> Result<usize, Error> {
+		await_db!("delete keywords in server": |conn| {
+			let user_id: i64 = user_id.0.try_into().unwrap();
+			let guild_id: i64 = guild_id.0.try_into().unwrap();
+			conn.execute(
+				"DELETE FROM keywords
+				WHERE user_id = ? AND server_id = ?",
+				params![user_id, guild_id]
+			)
+		})
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -216,7 +228,7 @@ impl Follow {
 
 			let mut stmt = conn.prepare(
 				"SELECT user_id, channel_id
-				FROM keywords
+				FROM follows
 				WHERE user_id = ?"
 			)?;
 

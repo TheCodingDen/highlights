@@ -7,14 +7,21 @@ use serenity::{
 	},
 };
 
-use crate::{db::Keyword, global::{EMBED_COLOR, PATIENCE_DURATION}, log_channel_id, Error};
-use std::{convert::TryInto, fmt::Display, ops::Range};
+use crate::{
+	db::Keyword,
+	global::{EMBED_COLOR, PATIENCE_DURATION},
+	log_channel_id, Error,
+};
+use std::{
+	convert::TryInto, error::Error as StdError, fmt::Display, ops::Range,
+};
 
 macro_rules! regex {
-    ($re:literal $(,)?) => {{
-        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
-        RE.get_or_init(|| regex::Regex::new($re).unwrap())
-    }};
+	($re:literal $(,)?) => {{
+		static RE: once_cell::sync::OnceCell<regex::Regex> =
+			once_cell::sync::OnceCell::new();
+		RE.get_or_init(|| regex::Regex::new($re).unwrap())
+		}};
 }
 
 pub async fn notify_keyword(
@@ -34,7 +41,8 @@ pub async fn notify_keyword(
 		.timeout(PATIENCE_DURATION);
 	if new_message.await.is_none() {
 		let result: Result<(), Error> = async {
-			let escaped_content = regex!(r"[_*()\[\]~`]").replace_all(&message.content, r"\$0");
+			let escaped_content =
+				regex!(r"[_*()\[\]~`]").replace_all(&message.content, r"\$0");
 			let formatted_content = format!(
 				"{}__**{}**__{}",
 				&escaped_content[..keyword_range.start],
@@ -92,7 +100,7 @@ pub async fn notify_keyword(
 	}
 }
 
-pub async fn report_error<E: Display>(
+pub async fn report_error<E: StdError>(
 	ctx: impl CacheHttp,
 	channel_id: ChannelId,
 	user_id: UserId,
@@ -101,11 +109,20 @@ pub async fn report_error<E: Display>(
 	let _ = log_channel_id()
 		.say(
 			ctx.http(),
-			format!("Error in {} by {}: {}", channel_id, user_id, error),
+			format!(
+				"Error in <#{0}> ({0}) by <@{1}> ({1}): {2}\n{2:?}",
+				channel_id, user_id, error
+			),
 		)
 		.await;
 
-	log::error!("Error in {} by {}: {}", channel_id, user_id, error);
+	log::error!("Error in {} by {}: {2}\n{2:?}", channel_id, user_id, error);
+}
+
+pub async fn success(ctx: &Context, message: &Message) -> Result<(), Error> {
+	message.react(ctx, '✅').await?;
+
+	Ok(())
 }
 
 pub async fn question(ctx: &Context, message: &Message) -> Result<(), Error> {
