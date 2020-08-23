@@ -9,6 +9,8 @@ use global::{
 	log_channel_id,
 };
 
+pub mod monitoring;
+
 pub mod util;
 use util::{error, notify_keyword, question, report_error};
 
@@ -198,6 +200,8 @@ async fn main() {
 	let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
 
 	db::init();
+
+	tokio::spawn(monitoring::init());
 
 	let mut client = Client::new(token)
 		.event_handler(Handler)

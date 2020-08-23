@@ -15,6 +15,7 @@ use crate::{
 	global::{EMBED_COLOR, MAX_KEYWORDS},
 	util::{error, question, success},
 	Error,
+	monitoring::Timer,
 };
 
 macro_rules! check_guild {
@@ -46,6 +47,7 @@ pub async fn add(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("add");
 	let guild_id = check_guild!(ctx, message);
 
 	check_empty_args!(args, ctx, message);
@@ -92,6 +94,7 @@ pub async fn remove(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("remove");
 	let guild_id = check_guild!(ctx, message);
 
 	check_empty_args!(args, ctx, message);
@@ -116,6 +119,7 @@ pub async fn remove_server(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("removeserver");
 	check_empty_args!(args, ctx, message);
 
 	let guild_id = match args.parse() {
@@ -141,6 +145,7 @@ pub async fn follow(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("follow");
 	let guild_id = check_guild!(ctx, message);
 
 	check_empty_args!(args, ctx, message);
@@ -247,6 +252,7 @@ pub async fn unfollow(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("unfollow");
 	check_empty_args!(args, ctx, message);
 
 	let channels = match message.guild_id {
@@ -379,6 +385,7 @@ pub async fn keywords(
 	message: &Message,
 	_: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("keywords");
 	match message.guild_id {
 		Some(guild_id) => {
 			let keywords =
@@ -423,6 +430,7 @@ pub async fn follows(
 	message: &Message,
 	_: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("follows");
 	match message.guild_id {
 		Some(guild_id) => {
 			let channels = ctx
@@ -542,6 +550,7 @@ pub async fn about(
 	message: &Message,
 	_: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("about");
 	let invite_url = ctx
 		.cache
 		.current_user()
@@ -577,6 +586,7 @@ pub async fn help(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	let _timer = Timer::command("help");
 	struct CommandInfo {
 		name: &'static str,
 		short_desc: &'static str,

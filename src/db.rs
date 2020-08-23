@@ -6,6 +6,8 @@ use serenity::model::id::{ChannelId, GuildId, UserId};
 
 use std::convert::TryInto;
 
+use crate::monitoring::Timer;
+
 static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
 
 pub fn connection() -> PooledConnection<SqliteConnectionManager> {
@@ -30,7 +32,8 @@ pub fn init() {
 }
 
 macro_rules! await_db {
-	($name:literal: |$conn:ident| $body:block) => {
+	($name:literal: |$conn:ident| $body:block) => {{
+		let _timer = Timer::query($name);
 		::tokio::task::spawn_blocking(move || {
 			let $conn = connection();
 
@@ -38,7 +41,7 @@ macro_rules! await_db {
 			})
 		.await
 		.expect(concat!("Failed to join ", $name, " task"))
-	};
+	}};
 }
 
 #[derive(Debug, Clone)]
