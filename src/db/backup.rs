@@ -29,7 +29,7 @@ async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 		let conn = connection();
 
 		let backup_name = format!(
-			"{}_data_backup_{}.db.bak",
+			"{}_data_backup_{}.db",
 			env!("CARGO_PKG_NAME"),
 			Utc::now().format(TIMESTAMP_FORMAT)
 		);
@@ -71,7 +71,7 @@ async fn clean_backups(backup_dir: &Path) {
 
 			let backup_time: DateTime<Utc> = match backup_name
 				.strip_prefix(backup_prefix)
-				.and_then(|s| s.strip_suffix(".db.bak"))
+				.and_then(|s| s.strip_suffix(".db"))
 				.and_then(|date_str| {
 					DateTime::parse_from_str(date_str, TIMESTAMP_FORMAT).ok()
 				}) {
