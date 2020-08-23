@@ -64,7 +64,7 @@ pub async fn add(
 	let keyword = Keyword {
 		keyword: args.to_lowercase(),
 		user_id: message.author.id.0.try_into().unwrap(),
-		server_id: guild_id.0.try_into().unwrap(),
+		guild_id: guild_id.0.try_into().unwrap(),
 	};
 
 	{
@@ -102,7 +102,7 @@ pub async fn remove(
 	let keyword = Keyword {
 		keyword: args.to_lowercase(),
 		user_id: message.author.id.0.try_into().unwrap(),
-		server_id: guild_id.0.try_into().unwrap(),
+		guild_id: guild_id.0.try_into().unwrap(),
 	};
 
 	if !keyword.clone().exists().await? {
@@ -127,7 +127,7 @@ pub async fn remove_server(
 		Err(_) => return error(ctx, message, "Invalid server ID!").await,
 	};
 
-	match Keyword::delete_in_server(message.author.id, guild_id).await? {
+	match Keyword::delete_in_guild(message.author.id, guild_id).await? {
 		0 => {
 			error(
 				ctx,
@@ -399,7 +399,7 @@ pub async fn keywords(
 	match message.guild_id {
 		Some(guild_id) => {
 			let keywords =
-				Keyword::user_keywords_in_server(message.author.id, guild_id)
+				Keyword::user_keywords_in_guild(message.author.id, guild_id)
 					.await?
 					.into_iter()
 					.map(|keyword| keyword.keyword)
@@ -449,7 +449,7 @@ pub async fn keywords(
 			let mut keywords_by_guild = HashMap::new();
 
 			for keyword in keywords {
-				let guild_id = GuildId(keyword.server_id.try_into().unwrap());
+				let guild_id = GuildId(keyword.guild_id.try_into().unwrap());
 
 				keywords_by_guild
 					.entry(guild_id)

@@ -1,10 +1,10 @@
+use chrono::Utc;
 use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, DatabaseName, Error, OpenFlags, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use tokio::task;
-use chrono::Utc;
 
 use std::{
 	convert::TryInto,
@@ -113,7 +113,7 @@ macro_rules! await_db {
 pub struct Keyword {
 	pub keyword: String,
 	pub user_id: i64,
-	pub server_id: i64,
+	pub guild_id: i64,
 }
 
 impl Keyword {
@@ -121,7 +121,7 @@ impl Keyword {
 		Ok(Keyword {
 			keyword: row.get(0)?,
 			user_id: row.get(1)?,
-			server_id: row.get(2)?,
+			guild_id: row.get(2)?,
 		})
 	}
 
@@ -132,8 +132,8 @@ impl Keyword {
 			"CREATE TABLE IF NOT EXISTS keywords (
 			keyword TEXT NOT NULL,
 			user_id INTEGER NOT NULL,
-			server_id INTEGER NOT NULL,
-			PRIMARY KEY (keyword, user_id, server_id)
+			guild_id INTEGER NOT NULL,
+			PRIMARY KEY (keyword, user_id, guild_id)
 			)",
 			params![],
 		)
@@ -151,11 +151,11 @@ impl Keyword {
 			let author_id: i64 = author_id.0.try_into().unwrap();
 
 			let mut stmt = conn.prepare(
-				"SELECT keywords.keyword, keywords.user_id, keywords.server_id
+				"SELECT keywords.keyword, keywords.user_id, keywords.guild_id
 				FROM keywords
 				INNER JOIN follows
 				ON keywords.user_id = follows.user_id
-				WHERE keywords.server_id = ? AND follows.channel_id = ? AND keywords.user_id != ?",
+				WHERE keywords.guild_id = ? AND follows.channel_id = ? AND keywords.user_id != ?",
 			)?;
 
 			let keywords =
@@ -165,18 +165,18 @@ impl Keyword {
 		})
 	}
 
-	pub async fn user_keywords_in_server(
+	pub async fn user_keywords_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<Vec<Keyword>, Error> {
-		await_db!("user server keywords": |conn| {
+		await_db!("user guild keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
 
 			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, server_id
+				"SELECT keyword, user_id, guild_id
 				FROM keywords
-				WHERE user_id = ? AND server_id = ?"
+				WHERE user_id = ? AND guild_id = ?"
 			)?;
 
 			let keywords = stmt.query_map(params![user_id, guild_id], Keyword::from_row)?;
@@ -190,7 +190,7 @@ impl Keyword {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
 			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, server_id
+				"SELECT keyword, user_id, guild_id
 				FROM keywords
 				WHERE user_id = ?"
 			)?;
@@ -205,8 +205,8 @@ impl Keyword {
 		await_db!("keyword exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM keywords
-				WHERE keyword = ? AND user_id = ? AND server_id = ?",
-				params![&self.keyword, self.user_id, self.server_id],
+				WHERE keyword = ? AND user_id = ? AND guild_id = ?",
+				params![&self.keyword, self.user_id, self.guild_id],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			)
 		})
@@ -226,9 +226,9 @@ impl Keyword {
 	pub async fn insert(self) -> Result<(), Error> {
 		await_db!("insert keyword": |conn| {
 			conn.execute(
-				"INSERT INTO keywords (keyword, user_id, server_id)
+				"INSERT INTO keywords (keyword, user_id, guild_id)
 				VALUES (?, ?, ?)",
-				params![&self.keyword, self.user_id, self.server_id],
+				params![&self.keyword, self.user_id, self.guild_id],
 			)?;
 
 			Ok(())
@@ -239,24 +239,24 @@ impl Keyword {
 		await_db!("delete keyword": |conn| {
 			conn.execute(
 				"DELETE FROM keywords
-				WHERE keyword = ? AND user_id = ? AND server_id = ?",
-				params![&self.keyword, self.user_id, self.server_id],
+				WHERE keyword = ? AND user_id = ? AND guild_id = ?",
+				params![&self.keyword, self.user_id, self.guild_id],
 			)?;
 
 			Ok(())
 		})
 	}
 
-	pub async fn delete_in_server(
+	pub async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<usize, Error> {
-		await_db!("delete keywords in server": |conn| {
+		await_db!("delete keywords in guild": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
 			conn.execute(
 				"DELETE FROM keywords
-				WHERE user_id = ? AND server_id = ?",
+				WHERE user_id = ? AND guild_id = ?",
 				params![user_id, guild_id]
 			)
 		})
