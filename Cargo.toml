@@ -19,7 +19,8 @@ prometheus = "0.9"
 hyper = "0.13"
 
 [dependencies.serenity]
-version = "0.9.0-rc.0"
+git = "https://github.com/serenity-rs/serenity.git"
+branch = "current"
 default-features = false
 features = [
     "builder",

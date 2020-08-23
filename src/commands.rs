@@ -13,9 +13,9 @@ use std::{collections::HashMap, convert::TryInto, fmt::Write};
 use crate::{
 	db::{Follow, Keyword},
 	global::{EMBED_COLOR, MAX_KEYWORDS},
+	monitoring::Timer,
 	util::{error, question, success},
 	Error,
-	monitoring::Timer,
 };
 
 macro_rules! check_guild {
@@ -242,7 +242,12 @@ pub async fn follow(
 		}
 	}
 
-	message.channel_id.say(ctx, msg).await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.content(msg).allowed_mentions(|m| m.empty_parse())
+		})
+		.await?;
 
 	Ok(())
 }
@@ -345,7 +350,12 @@ pub async fn unfollow(
 		message.react(ctx, '❓').await?;
 	}
 
-	message.channel_id.say(ctx, msg).await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.content(msg).allowed_mentions(|m| m.empty_parse())
+		})
+		.await?;
 
 	Ok(())
 }
@@ -417,9 +427,62 @@ pub async fn keywords(
 				keywords.join("\n  - ")
 			);
 
+			message
+				.channel_id
+				.send_message(ctx, |m| {
+					m.content(response).allowed_mentions(|m| m.empty_parse())
+				})
+				.await?;
+		}
+		None => {
+			let keywords = Keyword::user_keywords(message.author.id).await?;
+
+			if keywords.is_empty() {
+				return error(
+					ctx,
+					message,
+					"You haven't added any keywords yet!",
+				)
+				.await;
+			}
+
+			let mut keywords_by_guild = HashMap::new();
+
+			for keyword in keywords {
+				let guild_id = GuildId(keyword.server_id.try_into().unwrap());
+
+				keywords_by_guild
+					.entry(guild_id)
+					.or_insert_with(Vec::new)
+					.push(keyword.keyword);
+			}
+
+			let mut response = String::new();
+
+			for (guild_id, keywords) in keywords_by_guild {
+				if !response.is_empty() {
+					response.push_str("\n\n");
+				}
+
+				let guild_name = ctx
+					.cache
+					.guild_field(guild_id, |g| g.name.clone())
+					.await
+					.unwrap_or_else(|| {
+						format!("<Unknown server> ({})", guild_id)
+					});
+
+				write!(
+					&mut response,
+					"Your keywords in {}:\n  – {}",
+					guild_name,
+					keywords.join("\n  – ")
+				)
+				.unwrap();
+			}
+
 			message.channel_id.say(ctx, response).await?;
 		}
-		None => {}
 	}
 
 	Ok(())
@@ -521,8 +584,7 @@ pub async fn follows(
 
 				write!(
 					&mut response,
-					"{}'s follows in {}:\n  – {}",
-					message.author.name,
+					"Your follows in {}:\n  – {}",
 					guild_name,
 					channel_ids.join("\n  – ")
 				)

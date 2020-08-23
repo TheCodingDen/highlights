@@ -41,7 +41,7 @@ macro_rules! await_db {
 			})
 		.await
 		.expect(concat!("Failed to join ", $name, " task"))
-	}};
+		}};
 }
 
 #[derive(Debug, Clone)]

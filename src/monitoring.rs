@@ -56,19 +56,25 @@ impl Timer {
 			start: Instant::now(),
 		}
 	}
-} 
+}
 
 impl Drop for Timer {
 	fn drop(&mut self) {
-		if !ENABLED.get().unwrap() { return; }
+		if !ENABLED.get().unwrap() {
+			return;
+		}
 		let elapsed = self.start.elapsed().as_secs_f64();
 
 		match self.kind {
 			TimerType::Command => {
-				COMMAND_TIME_GAUGE.with_label_values(&[self.name]).add(elapsed);
+				COMMAND_TIME_GAUGE
+					.with_label_values(&[self.name])
+					.add(elapsed);
 			}
 			TimerType::Query => {
-				QUERY_TIME_GAUGE.with_label_values(&[self.name]).add(elapsed);
+				QUERY_TIME_GAUGE
+					.with_label_values(&[self.name])
+					.add(elapsed);
 			}
 		}
 	}
@@ -88,7 +94,9 @@ pub async fn init() {
 	} else {
 		ENABLED.set(false).unwrap();
 
-		log::warn!("PROMETHEUS_ADDR not provided; not starting monitoring server");
+		log::warn!(
+			"PROMETHEUS_ADDR not provided; not starting monitoring server"
+		);
 	}
 }
 
