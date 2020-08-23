@@ -81,21 +81,27 @@ impl Drop for Timer {
 }
 
 pub async fn init() {
-	if let Ok(var) = std::env::var("PROMETHEUS_ADDR") {
-		if let Ok(addr) = var.parse() {
-			ENABLED.set(true).unwrap();
+	if let Ok(var) = std::env::var("HIGHLIGHTS_PROMETHEUS_ADDR") {
+		match var.parse() {
+			Ok(addr) => {
+				ENABLED.set(true).unwrap();
 
-			prometheus_server(addr).await;
-		} else {
-			ENABLED.set(false).unwrap();
+				prometheus_server(addr).await;
+			}
+			Err(error) => {
+				ENABLED.set(false).unwrap();
 
-			log::error!("Invalid PROMETHEUS_ADDR provided");
+				log::error!(
+					"Invalid HIGHLIGHTS_PROMETHEUS_ADDR provided ({})",
+					error
+				);
+			}
 		}
 	} else {
 		ENABLED.set(false).unwrap();
 
 		log::warn!(
-			"PROMETHEUS_ADDR not provided; not starting monitoring server"
+			"HIGHLIGHTS_PROMETHEUS_ADDR not provided; not starting monitoring server"
 		);
 	}
 }

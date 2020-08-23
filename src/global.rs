@@ -52,7 +52,7 @@ async fn get_channel_for_owner_id(ctx: &Context) -> ChannelId {
 	let owner_id = {
 		const DEFAULT: u64 = 257711607096803328;
 
-		env::var("DISCORD_OWNER_ID")
+		env::var("HIGHLIGHTS_OWNER_ID")
 			.ok()
 			.and_then(|s| s.parse().ok())
 			.unwrap_or(DEFAULT)

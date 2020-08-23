@@ -195,9 +195,15 @@ async fn handle_keywords(
 async fn main() {
 	let _ = dotenv::dotenv();
 
-	env_logger::init();
+	env_logger::from_env(
+		env_logger::Env::new()
+			.filter("HIGHLIGHTS_LOG_FILTER")
+			.write_style("HIGHLIGHTS_LOG_STYLE"),
+	)
+	.init();
 
-	let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
+	let token = env::var("HIGHLIGHTS_DISCORD_TOKEN")
+		.expect("HIGHLIGHTS_DISCORD_TOKEN must be set");
 
 	db::init();
 
