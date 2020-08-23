@@ -713,7 +713,7 @@ pub async fn help(
 		},
 		CommandInfo {
 			name: "unfollow",
-			short_desc: 
+			short_desc:
 				"Unfollow a channel, stopping notifications about your keywords appearing there",
 			long_desc: format!(
 				"Use `@{name} unfollow [channels]` to unfollow channels and stop notifications \
@@ -791,7 +791,7 @@ pub async fn help(
 		CommandInfo {
 			name: "about",
 			short_desc: "Show some information about this bot",
-			long_desc: 
+			long_desc:
 				"Show some information about this bot, like version and source code.".to_owned(),
 		},
 	];
@@ -800,16 +800,20 @@ pub async fn help(
 		message
 			.channel_id
 			.send_message(&ctx, |m| {
-				m.embed(|e|
+				m.embed(|e| {
 					e.title(format!("{} – Help", username))
 						.description(format!(
 							"Use `@{} help [command]` to see more information \
 							about a specified command",
 							username
 						))
-						.fields(commands.iter().map(|info| (info.name, info.short_desc, true)))
+						.fields(
+							commands
+								.iter()
+								.map(|info| (info.name, info.short_desc, true)),
+						)
 						.color(EMBED_COLOR)
-				)
+				})
 			})
 			.await?;
 	} else {

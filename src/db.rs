@@ -1,17 +1,14 @@
-use chrono::Utc;
+mod backup;
+use backup::start_backup_cycle;
+
 use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, DatabaseName, Error, OpenFlags, Row};
+use rusqlite::{params, Error, OpenFlags, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use tokio::task;
 
-use std::{
-	convert::TryInto,
-	fs,
-	io::{Error as IoError, ErrorKind},
-	path::{Path, PathBuf},
-};
+use std::{convert::TryInto, env, fs, io::ErrorKind, path::PathBuf};
 
 use crate::monitoring::Timer;
 
@@ -25,17 +22,17 @@ pub fn connection() -> PooledConnection<SqliteConnectionManager> {
 }
 
 pub fn init() {
-	let data_path: PathBuf = std::env::var("HIGHLIGHTS_DATA_DIR")
+	let data_dir: PathBuf = env::var("HIGHLIGHTS_DATA_DIR")
 		.map(Into::into)
-		.unwrap_or("./data/".into());
+		.unwrap_or("data".into());
 
-	if let Err(error) = fs::create_dir(&data_path) {
+	if let Err(error) = fs::create_dir(&data_dir) {
 		if error.kind() != ErrorKind::AlreadyExists {
 			Err::<(), _>(error).expect("Failed to create data directory");
 		}
 	}
 
-	let manager = SqliteConnectionManager::file(data_path.join("data.db"))
+	let manager = SqliteConnectionManager::file(data_dir.join("data.db"))
 		.with_flags(
 			OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_READ_WRITE,
 		);
@@ -47,53 +44,11 @@ pub fn init() {
 	Follow::create_table();
 	Keyword::create_table();
 
-	let backup_dir = data_path.join("backup");
+	if env::var_os("HIGHLIGHTS_DONT_BACKUP").is_none() {
+		let backup_dir = data_dir.join("backup");
 
-	fn ensure_backup_dir_exists(path: &Path) -> Result<(), IoError> {
-		let result = fs::create_dir(path);
-		if let Err(error) = &result {
-			if error.kind() != ErrorKind::AlreadyExists {
-				log::error!(
-					"Failed to create backup directory: {0}\n{0:?}",
-					error
-				);
-			}
-		}
-		result
+		start_backup_cycle(backup_dir);
 	}
-
-	let _ = ensure_backup_dir_exists(&backup_dir);
-
-	task::spawn(async move {
-		use tokio::time::{interval, Duration};
-
-		let mut interval = interval(Duration::from_secs(60 * 60 * 24));
-
-		loop {
-			interval.tick().await;
-
-			if let Err(_) = ensure_backup_dir_exists(&backup_dir) {
-				continue;
-			}
-
-			let conn = connection();
-
-			let backup_name = format!(
-				"{}_{}_data_backup_{}.bak",
-				env!("CARGO_PKG_NAME"),
-				env!("CARGO_PKG_VERSION"),
-				Utc::now().format("%+")
-			);
-
-			let backup_path = backup_dir.join(backup_name);
-
-			if let Err(error) =
-				conn.backup(DatabaseName::Main, backup_path, None)
-			{
-				log::error!("Error backing up database: {0}\n{0:?}", error);
-			}
-		}
-	});
 }
 
 macro_rules! await_db {

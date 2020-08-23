@@ -6,7 +6,7 @@ repository = "https://github.com/ThatsNoMoon/highlights"
 edition = "2018"
 
 [dependencies]
-tokio = { version = "0.2", features = ["macros", "blocking", "time"] }
+tokio = { version = "0.2", features = ["macros", "blocking", "time", "fs"] }
 rusqlite = { version = "0.23", features = ["bundled", "backup"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.16"
