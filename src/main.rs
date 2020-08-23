@@ -207,7 +207,7 @@ async fn main() {
 
 	db::init();
 
-	tokio::spawn(monitoring::init());
+	monitoring::init();
 
 	let mut client = Client::new(token)
 		.event_handler(Handler)

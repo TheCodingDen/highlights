@@ -80,13 +80,13 @@ impl Drop for Timer {
 	}
 }
 
-pub async fn init() {
+pub fn init() {
 	if let Ok(var) = std::env::var("HIGHLIGHTS_PROMETHEUS_ADDR") {
 		match var.parse() {
 			Ok(addr) => {
 				ENABLED.set(true).unwrap();
 
-				prometheus_server(addr).await;
+				tokio::spawn(prometheus_server(addr));
 			}
 			Err(error) => {
 				ENABLED.set(false).unwrap();
