@@ -662,29 +662,38 @@ pub async fn help(
 			name: "add",
 			short_desc: "Add a keyword to highlight in the current server",
 			long_desc: format!(
-"Use `@{name} add [keyword]` to add a keyword to highlight in the current server. All of the text after `add` will be treated as one keyword.
+				"Use `@{name} add [keyword]` to add a keyword to highlight in the current server. \
+				All of the text after `add` will be treated as one keyword.
 
-Keywords are case-insensitive.
+				Keywords are case-insensitive.
 
-You're only notified of keywords when they appear in channels you follow. You can follow a channel with `@{name} follow [channel]`; see `@{name} help follow` for more information.
+				You're only notified of keywords when they appear in channels you follow. \
+				You can follow a channel with `@{name} follow [channel]`; \
+				see `@{name} help follow` for more information.
 
-You can remove keywords later with `@{name} remove [keyword]`.
+				You can remove keywords later with `@{name} remove [keyword]`.
 
-You can list your current keywords with `@{name} keywords`.",
-					name = username
-				)
+				You can list your current keywords with `@{name} keywords`.",
+				name = username,
+			)
 		},
 		CommandInfo {
 			name: "follow",
 			short_desc: "Follow a channel to be notified when your keywords appear there",
 			long_desc: format!(
-"Use `@{name} follow [channels]` to follow the specified channel and be notified when your keywords appear there. `[channels]` may be channel mentions, channel names, or channel IDs. You can specify multiple channels, separated by spaces, to follow all of them at once.
+				"Use `@{name} follow [channels]` to follow the specified channel and \
+				be notified when your keywords appear there. \
+				`[channels]` may be channel mentions, channel names, or channel IDs. \
+				You can specify multiple channels, separated by spaces, \
+				to follow all of them at once.
 
-You're only notified of your keywords in channels you follow. You can add a keyword with `@{name} add [keyword]`; see `@{name} help add` for more information.
+				You're only notified of your keywords in channels you follow. \
+				You can add a keyword with `@{name} add [keyword]`; \
+				see `@{name} help add` for more information.
 
-You can unfollow channels later with `@{name} unfollow [channels]`.
+				You can unfollow channels later with `@{name} unfollow [channels]`.
 
-You can list your current followed channels with `@{name} follows`.",
+				You can list your current followed channels with `@{name} follows`.",
 				name = username,
 			)
 		},
@@ -692,21 +701,28 @@ You can list your current followed channels with `@{name} follows`.",
 			name: "remove",
 			short_desc: "Remove a keyword to highlight in the current server",
 			long_desc: format!(
-"Use `@{name} remove [keyword]` to remove a keyword that you previously added with `@{name} add` in the current server. All of the text after `remove` will be treated as one keyword.
+				"Use `@{name} remove [keyword]` to remove a keyword that you \
+				previously added with `@{name} add` in the current server. \
+				All of the text after `remove` will be treated as one keyword.
 
-Keywords are case-insensitive.
+				Keywords are case-insensitive.
 
-You can list your current keywords with `@{name} keywords`.",
+				You can list your current keywords with `@{name} keywords`.",
 				name = username,
 			)
 		},
 		CommandInfo {
 			name: "unfollow",
-			short_desc: "Unfollow a channel, stopping notifications about your keywords appearing there",
+			short_desc: 
+				"Unfollow a channel, stopping notifications about your keywords appearing there",
 			long_desc: format!(
-"Use `@{name} unfollow [channels]` to unfollow channels and stop notifications about your keywords appearing there. `[channels]` may be channel mentions, channel names, or channel IDs. You can specify multiple channels, separated by spaces, to follow all of them at once.
+				"Use `@{name} unfollow [channels]` to unfollow channels and stop notifications \
+				about your keywords appearing there. \
+				`[channels]` may be channel mentions, channel names, or channel IDs. \
+				You can specify multiple channels, separated by spaces, to follow all of them \
+				at once.
 
-You can list your current followed channels with `@{name} follows`.",
+				You can list your current followed channels with `@{name} follows`.",
 				name = username,
 			)
 		},
@@ -714,13 +730,18 @@ You can list your current followed channels with `@{name} follows`.",
 			name: "keywords",
 			short_desc: "List your current highlighted keywords",
 			long_desc: format!(
-"Use `@{name} keywords` to list your current highlighted keywords.
+				"Use `@{name} keywords` to list your current highlighted keywords.
 
-Using `keywords` in a server will show you only the keywords you've highlighted in that server.
+				Using `keywords` in a server will show you only the keywords you've highlighted \
+				in that server.
 
-Using `keywords` in DMs with the bot will list keywords you've highlighted across all shared servers, including potentially deleted servers or servers this bot is no longer a member of.
+				Using `keywords` in DMs with the bot will list keywords you've highlighted \
+				across all shared servers, including potentially deleted servers or servers this \
+				bot is no longer a member of.
 
-If the bot can't find information about a server you have keywords in, its ID will be in parentheses, so you can remove them with `removeserver` if desired. See `@{name} help removeserver` for more details.",
+				If the bot can't find information about a server you have keywords in, \
+				its ID will be in parentheses, so you can remove them with `removeserver` \
+				if desired. See `@{name} help removeserver` for more details.",
 				name = username
 			)
 		},
@@ -728,13 +749,17 @@ If the bot can't find information about a server you have keywords in, its ID wi
 			name: "follows",
 			short_desc: "List your current followed channels",
 			long_desc: format!(
-"Use `@{name} follows` to list your current followed channels.
+				"Use `@{name} follows` to list your current followed channels.
 
-Using `follows` in a server will show you only the channels you've followed in that server.
+				Using `follows` in a server will show you only the channels you've followed \
+				in that server.
 
-Using `follows` in DMs with the bot will list channels you've followed across all servers, including deleted channels or channels in servers this bot is no longer a member of.
+				Using `follows` in DMs with the bot will list channels you've followed across \
+				all servers, including deleted channels or channels in servers this bot is \
+				no longer a member of.
 
-If the bot can't find information on a channel you previously followed, its ID will be in parentheses, so you can investigate or unfollow.",
+				If the bot can't find information on a channel you previously followed, \
+				its ID will be in parentheses, so you can investigate or unfollow.",
 				name = username
 			)
 		},
@@ -742,9 +767,13 @@ If the bot can't find information on a channel you previously followed, its ID w
 			name: "removeserver",
 			short_desc: "Remove all keywords on a given server",
 			long_desc: format!(
-"Use `@{name} removeserver [server ID]` to remove all keywords on the server with the given ID.
+				"Use `@{name} removeserver [server ID]` to remove all keywords on the server \
+				with the given ID.
 
-This is normally not necessary, but if you no longer share a server with the bot where you added keywords, you can clean up your keywords list by using `keywords` in DMs to see all keywords, and this command to remove any server IDs the bot can't find.",
+				This is normally not necessary, but if you no longer share a server with the bot \
+				where you added keywords, you can clean up your keywords list by using `keywords` \
+				in DMs to see all keywords, and this command to remove any server IDs the bot \
+				can't find.",
 				name = username
 			)
 		},
@@ -752,16 +781,18 @@ This is normally not necessary, but if you no longer share a server with the bot
 			name: "help",
 			short_desc: "Show this help message",
 			long_desc: format!(
-"Use `@{name} help` to see a list of commands and short descriptions.
-Use `@{name} help [command]` to see additional information about the specified command.
-Use `@{name} about` to see information about this bot.",
+				"Use `@{name} help` to see a list of commands and short descriptions.
+				Use `@{name} help [command]` to see additional information about \
+				the specified command.
+				Use `@{name} about` to see information about this bot.",
 				name = username
 			),
 		},
 		CommandInfo {
 			name: "about",
 			short_desc: "Show some information about this bot",
-			long_desc: "Show some information about this bot, like version and source code.".to_owned(),
+			long_desc: 
+				"Show some information about this bot, like version and source code.".to_owned(),
 		},
 	];
 
@@ -771,7 +802,11 @@ Use `@{name} about` to see information about this bot.",
 			.send_message(&ctx, |m| {
 				m.embed(|e|
 					e.title(format!("{} – Help", username))
-						.description(format!("Use `@{} help [command]` to see more information about a specified command", username))
+						.description(format!(
+							"Use `@{} help [command]` to see more information \
+							about a specified command",
+							username
+						))
 						.fields(commands.iter().map(|info| (info.name, info.short_desc, true)))
 						.color(EMBED_COLOR)
 				)
