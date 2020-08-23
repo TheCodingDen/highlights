@@ -1,4 +1,4 @@
 /target
-data.db*
+/data
 *.sublime*
 .env
