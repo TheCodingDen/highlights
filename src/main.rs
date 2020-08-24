@@ -101,6 +101,10 @@ impl EventHandler for Handler {
 
 		init_log_channel_id(&ctx).await;
 
+		let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
+
+		ctx.set_activity(Activity::listening(&format!("@{} help", username))).await;
+
 		log::info!("Ready to highlight!");
 	}
 }
