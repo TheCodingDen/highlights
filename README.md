@@ -52,3 +52,7 @@ scrape_configs:
 ```
 
 Highlights reports the metrics `highlights_command_time` and `highlights_query_time`.
+
+## License
+
+Highlights is licensed under the [OSL 3.0](https://choosealicense.com/licenses/osl-3.0/). Derivatives must be licensed under OSL 3.0, but this does not include any linking restrictions; you may link this code to closed-source code.

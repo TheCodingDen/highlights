@@ -1,3 +1,6 @@
+// Copyright 2020 Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
 use hyper::{
 	header::CONTENT_TYPE,
 	service::{make_service_fn, service_fn},

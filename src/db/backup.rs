@@ -1,3 +1,6 @@
+// Copyright 2020 Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
 use chrono::{DateTime, Utc};
 use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
 use tokio::{fs, task, time::interval};
