@@ -72,12 +72,12 @@ impl Drop for Timer {
 			TimerType::Command => {
 				COMMAND_TIME_GAUGE
 					.with_label_values(&[self.name])
-					.add(elapsed);
+					.set(elapsed);
 			}
 			TimerType::Query => {
 				QUERY_TIME_GAUGE
 					.with_label_values(&[self.name])
-					.add(elapsed);
+					.set(elapsed);
 			}
 		}
 	}
