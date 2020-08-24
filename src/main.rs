@@ -100,6 +100,8 @@ impl EventHandler for Handler {
 		init_mentions(ready.user.id);
 
 		init_log_channel_id(&ctx).await;
+
+		log::info!("Ready to highlight!");
 	}
 }
 
@@ -200,7 +202,7 @@ async fn main() {
 
 	env_logger::from_env(
 		env_logger::Env::new()
-			.filter("HIGHLIGHTS_LOG_FILTER")
+			.filter_or("HIGHLIGHTS_LOG_FILTER", "highlights=info")
 			.write_style("HIGHLIGHTS_LOG_STYLE"),
 	)
 	.init();
