@@ -2,6 +2,8 @@
 
 Highlights is a simple highlighting bot for Discord. Add a keyword and follow a channel to get notified by the bot when your keyword appears in that channel.
 
+You can add highlights to your server directly with [this link](https://discord.com/api/oauth2/authorize?client_id=740802975576096829&scope=bot). Keep in mind it's still in a beta state. If you run into any problems, please make an issue here or let me know on [The Coding Den](https://discord.gg/code), `@ThatsNoMoon#0175`.
+
 ## Building
 Highlights requires `cargo` to be built. [rustup](https://rustup.rs) is the recommended installation method for most use-cases.
 
@@ -20,7 +22,7 @@ HIGHLIGHTS_DATA_DIR="highlights_data"
 The only required environment variable is `HIGHLIGHTS_DISCORD_TOKEN`, which must be a valid Discord bot token. You can use the following environment variables to configure highlights' other behavior:
 - `HIGHLIGHTS_DATA_DIR`: Configures where highlights stores its database and backup files. Default is `./data`.
 - `HIGHLIGHTS_OWNER_ID`: Can be a Discord user ID or the ID of a channel where highlights can send messages; errors will be logged in the user's DMs or in the channel. Defaults to my (ThatsNoMoon's) user ID, so you should probably change this or I'm going to block your bot.
-- `HIGHLIGHTS_LOG_FILTER`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) output; set this to `debug` to enable all logging.
+- `HIGHLIGHTS_LOG_FILTER`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) output; set this to `debug` to enable all logging or `error` to only log errors. Default is `highlights=info`.
 - `HIGHLIGHTS_LOG_STYLE`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) style; set this to `never` to disable colored output, or `always` to force colored output. See [env_logger's documentation](https://docs.rs/env_logger/0.7.1/env_logger/index.html) for more information.
 - `HIGHLIGHTS_PROMETHEUS_ADDR`: Sets the address to listen for [Prometheus](https://prometheus.io) monitoring requests.
 - `HIGHLIGHTS_DONT_BACKUP`: Disables automatic database backups.
