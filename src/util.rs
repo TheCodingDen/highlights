@@ -3,21 +3,27 @@
 
 use serenity::{
 	client::Context,
-	http::CacheHttp,
-	model::{
-		channel::Message,
-		id::{ChannelId, UserId},
-	},
+	model::{channel::Message, id::UserId},
 };
 
 use crate::{
 	db::Keyword,
 	global::{EMBED_COLOR, PATIENCE_DURATION},
-	log_channel_id, Error,
+	Error,
 };
-use std::{
-	convert::TryInto, error::Error as StdError, fmt::Display, ops::Range,
-};
+use std::{convert::TryInto, fmt::Display, ops::Range};
+
+#[macro_export]
+macro_rules! log_discord_error {
+	(in $channel_id:expr, by $user_id:expr, $error:expr) => {
+		log::error!(
+			"Error in <#{0}> ({0}) by <@{1}> ({1}): {2}\n{2:?}",
+			$channel_id,
+			$user_id,
+			$error
+		);
+	};
+}
 
 macro_rules! regex {
 	($re:literal $(,)?) => {{
@@ -98,28 +104,9 @@ pub async fn notify_keyword(
 		.await;
 
 		if let Err(error) = result {
-			report_error(&ctx, channel_id, user_id, error).await;
+			log_discord_error!(in channel_id, by user_id, error);
 		}
 	}
-}
-
-pub async fn report_error<E: StdError>(
-	ctx: impl CacheHttp,
-	channel_id: ChannelId,
-	user_id: UserId,
-	error: E,
-) {
-	let _ = log_channel_id()
-		.say(
-			ctx.http(),
-			format!(
-				"Error in <#{0}> ({0}) by <@{1}> ({1}): {2}\n{2:?}",
-				channel_id, user_id, error
-			),
-		)
-		.await;
-
-	log::error!("Error in {} by {}: {2}\n{2:?}", channel_id, user_id, error);
 }
 
 pub async fn success(ctx: &Context, message: &Message) -> Result<(), Error> {

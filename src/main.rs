@@ -6,69 +6,24 @@ mod commands;
 pub mod db;
 use db::Keyword;
 
+mod error;
+pub use error::Error;
+
 pub mod global;
-use global::{
-	bot_mention, bot_nick_mention, init_log_channel_id, init_mentions,
-	log_channel_id,
-};
+use global::{bot_mention, bot_nick_mention, init_mentions};
 
 pub mod monitoring;
 
-pub mod util;
-use util::{error, notify_keyword, question, report_error};
+pub mod reporting;
 
-use rusqlite::Error as RusqliteError;
+#[macro_use]
+pub mod util;
+use util::{error, notify_keyword, question};
+
 use serenity::{model::prelude::*, prelude::*};
 use tokio::task;
 
-use std::{convert::TryInto, env, error::Error as StdError, fmt::Display};
-
-#[derive(Debug)]
-struct SimpleError(String);
-
-impl Display for SimpleError {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		Display::fmt(&self.0, f)
-	}
-}
-
-impl StdError for SimpleError {}
-
-#[derive(Debug)]
-pub struct Error(Box<dyn StdError + Send + Sync + 'static>);
-
-impl From<SerenityError> for Error {
-	fn from(e: SerenityError) -> Self {
-		Self(Box::new(e))
-	}
-}
-
-impl From<RusqliteError> for Error {
-	fn from(e: RusqliteError) -> Self {
-		Self(Box::new(e))
-	}
-}
-
-impl From<String> for Error {
-	fn from(e: String) -> Self {
-		Self(Box::new(SimpleError(e)))
-	}
-}
-
-impl From<&'_ str> for Error {
-	fn from(e: &str) -> Self {
-		Self(Box::new(SimpleError(e.to_owned())))
-	}
-}
-
-impl Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		Display::fmt(&self.0, f)
-	}
-}
-
-impl StdError for Error {}
-impl StdError for &'_ Error {}
+use std::{convert::TryInto, env};
 
 struct Handler;
 
@@ -92,18 +47,17 @@ impl EventHandler for Handler {
 		};
 
 		if let Err(e) = &result {
-			report_error(&ctx, message.channel_id, message.author.id, e).await;
+			log_discord_error!(in message.channel_id, by message.author.id, e);
 		}
 	}
 
 	async fn ready(&self, ctx: Context, ready: Ready) {
 		init_mentions(ready.user.id);
 
-		init_log_channel_id(&ctx).await;
-
 		let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
 
-		ctx.set_activity(Activity::listening(&format!("@{} help", username))).await;
+		ctx.set_activity(Activity::listening(&format!("@{} help", username)))
+			.await;
 
 		log::info!("Ready to highlight!");
 	}
@@ -204,12 +158,7 @@ async fn handle_keywords(
 async fn main() {
 	let _ = dotenv::dotenv();
 
-	env_logger::from_env(
-		env_logger::Env::new()
-			.filter_or("HIGHLIGHTS_LOG_FILTER", "highlights=info")
-			.write_style("HIGHLIGHTS_LOG_STYLE"),
-	)
-	.init();
+	reporting::init();
 
 	let token = env::var("HIGHLIGHTS_DISCORD_TOKEN")
 		.expect("HIGHLIGHTS_DISCORD_TOKEN must be set");

@@ -13,7 +13,7 @@ Once you have `cargo` installed, run `cargo build --release` (or `cargo build` f
 
 Highlights is configured by environment variables, and also supports dotenv. To use dotenv, create a file `.env` in the directory you run highlights in, and put key-value pairs in it, like the below:
 ```
-HIGHLIGHTS_DISCORD_TOKEN="your token goes here"
+HIGHLIGHTS_DISCORD_TOKEN="your bot token goes here"
 HIGHLIGHTS_DATA_DIR="highlights_data"
 ```
 
@@ -21,9 +21,9 @@ HIGHLIGHTS_DATA_DIR="highlights_data"
 
 The only required environment variable is `HIGHLIGHTS_DISCORD_TOKEN`, which must be a valid Discord bot token. You can use the following environment variables to configure highlights' other behavior:
 - `HIGHLIGHTS_DATA_DIR`: Configures where highlights stores its database and backup files. Default is `./data`.
-- `HIGHLIGHTS_OWNER_ID`: Can be a Discord user ID or the ID of a channel where highlights can send messages; errors will be logged in the user's DMs or in the channel. Defaults to my (ThatsNoMoon's) user ID, so you should probably change this or I'm going to block your bot.
-- `HIGHLIGHTS_LOG_FILTER`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) output; set this to `debug` to enable all logging or `error` to only log errors. Default is `highlights=info`.
-- `HIGHLIGHTS_LOG_STYLE`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) style; set this to `never` to disable colored output, or `always` to force colored output. See [env_logger's documentation](https://docs.rs/env_logger/0.7.1/env_logger/index.html) for more information.
+- `HIGHLIGHTS_WEBHOOK_URL`: Should be a Discord webhook url (`https://discord.com/api/webhooks/<webhook ID>/<webhook token>`) to send error messages to. If not set, errors will only be logged to the console. (Highlights uses a webhook instead of the bot account so that it can report panic messages and not just errors.)
+- `HIGHLIGHTS_LOG_FILTER`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) output; set this to `debug` to enable all console logging or `error` to only log errors. Default is `highlights=info`.
+- `HIGHLIGHTS_LOG_STYLE`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) style; set this to `never` to disable colored console output, or `always` to force colored output. See [env_logger's documentation](https://docs.rs/env_logger/0.7.1/env_logger/index.html) for more information.
 - `HIGHLIGHTS_PROMETHEUS_ADDR`: Sets the address to listen for [Prometheus](https://prometheus.io) monitoring requests.
 - `HIGHLIGHTS_DONT_BACKUP`: Disables automatic database backups.
 

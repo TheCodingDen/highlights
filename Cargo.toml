@@ -1,6 +1,6 @@
 [package]
 name = "highlights"
-version = "1.0.0-beta.3"
+version = "1.0.0-beta.4"
 authors = ["Benjamin Scherer <ThatsNoMoon.Alderaan@gmail.com>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"
@@ -14,11 +14,12 @@ r2d2_sqlite = "0.16"
 once_cell = "1.4"
 regex = "1.3"
 chrono = "0.4"
-log = "0.4"
+log = { version = "0.4", features = ["std"] }
 env_logger = "0.7"
 dotenv = "0.15"
 prometheus = "0.9"
 hyper = "0.13"
+serde = { version = "1", features = ["derive"] }
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity.git"
@@ -34,3 +35,8 @@ features = [
     "model",
     "rustls_backend",
 ]
+
+[dependencies.reqwest]
+version = "0.10"
+default-features = false
+features = ["blocking", "rustls-tls"]
