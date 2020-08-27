@@ -20,7 +20,14 @@ pub mod reporting;
 pub mod util;
 use util::{error, notify_keyword, question};
 
-use serenity::{model::prelude::*, prelude::*};
+use serenity::{
+	client::{Client, Context, EventHandler},
+	model::{
+		channel::Message,
+		gateway::{Activity, Ready},
+		id::UserId,
+	},
+};
 use tokio::task;
 
 use std::{convert::TryInto, env};
