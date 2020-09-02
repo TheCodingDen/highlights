@@ -25,6 +25,7 @@ macro_rules! log_discord_error {
 	};
 }
 
+#[macro_export]
 macro_rules! regex {
 	($re:literal $(,)?) => {{
 		static RE: once_cell::sync::OnceCell<regex::Regex> =

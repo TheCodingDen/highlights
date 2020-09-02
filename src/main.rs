@@ -128,9 +128,21 @@ async fn handle_keywords(
 			.await?;
 
 	for keyword in keywords {
-		let start = match content.to_lowercase().find(&keyword.keyword) {
-			Some(i) => i,
-			None => continue,
+		let start = {
+			let mut fragments = regex!(r"[^a-zA-Z0-9]").split(content);
+
+			let substring = match fragments
+				.find(|frag| keyword.keyword.eq_ignore_ascii_case(frag))
+			{
+				Some(s) => s,
+				None => continue,
+			};
+
+			let substring_start = substring.as_ptr() as usize;
+			let content_start = content.as_ptr() as usize;
+			let substring_index = substring_start - content_start;
+
+			substring_index
 		};
 		let end = start + keyword.keyword.len();
 
