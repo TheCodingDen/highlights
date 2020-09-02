@@ -50,13 +50,16 @@ pub async fn notify_keyword(
 		.timeout(PATIENCE_DURATION);
 	if new_message.await.is_none() {
 		let result: Result<(), Error> = async {
-			let escaped_content =
-				regex!(r"[_*()\[\]~`]").replace_all(&message.content, r"\$0");
+			let re = regex!(r"[_*()\[\]~`]");
+			let msg = &message.content;
 			let formatted_content = format!(
 				"{}__**{}**__{}",
-				&escaped_content[..keyword_range.start],
-				&escaped_content[keyword_range.start..keyword_range.end],
-				&escaped_content[keyword_range.end..]
+				re.replace_all(&msg[..keyword_range.start], r"\$0"),
+				re.replace_all(
+					&msg[keyword_range.start..keyword_range.end],
+					r"\$0"
+				),
+				re.replace_all(&msg[keyword_range.end..], r"\$0")
 			);
 
 			let message_link = format!(
