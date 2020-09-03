@@ -1,0 +1,357 @@
+// Copyright 2020 Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
+use super::util::{
+	get_ids_from_args, get_readable_channels_from_args,
+	get_text_channels_in_guild,
+};
+
+use serenity::{
+	client::Context,
+	model::{
+		channel::{ChannelType, Message},
+		id::ChannelId,
+	},
+};
+
+use std::{collections::HashMap, convert::TryInto, fmt::Write};
+
+use crate::{db::Mute, monitoring::Timer, util::error, Error};
+
+pub async fn mute(
+	ctx: &Context,
+	message: &Message,
+	args: &str,
+) -> Result<(), Error> {
+	let _timer = Timer::command("mute");
+	let guild_id = check_guild!(ctx, message);
+
+	check_empty_args!(args, ctx, message);
+
+	let channels = get_text_channels_in_guild(ctx, guild_id).await?;
+
+	let channel_args = get_readable_channels_from_args(
+		ctx,
+		message.author.id,
+		&channels,
+		args,
+	)
+	.await?;
+
+	let mut not_found = channel_args.not_found;
+	not_found
+		.extend(channel_args.user_cant_read.into_iter().map(|(_, arg)| arg));
+
+	let cant_mute = channel_args
+		.self_cant_read
+		.into_iter()
+		.map(|c| format!("<#{}>", c.id))
+		.collect::<Vec<_>>();
+
+	let mut muted = vec![];
+	let mut already_muted = vec![];
+
+	for channel in channel_args.found {
+		let mute = Mute {
+			user_id: message.author.id.0.try_into().unwrap(),
+			channel_id: channel.id.0.try_into().unwrap(),
+		};
+
+		if mute.clone().exists().await? {
+			already_muted.push(format!("<#{}>", channel.id));
+		} else {
+			muted.push(format!("<#{}>", channel.id));
+			mute.insert().await?;
+		}
+	}
+
+	let mut msg = String::with_capacity(45);
+
+	if !muted.is_empty() {
+		msg.push_str("Muted channels: ");
+		msg.push_str(&muted.join(", "));
+
+		message.react(ctx, '✅').await?;
+	}
+
+	if !already_muted.is_empty() {
+		if !msg.is_empty() {
+			msg.push('\n');
+		}
+		msg.push_str("Channels already muted: ");
+		msg.push_str(&already_muted.join(", "));
+
+		message.react(ctx, '❌').await?;
+	}
+
+	if !not_found.is_empty() {
+		if !msg.is_empty() {
+			msg.push('\n');
+		}
+		msg.push_str("Couldn't find channels: ");
+		msg.push_str(&not_found.join(", "));
+
+		message.react(ctx, '❓').await?;
+	}
+
+	if !cant_mute.is_empty() {
+		if !msg.is_empty() {
+			msg.push('\n');
+		}
+		msg.push_str("Unable to mute channels: ");
+		msg.push_str(&cant_mute.join(", "));
+
+		if already_muted.is_empty() {
+			message.react(ctx, '❌').await?;
+		}
+	}
+
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.content(msg).allowed_mentions(|m| m.empty_parse())
+		})
+		.await?;
+
+	Ok(())
+}
+
+pub async fn unmute(
+	ctx: &Context,
+	message: &Message,
+	args: &str,
+) -> Result<(), Error> {
+	let _timer = Timer::command("unmute");
+	check_empty_args!(args, ctx, message);
+
+	let channels = match message.guild_id {
+		Some(guild_id) => {
+			ctx.cache.guild_channels(guild_id).await.map(|channels| {
+				channels
+					.into_iter()
+					.filter(|(_, channel)| channel.kind == ChannelType::Text)
+					.collect()
+			})
+		}
+		None => None,
+	};
+
+	let user_id: i64 = message.author.id.0.try_into().unwrap();
+
+	let mut unmuted = vec![];
+	let mut not_muted = vec![];
+	let mut not_found = vec![];
+
+	match channels.as_ref() {
+		Some(channels) => {
+			let channel_args = get_readable_channels_from_args(
+				ctx,
+				message.author.id,
+				channels,
+				args,
+			)
+			.await?;
+
+			not_found = channel_args.not_found;
+
+			for (user_unreadable, arg) in channel_args.user_cant_read {
+				let mute = Mute {
+					user_id,
+					channel_id: user_unreadable.id.0.try_into().unwrap(),
+				};
+
+				if !mute.clone().exists().await? {
+					not_found.push(arg);
+				} else {
+					unmuted.push(format!("<#{0}> ({0})", user_unreadable.id));
+					mute.delete().await?;
+				}
+			}
+
+			for self_unreadable in channel_args.self_cant_read {
+				let mute = Mute {
+					user_id,
+					channel_id: self_unreadable.id.0.try_into().unwrap(),
+				};
+
+				if !mute.clone().exists().await? {
+					not_muted.push(format!("<#{0}>", self_unreadable.id));
+				} else {
+					unmuted.push(format!("<#{0}>", self_unreadable.id));
+					mute.delete().await?;
+				}
+			}
+		}
+		None => {
+			for result in get_ids_from_args(args) {
+				match result {
+					Ok((channel_id, arg)) => {
+						let channel_id = channel_id.0.try_into().unwrap();
+						let mute = Mute {
+							user_id,
+							channel_id,
+						};
+
+						if !mute.clone().exists().await? {
+							not_found.push(arg);
+						} else {
+							unmuted.push(format!("<#{0}> ({0})", channel_id));
+							mute.delete().await?;
+						}
+					}
+					Err(arg) => {
+						not_found.push(arg);
+					}
+				}
+			}
+		}
+	}
+
+	let mut msg = String::with_capacity(50);
+
+	if !unmuted.is_empty() {
+		msg.push_str("Unmuted channels: ");
+		msg.push_str(&unmuted.join(", "));
+
+		message.react(ctx, '✅').await?;
+	}
+
+	if !not_muted.is_empty() {
+		if !msg.is_empty() {
+			msg.push('\n');
+		}
+		msg.push_str("Channels weren't muted: ");
+		msg.push_str(&not_muted.join(", "));
+
+		message.react(ctx, '❌').await?;
+	}
+
+	if !not_found.is_empty() {
+		if !msg.is_empty() {
+			msg.push('\n');
+		}
+		msg.push_str("Couldn't find channels: ");
+		msg.push_str(&not_found.join(", "));
+
+		message.react(ctx, '❓').await?;
+	}
+
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.content(msg).allowed_mentions(|m| m.empty_parse())
+		})
+		.await?;
+
+	Ok(())
+}
+
+pub async fn mutes(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	let _timer = Timer::command("mutes");
+	match message.guild_id {
+		Some(guild_id) => {
+			let channels = ctx
+				.cache
+				.guild_channels(guild_id)
+				.await
+				.ok_or("Couldn't get guild channels to list mutes")?;
+
+			let mutes = Mute::user_mutes(message.author.id)
+				.await?
+				.into_iter()
+				.filter(|mute| {
+					let channel_id =
+						ChannelId(mute.channel_id.try_into().unwrap());
+					channels.contains_key(&channel_id)
+				})
+				.map(|mute| format!("<#{}>", mute.channel_id))
+				.collect::<Vec<_>>();
+
+			if mutes.is_empty() {
+				return error(ctx, message, "You haven't muted any channels!")
+					.await;
+			}
+
+			let guild_name = ctx
+				.cache
+				.guild_field(guild_id, |g| g.name.clone())
+				.await
+				.ok_or("Couldn't get guild to list mutes")?;
+
+			let response = format!(
+				"{}'s muted channels in {}:\n  - {}",
+				message.author.name,
+				guild_name,
+				mutes.join("\n  - ")
+			);
+
+			message.channel_id.say(ctx, response).await?;
+		}
+		None => {
+			let mutes = Mute::user_mutes(message.author.id).await?;
+
+			if mutes.is_empty() {
+				return error(ctx, message, "You haven't muted any channels!")
+					.await;
+			}
+
+			let mut mutes_by_guild = HashMap::new();
+			let mut not_found = Vec::new();
+
+			for mute in mutes {
+				let channel_id = ChannelId(mute.channel_id.try_into().unwrap());
+				let channel = match ctx.cache.guild_channel(channel_id).await {
+					Some(channel) => channel,
+					None => {
+						not_found.push(format!("<#{0}> ({0})", channel_id));
+						continue;
+					}
+				};
+
+				mutes_by_guild
+					.entry(channel.guild_id)
+					.or_insert_with(Vec::new)
+					.push(format!("<#{}>", channel_id));
+			}
+
+			let mut response = String::new();
+
+			for (guild_id, channel_ids) in mutes_by_guild {
+				if !response.is_empty() {
+					response.push_str("\n\n");
+				}
+
+				let guild_name = ctx
+					.cache
+					.guild_field(guild_id, |g| g.name.clone())
+					.await
+					.ok_or("Couldn't get guild to list mutes")?;
+
+				write!(
+					&mut response,
+					"Your muted channels in {}:\n  – {}",
+					guild_name,
+					channel_ids.join("\n  – ")
+				)
+				.unwrap();
+			}
+
+			if !not_found.is_empty() {
+				write!(
+					&mut response,
+					"\n\nCouldn't find (deleted?) muted channels:\n  – {}",
+					not_found.join("\n  – ")
+				)
+				.unwrap();
+			}
+
+			message.channel_id.say(ctx, response).await?;
+		}
+	}
+
+	Ok(())
+}

@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "highlights"
-version = "1.0.0-beta.5"
+version = "1.0.0-beta.6"
 dependencies = [
  "chrono",
  "dotenv",

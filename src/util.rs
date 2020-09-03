@@ -1,6 +1,7 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+use once_cell::sync::Lazy;
 use serenity::{
 	client::Context,
 	model::{channel::Message, id::UserId},
@@ -11,6 +12,7 @@ use crate::{
 	global::{EMBED_COLOR, PATIENCE_DURATION},
 	Error,
 };
+use regex::Regex;
 use std::{convert::TryInto, fmt::Display, ops::Range};
 
 #[macro_export]
@@ -34,6 +36,9 @@ macro_rules! regex {
 		}};
 }
 
+pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
+	Lazy::new(|| Regex::new(r"[_*()\[\]~`]").unwrap());
+
 pub async fn notify_keyword(
 	ctx: Context,
 	message: Message,
@@ -51,8 +56,8 @@ pub async fn notify_keyword(
 		.timeout(PATIENCE_DURATION);
 	if new_message.await.is_none() {
 		let result: Result<(), Error> = async {
-			let re = regex!(r"[_*()\[\]~`]");
 			let msg = &message.content;
+			let re = &*MD_SYMBOL_REGEX;
 			let formatted_content = format!(
 				"{}__**{}**__{}",
 				re.replace_all(&msg[..keyword_range.start], r"\$0"),

@@ -21,7 +21,7 @@ pub mod util;
 use util::{error, notify_keyword, question};
 
 use serenity::{
-	client::{Client, Context, EventHandler},
+	client::{bridge::gateway::GatewayIntents, Client, Context, EventHandler},
 	model::{
 		channel::Message,
 		gateway::{Activity, Ready},
@@ -90,12 +90,12 @@ async fn handle_command(
 
 	let result = match command {
 		"add" => commands::add(ctx, message, args).await,
-		"follow" => commands::follow(ctx, message, args).await,
 		"remove" => commands::remove(ctx, message, args).await,
-		"removeserver" => commands::remove_server(ctx, message, args).await,
-		"unfollow" => commands::unfollow(ctx, message, args).await,
+		"mute" => commands::mute(ctx, message, args).await,
+		"unmute" => commands::unmute(ctx, message, args).await,
+		"remove-server" => commands::remove_server(ctx, message, args).await,
 		"keywords" => commands::keywords(ctx, message, args).await,
-		"follows" => commands::follows(ctx, message, args).await,
+		"mutes" => commands::mutes(ctx, message, args).await,
 		"help" => commands::help(ctx, message, args).await,
 		"about" => commands::about(ctx, message, args).await,
 		_ => question(ctx, message).await,
@@ -188,6 +188,12 @@ async fn main() {
 
 	let mut client = Client::new(token)
 		.event_handler(Handler)
+		.intents(
+			GatewayIntents::DIRECT_MESSAGES
+				| GatewayIntents::GUILD_MESSAGES
+				| GatewayIntents::GUILDS
+				| GatewayIntents::GUILD_MEMBERS,
+		)
 		.await
 		.expect("Failed to create client");
 
