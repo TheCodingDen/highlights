@@ -50,7 +50,13 @@ impl EventHandler for Handler {
 			Some(command_content) => {
 				handle_command(&ctx, &message, command_content.trim()).await
 			}
-			None => handle_keywords(&ctx, &message, content).await,
+			None => {
+				if message.guild_id.is_none() {
+					handle_command(&ctx, &message, content.trim()).await
+				} else {
+					handle_keywords(&ctx, &message, content).await
+				}
+			}
 		};
 
 		if let Err(e) = &result {
@@ -79,7 +85,7 @@ async fn handle_command(
 		let mut iter = content.splitn(2, ' ');
 
 		let command = match iter.next() {
-			Some(c) => c,
+			Some(c) => c.to_lowercase(),
 			None => return question(ctx, message).await,
 		};
 
@@ -88,7 +94,7 @@ async fn handle_command(
 		(command, args)
 	};
 
-	let result = match command {
+	let result = match &*command {
 		"add" => commands::add(ctx, message, args).await,
 		"remove" => commands::remove(ctx, message, args).await,
 		"mute" => commands::mute(ctx, message, args).await,
@@ -98,7 +104,7 @@ async fn handle_command(
 		"mutes" => commands::mutes(ctx, message, args).await,
 		"help" => commands::help(ctx, message, args).await,
 		"about" => commands::about(ctx, message, args).await,
-		_ => question(ctx, message).await,
+		_ => return question(ctx, message).await,
 	};
 
 	match result {
