@@ -100,10 +100,10 @@ fn get_channels_from_args<'args, 'c>(
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	args: &'args str,
 ) -> ChannelsFromArgs<'args, 'c> {
-	dbg!(args
+	args
 		.split_whitespace()
 		.map(|arg| get_channel_from_arg(channels, arg))
-		.collect())
+		.collect()
 }
 
 fn get_channel_from_arg<'arg, 'c>(
