@@ -17,7 +17,7 @@ use super::util::{
 	get_readable_channels_from_args, get_text_channels_in_guild,
 };
 use crate::{
-	db::{Keyword, KeywordKind},
+	db::{Ignore, Keyword, KeywordKind},
 	global::MAX_KEYWORDS,
 	monitoring::Timer,
 	util::{error, success, MD_SYMBOL_REGEX},
@@ -395,6 +395,146 @@ async fn remove_channel_keyword(
 	Ok(())
 }
 
+pub async fn ignore(
+	ctx: &Context,
+	message: &Message,
+	args: &str,
+) -> Result<(), Error> {
+	let guild_id = check_guild!(ctx, message).0.try_into().unwrap();
+
+	check_empty_args!(args, ctx, message);
+
+	if args.len() < 3 {
+		return error(
+			ctx,
+			message,
+			"You can't ignore phrases shorter than 3 characters!",
+		)
+		.await;
+	}
+
+	let ignore = Ignore {
+		user_id: message.author.id.0.try_into().unwrap(),
+		guild_id,
+		phrase: args.to_lowercase(),
+	};
+
+	if ignore.clone().exists().await? {
+		return error(ctx, message, "You already ignored that phrase!").await;
+	}
+
+	ignore.insert().await?;
+
+	success(ctx, message).await
+}
+
+pub async fn unignore(
+	ctx: &Context,
+	message: &Message,
+	args: &str,
+) -> Result<(), Error> {
+	let guild_id = check_guild!(ctx, message).0.try_into().unwrap();
+
+	check_empty_args!(args, ctx, message);
+
+	let ignore = Ignore {
+		user_id: message.author.id.0.try_into().unwrap(),
+		guild_id,
+		phrase: args.to_lowercase(),
+	};
+
+	if !ignore.clone().exists().await? {
+		return error(ctx, message, "You haven't ignored that phrase!").await;
+	}
+
+	ignore.delete().await?;
+
+	success(ctx, message).await
+}
+
+pub async fn ignores(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	let _timer = Timer::command("ignores");
+	match message.guild_id {
+		Some(guild_id) => {
+			let ignores =
+				Ignore::user_guild_ignores(message.author.id, guild_id)
+					.await?
+					.into_iter()
+					.map(|ignore| ignore.phrase)
+					.collect::<Vec<_>>();
+
+			if ignores.is_empty() {
+				return error(ctx, message, "You haven't ignored any phrases!")
+					.await;
+			}
+
+			let guild_name = ctx
+				.cache
+				.guild_field(guild_id, |g| g.name.clone())
+				.await
+				.ok_or("Couldn't get guild to list ignores")?;
+
+			let response = format!(
+				"{}'s ignored phrases in {}:\n  - {}",
+				message.author.name,
+				guild_name,
+				ignores.join("\n  - ")
+			);
+
+			message.channel_id.say(ctx, response).await?;
+		}
+		None => {
+			let ignores = Ignore::user_ignores(message.author.id).await?;
+
+			if ignores.is_empty() {
+				return error(ctx, message, "You haven't ignored any phrases!")
+					.await;
+			}
+
+			let mut ignores_by_guild = HashMap::new();
+
+			for ignore in ignores {
+				ignores_by_guild
+					.entry(ignore.guild_id)
+					.or_insert_with(Vec::new)
+					.push(ignore.phrase);
+			}
+
+			let mut response = String::new();
+
+			for (guild_id, phrases) in ignores_by_guild {
+				if !response.is_empty() {
+					response.push_str("\n\n");
+				}
+
+				let guild_id = GuildId(guild_id.try_into().unwrap());
+
+				let guild_name = ctx
+					.cache
+					.guild_field(guild_id, |g| g.name.clone())
+					.await
+					.ok_or("Couldn't get guild to list ignores")?;
+
+				write!(
+					&mut response,
+					"Your ignored phrases in {}:\n  – {}",
+					guild_name,
+					phrases.join("\n  – ")
+				)
+				.unwrap();
+			}
+
+			message.channel_id.say(ctx, response).await?;
+		}
+	}
+
+	Ok(())
+}
+
 pub async fn remove_server(
 	ctx: &Context,
 	message: &Message,
@@ -408,16 +548,21 @@ pub async fn remove_server(
 		Err(_) => return error(ctx, message, "Invalid server ID!").await,
 	};
 
-	match Keyword::delete_in_guild(message.author.id, guild_id).await? {
-		0 => {
-			error(
-				ctx,
-				message,
-				"You didn't have any keywords with that server ID!",
-			)
-			.await
-		}
-		_ => success(ctx, message).await,
+	let keywords_deleted =
+		Keyword::delete_in_guild(message.author.id, guild_id).await?;
+
+	let ignores_deleted =
+		Ignore::delete_in_guild(message.author.id, guild_id).await?;
+
+	if keywords_deleted + ignores_deleted == 0 {
+		error(
+			ctx,
+			message,
+			"You didn't have any keywords or ignores with that server ID!",
+		)
+		.await
+	} else {
+		success(ctx, message).await
 	}
 }
 

@@ -2,18 +2,12 @@
 // Licensed under the Open Software License version 3.0
 
 use once_cell::sync::Lazy;
-use serenity::{
-	client::Context,
-	model::{channel::Message, id::UserId},
-};
-
-use crate::{
-	db::Keyword,
-	global::{EMBED_COLOR, PATIENCE_DURATION},
-	Error,
-};
 use regex::Regex;
-use std::{convert::TryInto, fmt::Display, ops::Range};
+use serenity::{client::Context, model::channel::Message};
+
+use std::fmt::Display;
+
+use crate::Error;
 
 #[macro_export]
 macro_rules! log_discord_error {
@@ -38,88 +32,6 @@ macro_rules! regex {
 
 pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
 	Lazy::new(|| Regex::new(r"[_*()\[\]~`]").unwrap());
-
-pub async fn notify_keyword(
-	ctx: Context,
-	message: Message,
-	keyword_range: Range<usize>,
-	keyword: Keyword,
-) {
-	let user_id = UserId(keyword.user_id.try_into().unwrap());
-	let channel_id = message.channel_id;
-	let guild_id = message.guild_id.unwrap();
-
-	let new_message = message
-		.channel_id
-		.await_reply(&ctx)
-		.author_id(user_id)
-		.timeout(PATIENCE_DURATION);
-	if new_message.await.is_none() {
-		let result: Result<(), Error> = async {
-			let msg = &message.content;
-			let re = &*MD_SYMBOL_REGEX;
-			let formatted_content = format!(
-				"{}__**{}**__{}",
-				re.replace_all(&msg[..keyword_range.start], r"\$0"),
-				re.replace_all(
-					&msg[keyword_range.start..keyword_range.end],
-					r"\$0"
-				),
-				re.replace_all(&msg[keyword_range.end..], r"\$0")
-			);
-
-			let message_link = format!(
-				"[(Link)](https://discord.com/channels/{}/{}/{})",
-				guild_id, channel_id, message.id
-			);
-
-			let channel_name = ctx
-				.cache
-				.guild_channel_field(channel_id, |c| c.name.clone())
-				.await
-				.ok_or("Couldn't get channel for keyword")?;
-			let guild_name = ctx
-				.cache
-				.guild_field(guild_id, |g| g.name.clone())
-				.await
-				.ok_or("Couldn't get guild for keyword")?;
-			let title = format!(
-				"Keyword \"{}\" seen in #{} ({})",
-				keyword.keyword, channel_name, guild_name
-			);
-			let channel_mention = format!("<#{}>", message.channel_id);
-
-			let dm_channel = user_id.create_dm_channel(&ctx).await?;
-			dm_channel
-				.send_message(&ctx, |m| {
-					m.embed(|e| {
-						e.description(formatted_content)
-							.timestamp(&message.timestamp)
-							.author(|a| a.name(title))
-							.field("Channel", channel_mention, true)
-							.field("Message", message_link, true)
-							.footer(|f| {
-								f.icon_url(
-									message.author.avatar_url().unwrap_or_else(
-										|| message.author.default_avatar_url(),
-									),
-								)
-								.text(message.author.name)
-							})
-							.color(EMBED_COLOR)
-					})
-				})
-				.await?;
-
-			Ok(())
-		}
-		.await;
-
-		if let Err(error) = result {
-			log_discord_error!(in channel_id, by user_id, error);
-		}
-	}
-}
 
 pub async fn success(ctx: &Context, message: &Message) -> Result<(), Error> {
 	message.react(ctx, '✅').await?;

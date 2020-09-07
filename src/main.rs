@@ -4,7 +4,7 @@
 mod commands;
 
 pub mod db;
-use db::Keyword;
+use db::{Ignore, Keyword};
 
 mod error;
 pub use error::Error;
@@ -12,13 +12,15 @@ pub use error::Error;
 pub mod global;
 use global::{bot_mention, bot_nick_mention, init_mentions};
 
+mod highlighting;
+
 pub mod monitoring;
 
 pub mod reporting;
 
 #[macro_use]
 pub mod util;
-use util::{error, notify_keyword, question};
+use util::{error, question};
 
 use serenity::{
 	client::{bridge::gateway::GatewayIntents, Client, Context, EventHandler},
@@ -30,7 +32,7 @@ use serenity::{
 };
 use tokio::task;
 
-use std::{convert::TryInto, env};
+use std::{collections::HashMap, convert::TryInto, env};
 
 struct Handler;
 
@@ -54,7 +56,7 @@ impl EventHandler for Handler {
 				if message.guild_id.is_none() {
 					handle_command(&ctx, &message, content.trim()).await
 				} else {
-					handle_keywords(&ctx, &message, content).await
+					handle_keywords(&ctx, &message).await
 				}
 			}
 		};
@@ -99,9 +101,12 @@ async fn handle_command(
 		"remove" => commands::remove(ctx, message, args).await,
 		"mute" => commands::mute(ctx, message, args).await,
 		"unmute" => commands::unmute(ctx, message, args).await,
+		"ignore" => commands::ignore(ctx, message, args).await,
+		"unignore" => commands::unignore(ctx, message, args).await,
 		"remove-server" => commands::remove_server(ctx, message, args).await,
 		"keywords" => commands::keywords(ctx, message, args).await,
 		"mutes" => commands::mutes(ctx, message, args).await,
+		"ignores" => commands::ignores(ctx, message, args).await,
 		"help" => commands::help(ctx, message, args).await,
 		"about" => commands::about(ctx, message, args).await,
 		_ => return question(ctx, message).await,
@@ -120,7 +125,6 @@ async fn handle_command(
 async fn handle_keywords(
 	ctx: &Context,
 	message: &Message,
-	content: &str,
 ) -> Result<(), Error> {
 	let guild_id = match message.guild_id {
 		Some(id) => id,
@@ -133,45 +137,33 @@ async fn handle_keywords(
 		Keyword::get_relevant_keywords(guild_id, channel_id, message.author.id)
 			.await?;
 
+	let mut ignores_by_user = HashMap::new();
+
 	for keyword in keywords {
-		let start = {
-			let mut fragments = regex!(r"[^a-zA-Z0-9]").split(content);
-
-			let substring = match fragments
-				.find(|frag| keyword.keyword.eq_ignore_ascii_case(frag))
-			{
-				Some(s) => s,
-				None => continue,
-			};
-
-			let substring_start = substring.as_ptr() as usize;
-			let content_start = content.as_ptr() as usize;
-			let substring_index = substring_start - content_start;
-
-			substring_index
-		};
-		let end = start + keyword.keyword.len();
-
-		let user_id = UserId(keyword.user_id.try_into().unwrap());
-		let channel = match ctx.cache.guild_channel(channel_id).await {
-			Some(c) => c,
+		let ignores = match ignores_by_user.get(&keyword.user_id) {
+			Some(ignores) => ignores,
 			None => {
-				log::error!("Channel not cached: {}", channel_id);
-				return Ok(());
+				let user_ignores = Ignore::user_guild_ignores(
+					UserId(keyword.user_id.try_into().unwrap()),
+					guild_id,
+				)
+				.await?;
+				ignores_by_user
+					.entry(keyword.user_id)
+					.or_insert(user_ignores)
 			}
 		};
 
-		if channel
-			.permissions_for_user(ctx, user_id)
+		if highlighting::should_notify_keyword(ctx, message, &keyword, &ignores)
 			.await?
-			.read_messages()
+			.is_some()
 		{
 			let ctx = ctx.clone();
-			task::spawn(notify_keyword(
+			task::spawn(highlighting::notify_keyword(
 				ctx,
 				message.clone(),
-				start..end,
 				keyword,
+				ignores.clone(),
 			));
 		}
 	}
