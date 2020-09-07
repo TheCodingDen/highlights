@@ -10,6 +10,7 @@ pub use keywords::{add, keywords, remove, remove_server};
 mod mutes;
 pub use mutes::{mute, mutes, unmute};
 
+use indoc::formatdoc;
 use serenity::{
 	client::Context,
 	model::{channel::Message, Permissions},
@@ -63,6 +64,7 @@ pub async fn help(
 		name: &'static str,
 		short_desc: &'static str,
 		long_desc: String,
+		examples: Option<String>,
 	}
 
 	let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
@@ -71,8 +73,8 @@ pub async fn help(
 		CommandInfo {
 			name: "add",
 			short_desc: "Add a keyword to highlight in the current server",
-			long_desc: format!(
-				"Use `@{name} add [keyword]` to add a keyword to highlight in the current server. \
+			long_desc: formatdoc!("
+				Use `@{name} add [keyword]` to add a keyword to highlight in the current server. \
 				In this usage, all of the text after `add` will be treated as one keyword.
 
 				Keywords are case-insensitive.
@@ -92,13 +94,24 @@ pub async fn help(
 
 				You can list your current keywords with `@{name} keywords`.",
 				name = username,
-			)
+			),
+			examples: Some(formatdoc!("
+				Add the keyword \"rust\" in the current server:
+				`@{name} add rust`
+
+				Add the keyword \"optimize\" in only the #javascript channel:
+				`@{name} add \"optimize\" in javascript`
+
+				Add the keyword \"hello world\" in the current server:
+				`@{name} add hello world`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "remove",
 			short_desc: "Remove a keyword to highlight in the current server",
-			long_desc: format!(
-				"Use `@{name} remove [keyword]` to remove a keyword that you previously added \
+			long_desc: formatdoc!("
+				Use `@{name} remove [keyword]` to remove a keyword that you previously added \
 				with `@{name} add` in the current server. \
 				In this usage, all of the text after `remove` will be treated as one keyword.
 
@@ -114,13 +127,21 @@ pub async fn help(
 
 				You can list your current keywords with `@{name} keywords`.",
 				name = username,
-			)
+			),
+			examples: Some(formatdoc!("
+				Remove the keyword \"node\" from the current server:
+				`@{name} remove node`
+
+				Remove the keyword \"go\" from the #general channel:
+				`@{name} remove \"go\" from general`",
+				name = username,
+			)),
 		},
 		CommandInfo {
 			name: "mute",
 			short_desc: "Mute a channel to prevent server keywords from being highlighted there",
-			long_desc: format!(
-				"Use `@{name} mute [channels]` to mute the specified channel(s) and \
+			long_desc: formatdoc!("
+				Use `@{name} mute [channels]` to mute the specified channel(s) and \
 				prevent notifications about your server-wide keywords appearing there. \
 				`[channels]` may be channel mentions, channel names, or channel IDs. \
 				You can specify multiple channels, separated by spaces, to mute all of them \
@@ -134,14 +155,22 @@ pub async fn help(
 
 				You can list your currently muted channels with `@{name} mutes`.",
 				name = username,
-			)
+			),
+			examples: Some(formatdoc!("
+				Mute the #memes channel:
+				`@{name} mute memes`
+
+				Mute the #general channel, and the off-topic channel, and the channel with an ID of 73413749283:
+				`@{name} mute #general off-topic 73413749283`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "unmute",
 			short_desc:
 				"Unmite a channel, enabling notifications about server keywords appearing there",
-			long_desc: format!(
-				"Use `@{name} unmute [channels]` to unmute channels you previously muted and \
+			long_desc: formatdoc!("
+				Use `@{name} unmute [channels]` to unmute channels you previously muted and \
 				re-enable notifications about your keywords appearing there. \
 				`[channels]` may be channel mentions, channel names, or channel IDs. \
 				You can specify multiple channels, separated by spaces, to unmute all of them at \
@@ -149,13 +178,21 @@ pub async fn help(
 
 				You can list your currently muted channels with `@{name} mutes`.",
 				name = username,
-			)
+			),
+			examples: Some(formatdoc!("
+				Unmute the #rust channel:
+				`@{name} unmute rust`
+
+				Unmute the #functional channel, and the elixir channel, and the channel with an ID of 73413749283:
+				`@{name} mute #functional elixir 73413749283`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "keywords",
 			short_desc: "List your current highlighted keywords",
-			long_desc: format!(
-				"Use `@{name} keywords` to list your current highlighted keywords.
+			long_desc: formatdoc!("
+				Use `@{name} keywords` to list your current highlighted keywords.
 
 				Using `keywords` in a server will show you only the keywords you've highlighted \
 				in that server, including all channel-specific keywords there.
@@ -169,13 +206,18 @@ pub async fn help(
 				if desired. \
 				See `@{name} help remove-server` for more details.",
 				name = username
-			)
+			),
+			examples: Some(formatdoc!("
+				Display your current keywords:
+				`@{name} keywords`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "mutes",
 			short_desc: "List your currently muted channels",
-			long_desc: format!(
-				"Use `@{name} mutes` to list your currently muted channels.
+			long_desc: formatdoc!("
+				Use `@{name} mutes` to list your currently muted channels.
 
 				Using `mutes` in a server will show you only the channels you've muted in that \
 				server.
@@ -187,13 +229,18 @@ pub async fn help(
 				If the bot can't find information on a channel you previously followed, \
 				its ID will be in parentheses, so you can investigate or unmute.",
 				name = username
-			)
+			),
+			examples: Some(formatdoc!("
+				Display your currently muted channels:
+				`@{name} mutes`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "remove-server",
 			short_desc: "Remove all server-wide keywords on a given server",
-			long_desc: format!(
-				"Use `@{name} remove-server [server ID]` to remove all keywords on the server \
+			long_desc: formatdoc!("
+				Use `@{name} remove-server [server ID]` to remove all keywords on the server \
 				with the given ID.
 
 				This won't remove channel-specific keywords in the given server; you can use the \
@@ -204,24 +251,38 @@ pub async fn help(
 				in DMs to see all keywords, and this command to remove any server IDs the bot \
 				can't find.",
 				name = username
-			)
+			),
+			examples: Some(formatdoc!("
+				Remove all server-wide keywords belonging to the server with an ID of 126029834632:
+				`@{name} remove-server 126029834632`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "help",
 			short_desc: "Show this help message",
-			long_desc: format!(
-				"Use `@{name} help` to see a list of commands and short descriptions.
+			long_desc: formatdoc!("
+				Use `@{name} help` to see a list of commands and short descriptions.
 				Use `@{name} help [command]` to see additional information about \
 				the specified command.
 				Use `@{name} about` to see information about this bot.",
 				name = username
 			),
+			examples: Some(formatdoc!("
+				Display the list of commands:
+				`@{name} help`
+
+				Display the help for the `add` command:
+				`@{name} help add`",
+				name = username
+			)),
 		},
 		CommandInfo {
 			name: "about",
 			short_desc: "Show some information about this bot",
 			long_desc:
 				"Show some information about this bot, like version and source code.".to_owned(),
+			examples: None,
 		},
 	];
 
@@ -260,7 +321,12 @@ pub async fn help(
 				m.embed(|e| {
 					e.title(format!("Help – {}", info.name))
 						.description(&info.long_desc)
-						.color(EMBED_COLOR)
+						.color(EMBED_COLOR);
+
+					match info.examples.as_ref() {
+						Some(ex) => e.field("Example Usage", ex, false),
+						None => e,
+					}
 				})
 			})
 			.await?;
