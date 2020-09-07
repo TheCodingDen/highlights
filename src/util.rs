@@ -69,7 +69,7 @@ pub async fn notify_keyword(
 			);
 
 			let message_link = format!(
-				"https://discord.com/channels/{}/{}/{}",
+				"[(Link)](https://discord.com/channels/{}/{}/{})",
 				guild_id, channel_id, message.id
 			);
 
@@ -87,6 +87,7 @@ pub async fn notify_keyword(
 				"Keyword \"{}\" seen in #{} ({})",
 				keyword.keyword, channel_name, guild_name
 			);
+			let channel_mention = format!("<#{}>", message.channel_id);
 
 			let dm_channel = user_id.create_dm_channel(&ctx).await?;
 			dm_channel
@@ -94,7 +95,9 @@ pub async fn notify_keyword(
 					m.embed(|e| {
 						e.description(formatted_content)
 							.timestamp(&message.timestamp)
-							.author(|a| a.name(title).url(message_link))
+							.author(|a| a.name(title))
+							.field("Channel", channel_mention, true)
+							.field("Message", message_link, true)
 							.footer(|f| {
 								f.icon_url(
 									message.author.avatar_url().unwrap_or_else(
