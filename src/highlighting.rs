@@ -1,8 +1,8 @@
 use serenity::{
 	client::Context,
+	http::{error::ErrorResponse, HttpError},
 	model::{channel::Message, id::UserId},
 	Error as SerenityError,
-	http::{HttpError, error::ErrorResponse}
 };
 
 use std::{convert::TryInto, ops::Range};
@@ -80,15 +80,22 @@ pub async fn notify_keyword(
 		.timeout(PATIENCE_DURATION);
 	if new_message.await.is_none() {
 		let result: Result<(), Error> = async {
-			let message = match ctx.http.get_message(message.channel_id.0, message.id.0).await {
-			    Ok(m) => m,
-			    Err(SerenityError::Http(err)) => match &*err {
-			    	HttpError::UnsuccessfulRequest(ErrorResponse { status_code, .. }) if status_code.as_u16() == 404 => {
-			    		return Ok(());
-			    	},
-			    	_ => return Err(SerenityError::Http(err).into()),
-			    }
-			    Err(err) => return Err(err.into())
+			let message = match ctx
+				.http
+				.get_message(message.channel_id.0, message.id.0)
+				.await
+			{
+				Ok(m) => m,
+				Err(SerenityError::Http(err)) => match &*err {
+					HttpError::UnsuccessfulRequest(ErrorResponse {
+						status_code,
+						..
+					}) if status_code.as_u16() == 404 => {
+						return Ok(());
+					}
+					_ => return Err(SerenityError::Http(err).into()),
+				},
+				Err(err) => return Err(err.into()),
 			};
 			let keyword_range =
 				match should_notify_keyword(&ctx, &message, &keyword, &ignores)
