@@ -18,7 +18,63 @@ use serenity::{
 	model::{channel::Message, Permissions},
 };
 
-use crate::{global::EMBED_COLOR, monitoring::Timer, util::question, Error};
+use std::time::Instant;
+
+use crate::{
+	global::EMBED_COLOR,
+	monitoring::{avg_command_time, avg_query_time, Timer},
+	util::question,
+	Error,
+};
+
+pub async fn ping(
+	ctx: &Context,
+	message: &Message,
+	_: &str,
+) -> Result<(), Error> {
+	let _timer = Timer::command("ping");
+	let start = Instant::now();
+	let mut sent_message = message.channel_id.say(ctx, "Ping... 🏓").await?;
+	let seconds = start.elapsed().as_secs_f64();
+
+	let message_latency = format_seconds(seconds);
+
+	let cmd_latency = avg_command_time()
+		.map(format_seconds)
+		.unwrap_or_else(|| "<None>".to_owned());
+
+	let db_latency = avg_query_time()
+		.map(format_seconds)
+		.unwrap_or_else(|| "<None>".to_owned());
+
+	let reply = formatdoc!(
+		"
+		🏓 Pong!
+
+		API Latency: {}
+		Average Recent Command Latency: {}
+		Average Recent Database Latency: {}
+		",
+		message_latency,
+		cmd_latency,
+		db_latency,
+	);
+
+	sent_message.edit(&ctx, |m| m.content(reply)).await?;
+
+	Ok(())
+}
+
+fn format_seconds(seconds: f64) -> String {
+	if seconds >= 10.0 {
+		format!("{:.2} s", seconds)
+	} else if seconds >= 0.0001 {
+		format!("{:.2} ms", seconds * 1000.0)
+	} else {
+		// I would love for this to ever happen
+		format!("{:.2} μs", seconds * 1_000_000.0)
+	}
+}
 
 pub async fn about(
 	ctx: &Context,

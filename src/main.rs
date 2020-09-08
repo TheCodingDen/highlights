@@ -108,6 +108,7 @@ async fn handle_command(
 		"mutes" => commands::mutes(ctx, message, args).await,
 		"ignores" => commands::ignores(ctx, message, args).await,
 		"help" => commands::help(ctx, message, args).await,
+		"ping" => commands::ping(ctx, message, args).await,
 		"about" => commands::about(ctx, message, args).await,
 		_ => return question(ctx, message).await,
 	};

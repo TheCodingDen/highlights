@@ -7,7 +7,10 @@ use hyper::{
 	Body, Request, Response, Server,
 };
 use once_cell::sync::{Lazy, OnceCell};
-use prometheus::{register_gauge_vec, Encoder, GaugeVec, TextEncoder};
+use prometheus::{
+	core::Collector, proto::MetricFamily, register_gauge_vec, Encoder,
+	GaugeVec, TextEncoder,
+};
 
 use std::{net::SocketAddr, time::Instant};
 
@@ -80,6 +83,31 @@ impl Drop for Timer {
 					.set(elapsed);
 			}
 		}
+	}
+}
+
+pub fn avg_command_time() -> Option<f64> {
+	avg_metrics(COMMAND_TIME_GAUGE.collect())
+}
+
+pub fn avg_query_time() -> Option<f64> {
+	avg_metrics(QUERY_TIME_GAUGE.collect())
+}
+
+fn avg_metrics(metric_families: Vec<MetricFamily>) -> Option<f64> {
+	let mut count = 0;
+	let mut sum = 0.0;
+	for metric_family in metric_families {
+		for metric in metric_family.get_metric() {
+			sum += metric.get_gauge().get_value();
+			count += 1;
+		}
+	}
+
+	if count == 0 {
+		None
+	} else {
+		Some(sum / count as f64)
 	}
 }
 
