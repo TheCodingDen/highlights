@@ -30,9 +30,10 @@ use crate::{
 pub async fn ping(
 	ctx: &Context,
 	message: &Message,
-	_: &str,
+	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("ping");
+	require_empty_args!(args, ctx, message);
 	let start = Instant::now();
 	let mut sent_message = message.channel_id.say(ctx, "Ping... 🏓").await?;
 	let seconds = start.elapsed().as_secs_f64();
@@ -79,9 +80,10 @@ fn format_seconds(seconds: f64) -> String {
 pub async fn about(
 	ctx: &Context,
 	message: &Message,
-	_: &str,
+	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("about");
+	require_empty_args!(args, ctx, message);
 	let invite_url = ctx
 		.cache
 		.current_user()

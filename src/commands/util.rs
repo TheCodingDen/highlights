@@ -13,7 +13,7 @@ use crate::Error;
 use std::{collections::HashMap, iter::FromIterator};
 
 #[macro_export]
-macro_rules! check_guild {
+macro_rules! require_guild {
 	($ctx:expr, $message:expr) => {{
 		match $message.guild_id {
 			None => {
@@ -30,7 +30,16 @@ macro_rules! check_guild {
 }
 
 #[macro_export]
-macro_rules! check_empty_args {
+macro_rules! require_nonempty_args {
+	($args:expr, $ctx:expr, $message:expr) => {{
+		if $args == "" {
+			return $crate::util::question($ctx, $message).await;
+			}
+		}};
+}
+
+#[macro_export]
+macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
 		if $args == "" {
 			return $crate::util::question($ctx, $message).await;

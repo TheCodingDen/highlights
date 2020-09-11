@@ -24,9 +24,9 @@ pub async fn mute(
 	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("mute");
-	let guild_id = check_guild!(ctx, message);
+	let guild_id = require_guild!(ctx, message);
 
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	let channels = get_text_channels_in_guild(ctx, guild_id).await?;
 
@@ -122,7 +122,7 @@ pub async fn unmute(
 	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("unmute");
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	let channels = match message.guild_id {
 		Some(guild_id) => {
@@ -249,9 +249,10 @@ pub async fn unmute(
 pub async fn mutes(
 	ctx: &Context,
 	message: &Message,
-	_: &str,
+	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("mutes");
+	require_empty_args!(args, ctx, message);
 	match message.guild_id {
 		Some(guild_id) => {
 			let channels = ctx

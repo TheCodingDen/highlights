@@ -34,9 +34,9 @@ pub async fn add(
 	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("add");
-	let guild_id = check_guild!(ctx, message);
+	let guild_id = require_guild!(ctx, message);
 
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	{
 		let keyword_count =
@@ -225,9 +225,9 @@ pub async fn remove(
 	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("remove");
-	let guild_id = check_guild!(ctx, message);
+	let guild_id = require_guild!(ctx, message);
 
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	match CHANNEL_KEYWORD_REGEX.captures(args) {
 		Some(captures) => {
@@ -400,9 +400,9 @@ pub async fn ignore(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
-	let guild_id = check_guild!(ctx, message).0.try_into().unwrap();
+	let guild_id = require_guild!(ctx, message).0.try_into().unwrap();
 
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	if args.len() < 3 {
 		return error(
@@ -433,9 +433,9 @@ pub async fn unignore(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
-	let guild_id = check_guild!(ctx, message).0.try_into().unwrap();
+	let guild_id = require_guild!(ctx, message).0.try_into().unwrap();
 
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	let ignore = Ignore {
 		user_id: message.author.id.0.try_into().unwrap(),
@@ -455,9 +455,10 @@ pub async fn unignore(
 pub async fn ignores(
 	ctx: &Context,
 	message: &Message,
-	_: &str,
+	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("ignores");
+	require_empty_args!(args, ctx, message);
 	match message.guild_id {
 		Some(guild_id) => {
 			let ignores =
@@ -541,7 +542,7 @@ pub async fn remove_server(
 	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("removeserver");
-	check_empty_args!(args, ctx, message);
+	require_nonempty_args!(args, ctx, message);
 
 	let guild_id = match args.parse() {
 		Ok(id) => GuildId(id),
@@ -569,9 +570,10 @@ pub async fn remove_server(
 pub async fn keywords(
 	ctx: &Context,
 	message: &Message,
-	_: &str,
+	args: &str,
 ) -> Result<(), Error> {
 	let _timer = Timer::command("keywords");
+	require_empty_args!(args, ctx, message);
 	match message.guild_id {
 		Some(guild_id) => {
 			let guild_keywords =
