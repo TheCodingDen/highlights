@@ -6,7 +6,7 @@
 mod commands;
 
 pub mod db;
-use db::{Ignore, Keyword};
+use db::{Ignore, Keyword, UserState};
 
 mod error;
 pub use error::Error;
@@ -52,11 +52,23 @@ impl EventHandler for Handler {
 			.or_else(|| content.strip_prefix(bot_nick_mention()))
 		{
 			Some(command_content) => {
-				handle_command(&ctx, &message, command_content.trim()).await
+				async {
+					handle_command(&ctx, &message, command_content.trim())
+						.await?;
+					highlighting::check_notify_user_state(&ctx, &message)
+						.await?;
+					Ok(())
+				}
+				.await
 			}
 			None => {
 				if message.guild_id.is_none() {
-					handle_command(&ctx, &message, content.trim()).await
+					async {
+						handle_command(&ctx, &message, content.trim()).await?;
+						UserState::clear(message.author.id).await?;
+						Ok(())
+					}
+					.await
 				} else {
 					handle_keywords(&ctx, &message).await
 				}

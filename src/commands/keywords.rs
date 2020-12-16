@@ -1,14 +1,18 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+use indoc::indoc;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
 	client::Context,
+	http::error::ErrorResponse,
 	model::{
 		channel::Message,
 		id::{ChannelId, GuildId},
 	},
+	prelude::HttpError,
+	Error as SerenityError,
 };
 
 use std::{collections::HashMap, convert::TryInto, fmt::Write};
@@ -48,6 +52,48 @@ pub async fn add(
 			});
 
 			return error(ctx, message, MSG.as_str()).await;
+		}
+
+		if keyword_count == 0 {
+			let dm_channel = message.author.create_dm_channel(ctx).await?;
+
+			match dm_channel
+				.say(
+					ctx,
+					indoc!(
+						"
+						Test message; if you can read this, \
+						I can send you notifications successfully!"
+					),
+				)
+				.await
+			{
+				Err(SerenityError::Http(err)) => match &*err {
+					HttpError::UnsuccessfulRequest(ErrorResponse {
+						error,
+						..
+					}) if error.message
+						== "Cannot send messages to this user" =>
+					{
+						message
+							.reply(
+								ctx,
+								indoc!(
+									"
+									⚠️ I failed to DM you to make sure I \
+									can notify you of your highlighted \
+									keywords. Make sure you have DMs enabled \
+									in at least one server that we share.",
+								),
+							)
+							.await?;
+					}
+
+					_ => Err(SerenityError::Http(err))?,
+				},
+				Err(err) => Err(err)?,
+				_ => {}
+			}
 		}
 	}
 

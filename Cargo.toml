@@ -1,6 +1,6 @@
 [package]
 name = "highlights"
-version = "1.0.0-beta.7"
+version = "1.0.0-beta.8"
 authors = ["Benjamin Scherer <ThatsNoMoon.Alderaan@gmail.com>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"

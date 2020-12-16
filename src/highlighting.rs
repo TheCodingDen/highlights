@@ -9,12 +9,13 @@ use serenity::{
 use std::{convert::TryInto, ops::Range, time::Duration};
 
 use crate::{
-	db::{Ignore, Keyword},
+	db::{Ignore, Keyword, UserState, UserStateKind},
 	global::{EMBED_COLOR, NOTIFICATION_RETRIES, PATIENCE_DURATION},
 	log_discord_error, regex,
 	util::MD_SYMBOL_REGEX,
 	Error,
 };
+use indoc::indoc;
 use tokio::time::delay_for;
 
 pub async fn should_notify_keyword(
@@ -186,6 +187,13 @@ pub async fn notify_keyword(
 						}) if error.message
 							== "Cannot send messages to this user" =>
 						{
+							let user_state = UserState {
+								user_id: keyword.user_id,
+								state: UserStateKind::CannotDm,
+							};
+
+							user_state.set().await?;
+
 							result = Ok(());
 							break;
 						}
@@ -243,4 +251,32 @@ fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
 
 		Some(substring_index..substring_index + keyword.len())
 	}
+}
+
+pub async fn check_notify_user_state(
+	ctx: &Context,
+	message: &Message,
+) -> Result<(), Error> {
+	let user_id = message.author.id;
+
+	let user_state = match UserState::user_state(user_id).await? {
+		Some(user_state) => user_state,
+		None => return Ok(()),
+	};
+
+	message
+		.reply(
+			ctx,
+			indoc!(
+				"
+					⚠️ I failed to DM you to notify you of your last \
+					highlighted keyword. Make sure you have DMs enabled in at \
+					least one server that we share."
+			),
+		)
+		.await?;
+
+	user_state.delete().await?;
+
+	Ok(())
 }
