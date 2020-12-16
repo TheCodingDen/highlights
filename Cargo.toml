@@ -23,8 +23,7 @@ hyper = "0.13"
 serde = { version = "1", features = ["derive"] }
 
 [dependencies.serenity]
-git = "https://github.com/serenity-rs/serenity.git"
-branch = "current"
+version = "0.9"
 default-features = false
 features = [
     "builder",

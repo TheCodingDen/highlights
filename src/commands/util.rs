@@ -41,7 +41,7 @@ macro_rules! require_nonempty_args {
 #[macro_export]
 macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
-		if $args == "" {
+		if $args != "" {
 			return $crate::util::question($ctx, $message).await;
 			}
 		}};

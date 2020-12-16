@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+#![type_length_limit = "2273649"]
+
 mod commands;
 
 pub mod db;
@@ -185,7 +187,7 @@ async fn main() {
 
 	monitoring::init();
 
-	let mut client = Client::new(token)
+	let mut client = Client::builder(token)
 		.event_handler(Handler)
 		.intents(
 			GatewayIntents::DIRECT_MESSAGES
