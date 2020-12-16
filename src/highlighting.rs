@@ -170,6 +170,7 @@ pub async fn notify_keyword(
 				{
 					Ok(_) => {
 						result = Ok(());
+						UserState::clear(user_id).await?;
 						break;
 					}
 
