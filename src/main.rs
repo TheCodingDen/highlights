@@ -1,7 +1,7 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
-#![type_length_limit = "2273649"]
+#![type_length_limit = "10000000"]
 
 mod commands;
 

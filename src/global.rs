@@ -10,6 +10,8 @@ pub const MAX_KEYWORDS: u32 = 100;
 
 pub const PATIENCE_DURATION: Duration = Duration::from_secs(60 * 2);
 
+pub const NOTIFICATION_RETRIES: u8 = 5;
+
 pub const EMBED_COLOR: u32 = 0xefff47;
 
 static BOT_MENTION: OnceCell<String> = OnceCell::new();

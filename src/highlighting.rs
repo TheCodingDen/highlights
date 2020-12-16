@@ -1,19 +1,21 @@
 use serenity::{
+	builder::CreateMessage,
 	client::Context,
 	http::{error::ErrorResponse, HttpError},
 	model::{channel::Message, id::UserId},
 	Error as SerenityError,
 };
 
-use std::{convert::TryInto, ops::Range};
+use std::{convert::TryInto, ops::Range, time::Duration};
 
 use crate::{
 	db::{Ignore, Keyword},
-	global::{EMBED_COLOR, PATIENCE_DURATION},
+	global::{EMBED_COLOR, NOTIFICATION_RETRIES, PATIENCE_DURATION},
 	log_discord_error, regex,
 	util::MD_SYMBOL_REGEX,
 	Error,
 };
+use tokio::time::delay_for;
 
 pub async fn should_notify_keyword(
 	ctx: &Context,
@@ -139,28 +141,65 @@ pub async fn notify_keyword(
 			let channel_mention = format!("<#{}>", message.channel_id);
 
 			let dm_channel = user_id.create_dm_channel(&ctx).await?;
-			dm_channel
-				.send_message(&ctx, |m| {
-					m.embed(|e| {
-						e.description(formatted_content)
-							.timestamp(&message.timestamp)
-							.author(|a| a.name(title))
-							.field("Channel", channel_mention, true)
-							.field("Message", message_link, true)
-							.footer(|f| {
-								f.icon_url(
-									message.author.avatar_url().unwrap_or_else(
-										|| message.author.default_avatar_url(),
-									),
-								)
-								.text(message.author.name)
-							})
-							.color(EMBED_COLOR)
-					})
-				})
-				.await?;
 
-			Ok(())
+			let mut message_to_send = CreateMessage::default();
+			message_to_send.embed(|e| {
+				e.description(formatted_content)
+					.timestamp(&message.timestamp)
+					.author(|a| a.name(title))
+					.field("Channel", channel_mention, true)
+					.field("Message", message_link, true)
+					.footer(|f| {
+						f.icon_url(message.author.avatar_url().unwrap_or_else(
+							|| message.author.default_avatar_url(),
+						))
+						.text(message.author.name)
+					})
+					.color(EMBED_COLOR)
+			});
+
+			let mut result = Ok(());
+
+			for _ in 0..NOTIFICATION_RETRIES {
+				let mut message_to_send = message_to_send.clone();
+
+				match dm_channel
+					.send_message(&ctx, |_| &mut message_to_send)
+					.await
+				{
+					Ok(_) => {
+						result = Ok(());
+						break;
+					}
+
+					Err(SerenityError::Http(err)) => match &*err {
+						HttpError::UnsuccessfulRequest(ErrorResponse {
+							status_code,
+							..
+						}) if status_code.is_server_error() => {
+							result = Err(SerenityError::Http(err).into());
+						}
+
+						HttpError::UnsuccessfulRequest(ErrorResponse {
+							error,
+							..
+						}) if error.message
+							== "Cannot send messages to this user" =>
+						{
+							result = Ok(());
+							break;
+						}
+
+						_ => Err(SerenityError::Http(err))?,
+					},
+
+					Err(err) => Err(err)?,
+				}
+
+				delay_for(Duration::from_secs(2)).await;
+			}
+
+			result
 		}
 		.await;
 
