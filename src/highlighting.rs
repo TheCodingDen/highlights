@@ -16,7 +16,7 @@ use crate::{
 	Error,
 };
 use indoc::indoc;
-use tokio::time::delay_for;
+use tokio::{select, time::delay_for};
 
 pub async fn should_notify_keyword(
 	ctx: &Context,
@@ -76,12 +76,22 @@ pub async fn notify_keyword(
 	let channel_id = message.channel_id;
 	let guild_id = message.guild_id.unwrap();
 
-	let new_message = message
+	let reply_or_reaction;
+
+	let reply = message
 		.channel_id
 		.await_reply(&ctx)
 		.author_id(user_id)
 		.timeout(PATIENCE_DURATION);
-	if new_message.await.is_none() {
+
+	let reaction = message.channel_id.await_reaction(&ctx).author_id(user_id);
+
+	select! {
+		reaction = reaction => reply_or_reaction = reaction.map(|_| ()),
+		reply = reply => reply_or_reaction = reply.map(|_| ()),
+	}
+
+	if reply_or_reaction.is_none() {
 		let result: Result<(), Error> = async {
 			let message = match ctx
 				.http

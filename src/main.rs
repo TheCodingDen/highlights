@@ -205,6 +205,7 @@ async fn main() {
 		.event_handler(Handler)
 		.intents(
 			GatewayIntents::DIRECT_MESSAGES
+				| GatewayIntents::GUILD_MESSAGE_REACTIONS
 				| GatewayIntents::GUILD_MESSAGES
 				| GatewayIntents::GUILDS
 				| GatewayIntents::GUILD_MEMBERS,
