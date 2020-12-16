@@ -86,16 +86,18 @@ async fn handle_command(
 	content: &str,
 ) -> Result<(), Error> {
 	let (command, args) = {
-		let mut iter = content.splitn(2, ' ');
+		let mut iter = regex!(r" +").splitn(content, 2);
 
-		let command = match iter.next() {
-			Some(c) => c.to_lowercase(),
-			None => return question(ctx, message).await,
-		};
+		let command = iter.next().map(str::to_lowercase);
 
 		let args = iter.next().map(|s| s.trim()).unwrap_or("");
 
 		(command, args)
+	};
+
+	let command = match command {
+		Some(command) => command,
+		None => return question(ctx, message).await,
 	};
 
 	let result = match &*command {
