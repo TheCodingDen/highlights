@@ -3,7 +3,14 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serenity::{client::Context, model::channel::Message};
+use serenity::{
+	client::Context,
+	model::{
+		channel::{GuildChannel, Message},
+		guild::{Guild, PartialGuild},
+		id::UserId,
+	},
+};
 
 use std::fmt::Display;
 
@@ -55,4 +62,34 @@ pub async fn error<S: Display>(
 	message.channel_id.say(ctx, response).await?;
 
 	Ok(())
+}
+
+pub async fn user_can_read_channel(
+	ctx: &Context,
+	channel: &GuildChannel,
+	user_id: UserId,
+) -> Result<bool, Error> {
+	enum MaybePartialGuild {
+		Partial(PartialGuild),
+		FullGuild(Guild),
+	}
+
+	use MaybePartialGuild::*;
+
+	let guild = match ctx.cache.guild(channel.guild_id).await {
+		Some(g) => FullGuild(g),
+		None => Partial(ctx.http.get_guild(channel.guild_id.0).await?),
+	};
+
+	let member = match &guild {
+		FullGuild(g) => g.member(ctx, user_id).await?,
+		Partial(g) => g.member(ctx, user_id).await?,
+	};
+
+	let permissions = match &guild {
+		FullGuild(g) => g.user_permissions_in(&channel, &member)?,
+		Partial(g) => g.user_permissions_in(&channel, &member)?,
+	};
+
+	Ok(permissions.read_messages())
 }

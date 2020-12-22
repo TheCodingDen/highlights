@@ -2,7 +2,10 @@ use serenity::{
 	builder::CreateMessage,
 	client::Context,
 	http::{error::ErrorResponse, HttpError},
-	model::{channel::Message, id::UserId},
+	model::{
+		channel::Message,
+		id::{GuildId, UserId},
+	},
 	Error as SerenityError,
 };
 
@@ -12,7 +15,7 @@ use crate::{
 	db::{Ignore, Keyword, UserState, UserStateKind},
 	global::{EMBED_COLOR, NOTIFICATION_RETRIES, PATIENCE_DURATION},
 	log_discord_error, regex,
-	util::MD_SYMBOL_REGEX,
+	util::{user_can_read_channel, MD_SYMBOL_REGEX},
 	Error,
 };
 use indoc::indoc;
@@ -37,28 +40,26 @@ pub async fn should_notify_keyword(
 		None => return Ok(None),
 	};
 
-	let user_id = UserId(keyword.user_id.try_into().unwrap());
 	let channel = match ctx.cache.guild_channel(message.channel_id).await {
 		Some(c) => c,
-		None => match ctx.http.get_channel(message.channel_id.0).await {
-			Ok(c) => match c {
-				serenity::model::channel::Channel::Guild(c) => c,
-				_ => {
-					return Err(format!(
-						"Channel {} wasn't a guild channel",
-						message.channel_id
-					)
-					.into())
-				}
-			},
-			Err(e) => return Err(e.into()),
+		None => match ctx.http.get_channel(message.channel_id.0).await? {
+			serenity::model::channel::Channel::Guild(c) => c,
+			_ => {
+				return Err(format!(
+					"Channel {} wasn't a guild channel",
+					message.channel_id
+				)
+				.into())
+			}
 		},
 	};
 
-	if !channel
-		.permissions_for_user(ctx, user_id)
-		.await?
-		.read_messages()
+	if !user_can_read_channel(
+		ctx,
+		&channel,
+		UserId(keyword.user_id.try_into().unwrap()),
+	)
+	.await?
 	{
 		return Ok(None);
 	}
@@ -71,10 +72,10 @@ pub async fn notify_keyword(
 	message: Message,
 	keyword: Keyword,
 	ignores: Vec<Ignore>,
+	guild_id: GuildId,
 ) {
 	let user_id = UserId(keyword.user_id.try_into().unwrap());
 	let channel_id = message.channel_id;
-	let guild_id = message.guild_id.unwrap();
 
 	let reply_or_reaction;
 

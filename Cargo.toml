@@ -23,7 +23,8 @@ hyper = "0.13"
 serde = { version = "1", features = ["derive"] }
 
 [dependencies.serenity]
-version = "0.9"
+git = "https://github.com/ThatsNoMoon/serenity"
+branch = "permission-checking"
 default-features = false
 features = [
     "builder",

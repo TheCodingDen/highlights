@@ -181,6 +181,7 @@ async fn handle_keywords(
 				message.clone(),
 				keyword,
 				ignores.clone(),
+				guild_id,
 			));
 		}
 	}

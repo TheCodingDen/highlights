@@ -77,15 +77,15 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 	result.not_found = all_channels.not_found;
 
 	for (channel, arg) in all_channels.found {
-		let user_can_read = channel
-			.permissions_for_user(&ctx.cache, author_id)
-			.await?
-			.read_messages();
+		let user_can_read =
+			crate::util::user_can_read_channel(ctx, channel, author_id).await?;
 
-		let self_can_read = channel
-			.permissions_for_user(&ctx.cache, ctx.cache.current_user_id().await)
-			.await?
-			.read_messages();
+		let self_can_read = crate::util::user_can_read_channel(
+			ctx,
+			channel,
+			ctx.cache.current_user_id().await,
+		)
+		.await?;
 
 		if !user_can_read {
 			result.user_cant_read.push((channel, arg));
