@@ -50,7 +50,7 @@ impl Log for Logger {
 }
 
 pub fn init() {
-	let mut env_logger_builder = env_logger::from_env(
+	let mut env_logger_builder = env_logger::Builder::from_env(
 		env_logger::Env::new()
 			.filter_or("HIGHLIGHTS_LOG_FILTER", "highlights=info,warn")
 			.write_style("HIGHLIGHTS_LOG_STYLE"),
