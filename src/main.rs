@@ -195,12 +195,12 @@ async fn handle_keywords(
 #[tokio::main]
 async fn main() {
 	let _ = dotenv::dotenv();
-	init_env();
 
 	reporting::init();
 
 	let token = env::var("HIGHLIGHTS_DISCORD_TOKEN")
 		.expect("HIGHLIGHTS_DISCORD_TOKEN must be set");
+	init_env();
 
 	db::init();
 
