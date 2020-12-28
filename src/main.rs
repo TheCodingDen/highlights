@@ -12,7 +12,7 @@ mod error;
 pub use error::Error;
 
 pub mod global;
-use global::{bot_mention, bot_nick_mention, init_mentions};
+use global::{bot_mention, bot_nick_mention, init_env, init_mentions};
 
 mod highlighting;
 
@@ -82,6 +82,7 @@ impl EventHandler for Handler {
 
 	async fn ready(&self, ctx: Context, ready: Ready) {
 		init_mentions(ready.user.id);
+		init_env();
 
 		let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
 

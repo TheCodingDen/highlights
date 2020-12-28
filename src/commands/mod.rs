@@ -24,7 +24,7 @@ use serenity::{
 use std::time::Instant;
 
 use crate::{
-	global::EMBED_COLOR,
+	global::{private_mode, EMBED_COLOR},
 	monitoring::{avg_command_time, avg_query_time, Timer},
 	util::question,
 	Error,
@@ -87,12 +87,17 @@ pub async fn about(
 ) -> Result<(), Error> {
 	let _timer = Timer::command("about");
 	require_empty_args!(args, ctx, message);
-	let invite_url = ctx
-		.cache
-		.current_user()
-		.await
-		.invite_url(&ctx, Permissions::empty())
-		.await?;
+	let invite_url = if private_mode() {
+		None
+	} else {
+		Some(
+			ctx.cache
+				.current_user()
+				.await
+				.invite_url(&ctx, Permissions::empty())
+				.await?,
+		)
+	};
 	message
 		.channel_id
 		.send_message(ctx, |m| {
@@ -104,12 +109,16 @@ pub async fn about(
 				))
 				.field("Source", env!("CARGO_PKG_REPOSITORY"), true)
 				.field("Author", "ThatsNoMoon#0175", true)
-				.field(
-					"Invite",
-					format!("[Add me to your server]({})", invite_url),
-					true,
-				)
-				.color(EMBED_COLOR)
+				.color(EMBED_COLOR);
+
+				if let Some(invite_url) = invite_url {
+					e.field(
+						"Invite",
+						format!("[Add me to your server]({})", invite_url),
+						true,
+					);
+				};
+				e
 			})
 		})
 		.await?;

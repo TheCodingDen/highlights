@@ -4,7 +4,7 @@
 use once_cell::sync::OnceCell;
 use serenity::model::id::UserId;
 
-use std::time::Duration;
+use std::{env, time::Duration};
 
 pub const MAX_KEYWORDS: u32 = 100;
 
@@ -34,4 +34,16 @@ pub fn bot_nick_mention() -> &'static str {
 pub fn init_mentions(bot_id: UserId) {
 	let _ = BOT_MENTION.set(format!("<@{}>", bot_id));
 	let _ = BOT_NICK_MENTION.set(format!("<@!{}>", bot_id));
+}
+
+static PRIVATE_MODE: OnceCell<bool> = OnceCell::new();
+
+pub fn private_mode() -> bool {
+	*PRIVATE_MODE
+		.get()
+		.expect("Private mode env was not initialized")
+}
+
+pub fn init_env() {
+	let _ = PRIVATE_MODE.set(env::var_os("HIGHLIGHTS_PRIVATE").is_some());
 }
