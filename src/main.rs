@@ -1,7 +1,7 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
-#![type_length_limit = "10000000"]
+#![type_length_limit = "20000000"]
 
 mod commands;
 
@@ -119,10 +119,13 @@ async fn handle_command(
 		"unmute" => commands::unmute(ctx, message, args).await,
 		"ignore" => commands::ignore(ctx, message, args).await,
 		"unignore" => commands::unignore(ctx, message, args).await,
+		"block" => commands::block(ctx, message, args).await,
+		"unblock" => commands::unblock(ctx, message, args).await,
 		"remove-server" => commands::remove_server(ctx, message, args).await,
 		"keywords" => commands::keywords(ctx, message, args).await,
 		"mutes" => commands::mutes(ctx, message, args).await,
 		"ignores" => commands::ignores(ctx, message, args).await,
+		"blocks" => commands::blocks(ctx, message, args).await,
 		"help" => commands::help(ctx, message, args).await,
 		"ping" => commands::ping(ctx, message, args).await,
 		"about" => commands::about(ctx, message, args).await,

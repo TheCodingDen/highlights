@@ -59,7 +59,12 @@ pub async fn error<S: Display>(
 ) -> Result<(), Error> {
 	let _ = message.react(ctx, '❌').await;
 
-	message.channel_id.say(ctx, response).await?;
+	message
+		.channel_id
+		.send_message(ctx, |m| {
+			m.content(response).allowed_mentions(|m| m.empty_parse())
+		})
+		.await?;
 
 	Ok(())
 }

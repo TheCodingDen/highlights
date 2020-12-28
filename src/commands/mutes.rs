@@ -290,7 +290,12 @@ pub async fn mutes(
 				mutes.join("\n  - ")
 			);
 
-			message.channel_id.say(ctx, response).await?;
+			message
+				.channel_id
+				.send_message(ctx, |m| {
+					m.content(response).allowed_mentions(|m| m.empty_parse())
+				})
+				.await?;
 		}
 		None => {
 			let mutes = Mute::user_mutes(message.author.id).await?;
@@ -350,7 +355,12 @@ pub async fn mutes(
 				.unwrap();
 			}
 
-			message.channel_id.say(ctx, response).await?;
+			message
+				.channel_id
+				.send_message(ctx, |m| {
+					m.content(response).allowed_mentions(|m| m.empty_parse())
+				})
+				.await?;
 		}
 	}
 

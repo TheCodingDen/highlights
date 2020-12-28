@@ -12,6 +12,9 @@ pub use keywords::{
 mod mutes;
 pub use mutes::{mute, mutes, unmute};
 
+mod blocks;
+pub use blocks::{block, blocks, unblock};
+
 use indoc::formatdoc;
 use serenity::{
 	client::Context,
@@ -232,7 +235,7 @@ pub async fn help(
 		CommandInfo {
 			name: "unmute",
 			short_desc:
-				"Unmite a channel, enabling notifications about server keywords appearing there",
+				"Unmute a channel, enabling notifications about server keywords appearing there",
 			long_desc: formatdoc!("
 				Use `@{name} unmute [channels]` to unmute channels you previously muted and \
 				re-enable notifications about your keywords appearing there. \
@@ -248,7 +251,53 @@ pub async fn help(
 				`@{name} unmute rust`
 
 				Unmute the #functional channel, and the elixir channel, and the channel with an ID of 73413749283:
-				`@{name} mute #functional elixir 73413749283`",
+				`@{name} unmute #functional elixir 73413749283`",
+				name = username
+			)),
+		},
+		CommandInfo {
+			name: "block",
+			short_desc: "Block a user to prevent your keywords in their messages from being highlighted",
+			long_desc: formatdoc!("
+				Use `@{name} block [users]` to block the specified users(s) and \
+				prevent notifications about your keywords in their messages. \
+				`[users]` may be user mentions or user IDs. \
+				You can specify multiple users, separated by spaces, to block all of them \
+				at once.
+
+				You can unblock users later with `@{name} unblock [users]`.
+
+				You can list your currently blocked users with `@{name} blocks`.",
+				name = username,
+			),
+			examples: Some(formatdoc!("
+				Block AnnoyingUser:
+				`@{name} block @AnnoyingUser`
+
+				Block RidiculousPerson and the user with ID 669274872716
+				`@{name} mute @RidiculousPerson 669274872716`",
+				name = username
+			)),
+		},
+		CommandInfo {
+			name: "unblock",
+			short_desc:
+				"Unblock a user, enabling notifications about your keywords in their messages",
+			long_desc: formatdoc!("
+				Use `@{name} unblock [users]` to unblock users you previously blocked and \
+				re-enable notifications about your keywords appearing in their messages. \
+				`[users]` may be user mentions or user IDs. You can specify multiple users, \
+				separated by spaces, to unblock all of them at once.
+
+				You can list your currently blocked users with `@{name} blocks`.",
+				name = username,
+			),
+			examples: Some(formatdoc!("
+				Unblock the user RedemptionArc:
+				`@{name} unblock @RedemptionArc`
+
+				Unmute the user AccidentallyTrollish and the user with an ID of 669274872716:
+				`@{name} unblock @AccidentallyTrollish 669274872716`",
 				name = username
 			)),
 		},
@@ -335,15 +384,26 @@ pub async fn help(
 
 				Using `mutes` in DMs with the bot will list channels you've muted across \
 				all servers, including deleted channels or channels in servers this bot is \
-				no longer a member of.
-
-				If the bot can't find information on a channel you previously followed, \
-				its ID will be in parentheses, so you can investigate or unmute.",
+				no longer a member of. If the bot can't find information on a channel you \
+				previously muted, its ID will be in parentheses.",
 				name = username
 			),
 			examples: Some(formatdoc!("
 				Display your currently muted channels:
 				`@{name} mutes`",
+				name = username
+			)),
+		},
+		CommandInfo {
+			name: "blocks",
+			short_desc: "List your currently blocked users",
+			long_desc: formatdoc!("
+				Use `@{name} blocks` to list your currently blocked users.",
+				name = username
+			),
+			examples: Some(formatdoc!("
+				Display your currently blocked users:
+				`@{name} blocks`",
 				name = username
 			)),
 		},

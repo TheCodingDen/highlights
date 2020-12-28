@@ -5,11 +5,11 @@ use serenity::{
 	client::Context,
 	model::{
 		channel::{ChannelType, GuildChannel},
-		id::{ChannelId, GuildId, UserId},
+		id::{ChannelId, GuildId, UserId}, prelude::User,
 	},
 };
 
-use crate::Error;
+use crate::{Error, regex};
 use std::{collections::HashMap, iter::FromIterator};
 
 #[macro_export]
@@ -45,6 +45,33 @@ macro_rules! require_empty_args {
 			return $crate::util::question($ctx, $message).await;
 			}
 		}};
+}
+
+#[derive(Debug, Default)]
+pub struct UsersFromArgs<'args> {
+	pub found: Vec<User>,
+	pub not_found: Vec<u64>,
+	pub invalid: Vec<&'args str>,
+}
+
+pub async fn get_users_from_args<'args>(ctx: &Context, args: &'args str) -> UsersFromArgs<'args> {
+	let mut results = UsersFromArgs::default();
+
+	for word in args.split_whitespace() {
+		match regex!(r"([0-9]{16,20})|<@!?([0-9]{16,20})>").captures(word) {
+			Some(captures) => {
+				let id = captures.get(1).or_else(|| captures.get(2)).unwrap().as_str().parse().unwrap();
+
+				match ctx.http.get_user(id).await {
+					Ok(user) => results.found.push(user),
+					Err(_) => results.not_found.push(id),
+				}
+			}
+			None => results.invalid.push(word),
+		}
+	}
+
+	results
 }
 
 pub async fn get_text_channels_in_guild(

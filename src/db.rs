@@ -48,6 +48,7 @@ pub fn init() {
 	Ignore::create_table();
 	Keyword::create_tables();
 	UserState::create_table();
+	Block::create_table();
 
 	if env::var_os("HIGHLIGHTS_DONT_BACKUP").is_none() {
 		let backup_dir = data_dir.join("backup");
@@ -146,11 +147,17 @@ impl Keyword {
 								WHERE mutes.user_id = guild_keywords.user_id
 									AND mutes.channel_id = ?
 						)
+						AND NOT EXISTS (
+							SELECT blocks.user_id
+								FROM blocks
+								WHERE blocks.user_id = guild_keywords.user_id
+									AND blocks.blocked_id = ?
+						)
 				",
 			)?;
 
 			let guild_keywords = stmt.query_map(
-					params![guild_id, author_id, channel_id],
+					params![guild_id, author_id, channel_id, author_id],
 					Keyword::from_guild_row
 				)?;
 
@@ -557,6 +564,85 @@ impl Ignore {
 					WHERE user_id = ? AND guild_id = ?",
 				params![user_id, guild_id]
 			)
+		})
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct Block {
+	pub user_id: i64,
+	pub blocked_id: i64,
+}
+
+impl Block {
+	fn from_row(row: &Row) -> Result<Self, Error> {
+		Ok(Self {
+			user_id: row.get(0)?,
+			blocked_id: row.get(1)?,
+		})
+	}
+
+	fn create_table() {
+		let conn = connection();
+		conn.execute(
+			"CREATE TABLE IF NOT EXISTS blocks (
+			user_id INTEGER NOT NULL,
+			blocked_id INTEGER NOT NULL,
+			PRIMARY KEY (user_id, blocked_id)
+			)",
+			params![],
+		)
+		.expect("Failed to create blocks table");
+	}
+
+	pub async fn user_blocks(user_id: UserId) -> Result<Vec<Block>, Error> {
+		await_db!("user blocks": |conn| {
+			let user_id: i64 = user_id.0.try_into().unwrap();
+
+			let mut stmt = conn.prepare(
+				"SELECT user_id, blocked_id
+				FROM blocks
+				WHERE user_id = ?"
+			)?;
+
+			let blocks = stmt.query_map(params![user_id], Self::from_row)?;
+
+			blocks.collect()
+		})
+	}
+
+	pub async fn insert(self) -> Result<(), Error> {
+		await_db!("insert block": |conn| {
+			conn.execute(
+				"INSERT INTO blocks (user_id, blocked_id)
+				VALUES (?, ?)",
+				params![self.user_id, self.blocked_id],
+			)?;
+
+			Ok(())
+		})
+	}
+
+	pub async fn exists(self) -> Result<bool, Error> {
+		await_db!("block exists": |conn| {
+			conn.query_row(
+				"SELECT COUNT(*) FROM blocks
+				WHERE user_id = ? AND blocked_id = ?",
+				params![self.user_id, self.blocked_id],
+				|row| Ok(row.get::<_, u32>(0)? == 1),
+			)
+		})
+	}
+
+	pub async fn delete(self) -> Result<(), Error> {
+		await_db!("delete block": |conn| {
+			conn.execute(
+				"DELETE FROM blocks
+				WHERE user_id = ? AND blocked_id = ?",
+				params![self.user_id, self.blocked_id],
+			)?;
+
+			Ok(())
 		})
 	}
 }

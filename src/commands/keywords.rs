@@ -532,7 +532,12 @@ pub async fn ignores(
 				ignores.join("\n  - ")
 			);
 
-			message.channel_id.say(ctx, response).await?;
+			message
+				.channel_id
+				.send_message(ctx, |m| {
+					m.content(response).allowed_mentions(|m| m.empty_parse())
+				})
+				.await?;
 		}
 		None => {
 			let ignores = Ignore::user_ignores(message.author.id).await?;
