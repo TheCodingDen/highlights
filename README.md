@@ -40,6 +40,7 @@ The only required environment variable is `HIGHLIGHTS_DISCORD_TOKEN`, which must
 - `HIGHLIGHTS_LOG_STYLE`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) style; set this to `never` to disable colored console output, or `always` to force colored output. See [env_logger's documentation](https://docs.rs/env_logger/0.7.1/env_logger/index.html) for more information.
 - `HIGHLIGHTS_PROMETHEUS_ADDR`: Sets the address to listen for [Prometheus](https://prometheus.io) monitoring requests.
 - `HIGHLIGHTS_DONT_BACKUP`: Disables automatic database backups.
+- `HIGHLIGHTS_PRIVATE`: Disables sharing the bot invite link.
 
 ## Backups
 
@@ -58,9 +59,9 @@ If you set the `HIGHLIGHTS_PROMETHEUS_ADDR` environment variable, highlights wil
 Example prometheus config to scrape `127.0.0.1:9000`:
 ```yml
 global:
-  scrape_interval: 15s 
+  scrape_interval: 15s
   evaluation_interval: 15s
-  
+
 scrape_configs:
   - job_name: 'highlights'
     static_configs:
