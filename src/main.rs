@@ -82,7 +82,6 @@ impl EventHandler for Handler {
 
 	async fn ready(&self, ctx: Context, ready: Ready) {
 		init_mentions(ready.user.id);
-		init_env();
 
 		let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
 
@@ -196,6 +195,7 @@ async fn handle_keywords(
 #[tokio::main]
 async fn main() {
 	let _ = dotenv::dotenv();
+	init_env();
 
 	reporting::init();
 
