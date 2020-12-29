@@ -36,6 +36,8 @@ HIGHLIGHTS_DATA_DIR="highlights_data"
 The only required environment variable is `HIGHLIGHTS_DISCORD_TOKEN`, which must be a valid Discord bot token. You can use the following environment variables to configure highlights' other behavior:
 - `HIGHLIGHTS_DATA_DIR`: Configures where highlights stores its database and backup files. Default is `./data`.
 - `HIGHLIGHTS_WEBHOOK_URL`: Should be a Discord webhook url (`https://discord.com/api/webhooks/<webhook ID>/<webhook token>`) to send error messages to. If not set, errors will only be logged to the console. (Highlights uses a webhook instead of the bot account so that it can report panic messages and not just errors.)
+- `HIGHLIGHTS_MAX_KEYWORDS`: Sets the limit of how many keywords users can have.
+- `HIGHLIGHTS_PATIENCE_SECONDS`: Sets how long to wait for activity before sending a notification.
 - `HIGHLIGHTS_LOG_FILTER`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) output; set this to `debug` to enable all console logging or `error` to only log errors. Default is `highlights=info`.
 - `HIGHLIGHTS_LOG_STYLE`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) style; set this to `never` to disable colored console output, or `always` to force colored output. See [env_logger's documentation](https://docs.rs/env_logger/0.7.1/env_logger/index.html) for more information.
 - `HIGHLIGHTS_PROMETHEUS_ADDR`: Sets the address to listen for [Prometheus](https://prometheus.io) monitoring requests.
