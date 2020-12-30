@@ -1,3 +1,6 @@
+// Copyright 2020 Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
 use env_logger::Logger as EnvLogger;
 use log::{Level, Log, Metadata, Record};
 use once_cell::sync::OnceCell;

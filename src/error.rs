@@ -1,3 +1,6 @@
+// Copyright 2020 Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
 use reqwest::Error as ReqwestError;
 use rusqlite::Error as RusqliteError;
 use serenity::Error as SerenityError;
