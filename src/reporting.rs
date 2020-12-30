@@ -1,3 +1,6 @@
+// Copyright 2020 Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
 use once_cell::sync::OnceCell;
 use reqwest::{
 	blocking::{self, Client as BlockingClient},
