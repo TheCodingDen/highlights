@@ -21,7 +21,9 @@ use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 
-use std::{env, fs, io::ErrorKind, path::PathBuf};
+use std::{fs, io::ErrorKind};
+
+use crate::global::settings;
 
 static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
 
@@ -33,11 +35,9 @@ pub fn connection() -> PooledConnection<SqliteConnectionManager> {
 }
 
 pub fn init() {
-	let data_dir: PathBuf = env::var("HIGHLIGHTS_DATA_DIR")
-		.map(Into::into)
-		.unwrap_or("data".into());
+	let data_dir = &settings().database.path;
 
-	if let Err(error) = fs::create_dir(&data_dir) {
+	if let Err(error) = fs::create_dir(data_dir) {
 		if error.kind() != ErrorKind::AlreadyExists {
 			Err::<(), _>(error).expect("Failed to create data directory");
 		}
@@ -58,7 +58,7 @@ pub fn init() {
 	Keyword::create_tables();
 	UserState::create_table();
 
-	if env::var_os("HIGHLIGHTS_DONT_BACKUP").is_none() {
+	if settings().database.backup {
 		let backup_dir = data_dir.join("backup");
 
 		start_backup_cycle(backup_dir);

@@ -1,0 +1,15 @@
+[behavior]
+max_keywords = 100
+patience_seconds = 120
+
+[bot]
+token = "..."
+private = true
+
+[logging]
+webhook = "..."
+prometheus = "..."
+
+[database]
+path = "./data"
+backup = true

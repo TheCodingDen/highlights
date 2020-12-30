@@ -22,7 +22,7 @@ use super::util::{
 };
 use crate::{
 	db::{Ignore, Keyword, KeywordKind},
-	global::max_keywords,
+	global::settings,
 	monitoring::Timer,
 	util::{error, success, MD_SYMBOL_REGEX},
 	Error,
@@ -37,6 +37,7 @@ pub async fn add(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
+	panic!("uh oh");
 	let _timer = Timer::command("add");
 	let guild_id = require_guild!(ctx, message);
 
@@ -46,11 +47,11 @@ pub async fn add(
 		let keyword_count =
 			Keyword::user_keyword_count(message.author.id).await?;
 
-		if keyword_count >= max_keywords() {
+		if keyword_count >= settings().behavior.max_keywords {
 			static MSG: Lazy<String, fn() -> String> = Lazy::new(|| {
 				format!(
 					"You can't create more than {} keywords!",
-					max_keywords()
+					settings().behavior.max_keywords
 				)
 			});
 

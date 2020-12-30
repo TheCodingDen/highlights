@@ -3,15 +3,13 @@ use log::{Level, Log, Metadata, Record};
 use once_cell::sync::OnceCell;
 use reqwest::{
 	blocking::{self, Client as BlockingClient},
-	Client as AsyncClient, Url,
+	Client as AsyncClient,
 };
 use serde::Serialize;
 
-use std::{env, panic, time::Duration};
+use std::{panic, time::Duration};
 
-use crate::Error;
-
-static WEBHOOK_URL: OnceCell<Url> = OnceCell::new();
+use crate::{global::settings, Error};
 
 static WEBHOOK_CLIENT: OnceCell<AsyncClient> = OnceCell::new();
 
@@ -52,35 +50,14 @@ impl Log for Logger {
 pub fn init() {
 	let mut env_logger_builder = env_logger::Builder::from_env(
 		env_logger::Env::new()
-			.filter_or("HIGHLIGHTS_LOG_FILTER", "highlights=info,warn")
-			.write_style("HIGHLIGHTS_LOG_STYLE"),
+			.filter_or("HIGHLIGHTS_LOGGING.FILTER", "highlights=info,warn")
+			.write_style("HIGHLIGHTS_LOGGING.STYLE"),
 	);
 
-	match env::var("HIGHLIGHTS_WEBHOOK_URL") {
-		Ok(url) => match url.parse() {
-			Ok(url) => WEBHOOK_URL.set(url).unwrap(),
-			Err(e) => {
-				log::error!(
-					"HIGHLIGHTS_WEBHOOK_URL is an invalid URL ({}): {}",
-					url,
-					e
-				);
-				env_logger_builder.init();
-				return;
-			}
-		},
-		Err(env::VarError::NotPresent) => {
-			log::warn!(
-				"HIGHLIGHTS_WEBHOOK_URL is not present, not reporting errors"
-			);
-			env_logger_builder.init();
-			return;
-		}
-		Err(env::VarError::NotUnicode(_)) => {
-			log::error!("HIGHLIGHTS_WEBHOOK_URL is invalid UTF-8");
-			env_logger_builder.init();
-			return;
-		}
+	if settings().logging.webhook.is_none() {
+		log::warn!("Webhook URL is not present, not reporting errors");
+		env_logger_builder.init();
+		return;
 	}
 
 	WEBHOOK_CLIENT
@@ -117,7 +94,12 @@ pub fn init() {
 }
 
 async fn report_error(content: String) -> Result<reqwest::Response, Error> {
-	let url = WEBHOOK_URL.get().ok_or("Webhook URL not set")?.to_owned();
+	let url = settings()
+		.logging
+		.webhook
+		.as_ref()
+		.ok_or("Webhook URL not set")?
+		.to_owned();
 	let client = WEBHOOK_CLIENT.get().ok_or("Webhook client not set")?;
 
 	let message = WebhookMessage { content };
@@ -131,7 +113,12 @@ async fn report_error(content: String) -> Result<reqwest::Response, Error> {
 }
 
 fn report_panic(info: &panic::PanicInfo) -> Result<blocking::Response, Error> {
-	let url = WEBHOOK_URL.get().ok_or("Webhook URL not set")?.to_owned();
+	let url = settings()
+		.logging
+		.webhook
+		.as_ref()
+		.ok_or("Webhook URL not set")?
+		.to_owned();
 	let client = BlockingClient::builder().build()?;
 
 	let message = WebhookMessage {

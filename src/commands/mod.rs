@@ -24,7 +24,7 @@ use serenity::{
 use std::time::Instant;
 
 use crate::{
-	global::{private_mode, EMBED_COLOR},
+	global::{settings, EMBED_COLOR},
 	monitoring::{avg_command_time, avg_query_time, Timer},
 	util::question,
 	Error,
@@ -87,7 +87,7 @@ pub async fn about(
 ) -> Result<(), Error> {
 	let _timer = Timer::command("about");
 	require_empty_args!(args, ctx, message);
-	let invite_url = if private_mode() {
+	let invite_url = if settings().bot.private {
 		None
 	} else {
 		Some(

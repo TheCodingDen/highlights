@@ -3,3 +3,4 @@
 *.sublime*
 /.vscode
 .env
+config.toml

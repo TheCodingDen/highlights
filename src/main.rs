@@ -11,8 +11,12 @@ use db::{Ignore, Keyword, UserState};
 mod error;
 pub use error::Error;
 
+pub mod settings;
+
 pub mod global;
-use global::{bot_mention, bot_nick_mention, init_env, init_mentions};
+use global::{
+	bot_mention, bot_nick_mention, init_mentions, init_settings, settings,
+};
 
 mod highlighting;
 
@@ -34,7 +38,7 @@ use serenity::{
 };
 use tokio::task;
 
-use std::{collections::HashMap, convert::TryInto, env};
+use std::{collections::HashMap, convert::TryInto};
 
 struct Handler;
 
@@ -196,17 +200,15 @@ async fn handle_keywords(
 async fn main() {
 	let _ = dotenv::dotenv();
 
-	reporting::init();
+	init_settings();
 
-	let token = env::var("HIGHLIGHTS_DISCORD_TOKEN")
-		.expect("HIGHLIGHTS_DISCORD_TOKEN must be set");
-	init_env();
+	reporting::init();
 
 	db::init();
 
 	monitoring::init();
 
-	let mut client = Client::builder(token)
+	let mut client = Client::builder(&settings().bot.token)
 		.event_handler(Handler)
 		.intents(
 			GatewayIntents::DIRECT_MESSAGES

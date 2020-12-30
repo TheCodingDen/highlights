@@ -21,6 +21,8 @@ dotenv = "0.15"
 prometheus = "0.11"
 hyper = "0.13"
 serde = { version = "1", features = ["derive"] }
+config = { version = "0.10", default-features = false, features = ["toml"] }
+url = { version = "2.2", features = ["serde"] }
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"
