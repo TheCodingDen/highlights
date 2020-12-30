@@ -1,14 +1,19 @@
+# All fields except bot.token are optional, defaults shown below
+
 [behavior]
 max_keywords = 100
 patience_seconds = 120
 
 [bot]
-token = "..."
+#token = "..."
 private = true
 
 [logging]
-webhook = "..."
-prometheus = "..."
+#webhook = "..."
+#prometheus = "..."
+level = "WARN"
+[logging.filters]
+"highlights" = "INFO"
 
 [database]
 path = "./data"

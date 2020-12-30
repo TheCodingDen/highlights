@@ -1,8 +1,12 @@
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
-use std::{env, net::SocketAddr, path::PathBuf, time::Duration};
+use log::LevelFilter;
 use url::Url;
+
+use std::{
+	collections::HashMap, env, net::SocketAddr, path::PathBuf, time::Duration,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct BehaviorSettings {
@@ -23,10 +27,11 @@ pub struct BotSettings {
 
 #[derive(Debug, Deserialize)]
 pub struct LoggingSettings {
-	// pub style: String,
-	// pub filter: String,
 	pub webhook: Option<Url>,
 	pub prometheus: Option<SocketAddr>,
+
+	pub level: LevelFilter,
+	pub filters: HashMap<String, LevelFilter>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,8 +57,8 @@ impl Settings {
 
 		s.set_default("bot.private", false)?;
 
-		// s.set_default("logging.style", "")?;
-		// s.set_default("logging.filter", "")?;
+		s.set_default("logging.level", "WARN")?;
+		s.set_default("logging.filters.highlights", "INFO")?;
 
 		s.set_default("database.path", "./data")?;
 		s.set_default("database.backup", true)?;

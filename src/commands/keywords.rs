@@ -37,7 +37,6 @@ pub async fn add(
 	message: &Message,
 	args: &str,
 ) -> Result<(), Error> {
-	panic!("uh oh");
 	let _timer = Timer::command("add");
 	let guild_id = require_guild!(ctx, message);
 
