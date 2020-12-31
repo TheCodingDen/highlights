@@ -16,7 +16,7 @@ use std::{convert::TryInto, ops::Range, time::Duration};
 
 use crate::{
 	db::{Ignore, Keyword, UserState, UserStateKind},
-	global::{patience_duration, EMBED_COLOR, NOTIFICATION_RETRIES},
+	global::{settings, EMBED_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
 	util::{user_can_read_channel, MD_SYMBOL_REGEX},
 	Error,
@@ -86,7 +86,7 @@ pub async fn notify_keyword(
 		.channel_id
 		.await_reply(&ctx)
 		.author_id(user_id)
-		.timeout(patience_duration());
+		.timeout(settings().behavior.patience);
 
 	let reaction = message.channel_id.await_reaction(&ctx).author_id(user_id);
 

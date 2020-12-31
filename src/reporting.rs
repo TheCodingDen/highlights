@@ -1,20 +1,22 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
-use env_logger::Logger as EnvLogger;
-use log::{Level, Log, Metadata, Record};
 use once_cell::sync::OnceCell;
 use reqwest::{
 	blocking::{self, Client as BlockingClient},
-	Client as AsyncClient, Url,
+	Client as AsyncClient,
 };
 use serde::Serialize;
 
-use std::{env, panic, time::Duration};
+use std::{panic, time::Duration};
 
-use crate::Error;
+use log::{Level, LevelFilter, Log, Metadata, Record};
+use simplelog::{
+	CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger,
+	TerminalMode,
+};
 
-static WEBHOOK_URL: OnceCell<Url> = OnceCell::new();
+use crate::{global::settings, Error};
 
 static WEBHOOK_CLIENT: OnceCell<AsyncClient> = OnceCell::new();
 
@@ -23,21 +25,14 @@ struct WebhookMessage {
 	content: String,
 }
 
-struct Logger {
-	inner: EnvLogger,
-}
-
-impl Log for Logger {
+struct WebhookLogger;
+impl Log for WebhookLogger {
 	fn enabled(&self, meta: &Metadata) -> bool {
-		meta.level() == Level::Error || self.inner.enabled(meta)
+		meta.level() == Level::Error
 	}
 
 	fn log(&self, record: &Record) {
-		if self.inner.enabled(record.metadata()) {
-			self.inner.log(record);
-		}
-
-		if record.level() == Level::Error {
+		if self.enabled(record.metadata()) {
 			let content = format!("[{}] {}", record.level(), record.args());
 			tokio::spawn(async move {
 				if let Err(e) = report_error(content).await {
@@ -47,80 +42,83 @@ impl Log for Logger {
 		}
 	}
 
-	fn flush(&self) {
-		self.inner.flush();
+	fn flush(&self) {}
+}
+impl SharedLogger for WebhookLogger {
+	fn level(&self) -> LevelFilter {
+		LevelFilter::Error
+	}
+
+	fn config(&self) -> Option<&Config> {
+		None
+	}
+
+	fn as_log(self: Box<Self>) -> Box<dyn Log> {
+		Box::new(*self)
 	}
 }
 
 pub fn init() {
-	let mut env_logger_builder = env_logger::Builder::from_env(
-		env_logger::Env::new()
-			.filter_or("HIGHLIGHTS_LOG_FILTER", "highlights=info,warn")
-			.write_style("HIGHLIGHTS_LOG_STYLE"),
-	);
+	let mut loggers: Vec<Box<dyn SharedLogger>> = vec![];
 
-	match env::var("HIGHLIGHTS_WEBHOOK_URL") {
-		Ok(url) => match url.parse() {
-			Ok(url) => WEBHOOK_URL.set(url).unwrap(),
-			Err(e) => {
-				log::error!(
-					"HIGHLIGHTS_WEBHOOK_URL is an invalid URL ({}): {}",
-					url,
-					e
-				);
-				env_logger_builder.init();
-				return;
+	let mut default_config = ConfigBuilder::new();
+	default_config.set_target_level(LevelFilter::Error);
+	for (path, level) in &settings().logging.filters {
+		default_config.add_filter_ignore(path.to_string());
+
+		let mut config = ConfigBuilder::new();
+		config.set_target_level(LevelFilter::Error);
+		config.add_filter_allow(path.to_string());
+		loggers.push(TermLogger::new(
+			*level,
+			config.build(),
+			TerminalMode::Mixed,
+		));
+	}
+	loggers.push(TermLogger::new(
+		settings().logging.level,
+		default_config.build(),
+		TerminalMode::Mixed,
+	));
+
+	if settings().logging.webhook.is_some() {
+		WEBHOOK_CLIENT
+			.set(
+				AsyncClient::builder()
+					.build()
+					.expect("Failed to build webhook client"),
+			)
+			.unwrap();
+
+		let default_panic_hook = panic::take_hook();
+
+		let reporting_panic_hook: Box<
+			dyn Fn(&panic::PanicInfo<'_>) + Send + Sync + 'static,
+		> = Box::new(move |info| {
+			if let Err(e) = report_panic(info) {
+				log::error!("Error reporting panic: {}", e);
 			}
-		},
-		Err(env::VarError::NotPresent) => {
-			log::warn!(
-				"HIGHLIGHTS_WEBHOOK_URL is not present, not reporting errors"
-			);
-			env_logger_builder.init();
-			return;
-		}
-		Err(env::VarError::NotUnicode(_)) => {
-			log::error!("HIGHLIGHTS_WEBHOOK_URL is invalid UTF-8");
-			env_logger_builder.init();
-			return;
-		}
+
+			default_panic_hook(info);
+		});
+
+		panic::set_hook(reporting_panic_hook);
+
+		loggers.push(Box::new(WebhookLogger));
+	} else {
+		log::warn!("Webhook URL is not present, not reporting errors");
 	}
 
-	WEBHOOK_CLIENT
-		.set(
-			AsyncClient::builder()
-				.build()
-				.expect("Failed to build webhook client"),
-		)
-		.unwrap();
-
-	let default_panic_hook = panic::take_hook();
-
-	let reporting_panic_hook: Box<
-		dyn Fn(&panic::PanicInfo<'_>) + Send + Sync + 'static,
-	> = Box::new(move |info| {
-		if let Err(e) = report_panic(info) {
-			log::error!("Error reporting panic: {}", e);
-		}
-
-		default_panic_hook(info);
-	});
-
-	panic::set_hook(reporting_panic_hook);
-
-	let env_logger = env_logger_builder.build();
-
-	let max_level = env_logger.filter();
-
-	let logger = Logger { inner: env_logger };
-
-	log::set_boxed_logger(Box::new(logger)).expect("Failed to set logger");
-
-	log::set_max_level(max_level);
+	CombinedLogger::init(loggers).expect("Failed to set logger");
 }
 
 async fn report_error(content: String) -> Result<reqwest::Response, Error> {
-	let url = WEBHOOK_URL.get().ok_or("Webhook URL not set")?.to_owned();
+	let url = settings()
+		.logging
+		.webhook
+		.as_ref()
+		.ok_or("Webhook URL not set")?
+		.to_owned();
 	let client = WEBHOOK_CLIENT.get().ok_or("Webhook client not set")?;
 
 	let message = WebhookMessage { content };
@@ -134,7 +132,12 @@ async fn report_error(content: String) -> Result<reqwest::Response, Error> {
 }
 
 fn report_panic(info: &panic::PanicInfo) -> Result<blocking::Response, Error> {
-	let url = WEBHOOK_URL.get().ok_or("Webhook URL not set")?.to_owned();
+	let url = settings()
+		.logging
+		.webhook
+		.as_ref()
+		.ok_or("Webhook URL not set")?
+		.to_owned();
 	let client = BlockingClient::builder().build()?;
 
 	let message = WebhookMessage {

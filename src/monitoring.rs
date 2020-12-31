@@ -14,6 +14,8 @@ use prometheus::{
 
 use std::{net::SocketAddr, time::Instant};
 
+use crate::global::settings;
+
 static ENABLED: OnceCell<bool> = OnceCell::new();
 
 static COMMAND_TIME_GAUGE: Lazy<GaugeVec, fn() -> GaugeVec> = Lazy::new(|| {
@@ -112,27 +114,14 @@ fn avg_metrics(metric_families: Vec<MetricFamily>) -> Option<f64> {
 }
 
 pub fn init() {
-	if let Ok(var) = std::env::var("HIGHLIGHTS_PROMETHEUS_ADDR") {
-		match var.parse() {
-			Ok(addr) => {
-				ENABLED.set(true).unwrap();
-
-				tokio::spawn(prometheus_server(addr));
-			}
-			Err(error) => {
-				ENABLED.set(false).unwrap();
-
-				log::error!(
-					"Invalid HIGHLIGHTS_PROMETHEUS_ADDR provided ({})",
-					error
-				);
-			}
-		}
+	if let Some(addr) = settings().logging.prometheus {
+		ENABLED.set(true).unwrap();
+		tokio::spawn(prometheus_server(addr));
 	} else {
 		ENABLED.set(false).unwrap();
 
 		log::warn!(
-			"HIGHLIGHTS_PROMETHEUS_ADDR not provided; not starting monitoring server"
+			"Prometheus address not provided; not starting monitoring server"
 		);
 	}
 }
