@@ -86,7 +86,7 @@ pub async fn notify_keyword(
 		.channel_id
 		.await_reply(&ctx)
 		.author_id(user_id)
-		.timeout(settings().behavior.patience());
+		.timeout(settings().behavior.patience);
 
 	let reaction = message.channel_id.await_reaction(&ctx).author_id(user_id);
 

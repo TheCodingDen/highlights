@@ -1,22 +1,43 @@
 use config::{Config, ConfigError, Environment, File};
-use serde::Deserialize;
+use serde::{de, Deserialize, Deserializer};
 
 use log::LevelFilter;
 use url::Url;
 
 use std::{
-	collections::HashMap, env, net::SocketAddr, path::PathBuf, time::Duration,
+	collections::HashMap, env, fmt, net::SocketAddr, path::PathBuf,
+	time::Duration,
 };
+
+struct DurationVisitor;
+impl<'de> de::Visitor<'de> for DurationVisitor {
+	type Value = Duration;
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+		write!(formatter, "a std::time::Duration in seconds")
+	}
+	fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+	where
+		E: de::Error,
+	{
+		Ok(Duration::from_secs(v))
+	}
+}
+fn deserialize_duration<'de, D>(d: D) -> Result<Duration, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	d.deserialize_u64(DurationVisitor)
+}
 
 #[derive(Debug, Deserialize)]
 pub struct BehaviorSettings {
 	pub max_keywords: u32,
-	patience_seconds: u64,
-}
-impl BehaviorSettings {
-	pub fn patience(&self) -> Duration {
-		Duration::from_secs(self.patience_seconds)
-	}
+
+	#[serde(
+		rename = "patience_seconds",
+		deserialize_with = "deserialize_duration"
+	)]
+	pub patience: Duration,
 }
 
 #[derive(Debug, Deserialize)]
