@@ -4,12 +4,12 @@
 //! Functions for sending, editing, and deleting notifications.
 
 use serenity::{
-	builder::CreateMessage,
+	builder::{CreateEmbed, CreateMessage, EditMessage},
 	client::Context,
 	http::{error::ErrorResponse, HttpError},
 	model::{
 		channel::Message,
-		id::{GuildId, UserId},
+		id::{ChannelId, GuildId, MessageId, UserId},
 	},
 	Error as SerenityError,
 };
@@ -17,8 +17,8 @@ use serenity::{
 use std::{convert::TryInto, ops::Range, time::Duration};
 
 use crate::{
-	db::{Ignore, Keyword, UserState, UserStateKind},
-	global::{settings, EMBED_COLOR, NOTIFICATION_RETRIES},
+	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
+	global::{settings, EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
 	util::{user_can_read_channel, MD_SYMBOL_REGEX},
 	Error,
@@ -145,112 +145,308 @@ pub async fn notify_keyword(
 					None => return Ok(()),
 				};
 
-			let msg = &message.content;
-			let re = &*MD_SYMBOL_REGEX;
-			let formatted_content = format!(
-				"{}__**{}**__{}",
-				re.replace_all(&msg[..keyword_range.start], r"\$0"),
-				re.replace_all(
-					&msg[keyword_range.start..keyword_range.end],
-					r"\$0"
-				),
-				re.replace_all(&msg[keyword_range.end..], r"\$0")
-			);
+			let message_to_send = build_notification_message(
+				&ctx,
+				&message,
+				&keyword.keyword,
+				keyword_range,
+				channel_id,
+				guild_id,
+			)
+			.await?;
 
-			let message_link = format!(
-				"[(Link)](https://discord.com/channels/{}/{}/{})",
-				guild_id, channel_id, message.id
-			);
-
-			let channel_name = ctx
-				.cache
-				.guild_channel_field(channel_id, |c| c.name.clone())
-				.await
-				.ok_or("Couldn't get channel for keyword")?;
-			let guild_name = ctx
-				.cache
-				.guild_field(guild_id, |g| g.name.clone())
-				.await
-				.ok_or("Couldn't get guild for keyword")?;
-			let title = format!(
-				"Keyword \"{}\" seen in #{} ({})",
-				keyword.keyword, channel_name, guild_name
-			);
-			let channel_mention = format!("<#{}>", message.channel_id);
-
-			let dm_channel = user_id.create_dm_channel(&ctx).await?;
-
-			let mut message_to_send = CreateMessage::default();
-			message_to_send.embed(|e| {
-				e.description(formatted_content)
-					.timestamp(&message.timestamp)
-					.author(|a| a.name(title))
-					.field("Channel", channel_mention, true)
-					.field("Message", message_link, true)
-					.footer(|f| {
-						f.icon_url(message.author.avatar_url().unwrap_or_else(
-							|| message.author.default_avatar_url(),
-						))
-						.text(message.author.name)
-					})
-					.color(EMBED_COLOR)
-			});
-
-			let mut result = Ok(());
-
-			for _ in 0..NOTIFICATION_RETRIES {
-				let mut message_to_send = message_to_send.clone();
-
-				match dm_channel
-					.send_message(&ctx, |_| &mut message_to_send)
-					.await
-				{
-					Ok(_) => {
-						result = Ok(());
-						UserState::clear(user_id).await?;
-						break;
-					}
-
-					Err(SerenityError::Http(err)) => match &*err {
-						HttpError::UnsuccessfulRequest(ErrorResponse {
-							status_code,
-							..
-						}) if status_code.is_server_error() => {
-							result = Err(SerenityError::Http(err).into());
-						}
-
-						HttpError::UnsuccessfulRequest(ErrorResponse {
-							error,
-							..
-						}) if error.message
-							== "Cannot send messages to this user" =>
-						{
-							let user_state = UserState {
-								user_id: keyword.user_id,
-								state: UserStateKind::CannotDm,
-							};
-
-							user_state.set().await?;
-
-							result = Ok(());
-							break;
-						}
-
-						_ => Err(SerenityError::Http(err))?,
-					},
-
-					Err(err) => Err(err)?,
-				}
-
-				delay_for(Duration::from_secs(2)).await;
-			}
-
-			result
+			send_notification_message(
+				&ctx,
+				user_id,
+				message.id,
+				message_to_send,
+				keyword.keyword,
+			)
+			.await
 		}
 		.await;
 
 		if let Err(error) = result {
 			log_discord_error!(in channel_id, by user_id, error);
+		}
+	}
+}
+
+async fn build_notification_message(
+	ctx: &Context,
+	message: &Message,
+	keyword: &str,
+	keyword_range: Range<usize>,
+	channel_id: ChannelId,
+	guild_id: GuildId,
+) -> Result<CreateMessage<'static>, Error> {
+	let embed = build_notification_embed(
+		ctx,
+		message,
+		keyword,
+		keyword_range,
+		channel_id,
+		guild_id,
+	)
+	.await?;
+
+	let mut msg = CreateMessage::default();
+
+	msg.embed(|e| {
+		*e = embed;
+		e
+	});
+
+	Ok(msg)
+}
+
+async fn build_notification_edit(
+	ctx: &Context,
+	message: &Message,
+	keyword: &str,
+	keyword_range: Range<usize>,
+	channel_id: ChannelId,
+	guild_id: GuildId,
+) -> Result<EditMessage, Error> {
+	let embed = build_notification_embed(
+		ctx,
+		message,
+		keyword,
+		keyword_range,
+		channel_id,
+		guild_id,
+	)
+	.await?;
+
+	let mut msg = EditMessage::default();
+
+	msg.embed(|e| {
+		*e = embed;
+		e
+	});
+
+	Ok(msg)
+}
+
+async fn build_notification_embed(
+	ctx: &Context,
+	message: &Message,
+	keyword: &str,
+	keyword_range: Range<usize>,
+	channel_id: ChannelId,
+	guild_id: GuildId,
+) -> Result<CreateEmbed, Error> {
+	let re = &*MD_SYMBOL_REGEX;
+	let formatted_content = format!(
+		"{}__**{}**__{}",
+		re.replace_all(&message.content[..keyword_range.start], r"\$0"),
+		re.replace_all(
+			&message.content[keyword_range.start..keyword_range.end],
+			r"\$0"
+		),
+		re.replace_all(&message.content[keyword_range.end..], r"\$0")
+	);
+
+	let message_link = format!(
+		"[(Link)](https://discord.com/channels/{}/{}/{})",
+		guild_id, channel_id, message.id
+	);
+
+	let channel_name = ctx
+		.cache
+		.guild_channel_field(channel_id, |c| c.name.clone())
+		.await
+		.ok_or("Couldn't get channel for keyword")?;
+	let guild_name = ctx
+		.cache
+		.guild_field(guild_id, |g| g.name.clone())
+		.await
+		.ok_or("Couldn't get guild for keyword")?;
+	let title = format!(
+		"Keyword \"{}\" seen in #{} ({})",
+		keyword, channel_name, guild_name
+	);
+	let channel_mention = format!("<#{}>", message.channel_id);
+
+	let mut embed = CreateEmbed::default();
+
+	embed
+		.description(formatted_content)
+		.timestamp(&message.timestamp)
+		.author(|a| a.name(title))
+		.field("Channel", channel_mention, true)
+		.field("Message", message_link, true)
+		.footer(|f| {
+			f.icon_url(
+				message
+					.author
+					.avatar_url()
+					.unwrap_or_else(|| message.author.default_avatar_url()),
+			)
+			.text(&message.author.name)
+		})
+		.color(EMBED_COLOR);
+
+	Ok(embed)
+}
+
+async fn send_notification_message(
+	ctx: &Context,
+	user_id: UserId,
+	message_id: MessageId,
+	message_to_send: CreateMessage<'static>,
+	keyword: String,
+) -> Result<(), Error> {
+	let dm_channel = user_id.create_dm_channel(&ctx).await?;
+
+	let mut result = Ok(());
+
+	for _ in 0..NOTIFICATION_RETRIES {
+		let mut message_to_send = message_to_send.clone();
+
+		match dm_channel
+			.send_message(&ctx, |_| &mut message_to_send)
+			.await
+		{
+			Ok(sent_message) => {
+				result = Ok(());
+				UserState::clear(user_id).await?;
+				let notification = Notification {
+					original_message: message_id.0.try_into().unwrap(),
+					notification_message: sent_message.id.0.try_into().unwrap(),
+					keyword,
+					user_id: user_id.0.try_into().unwrap(),
+				};
+				notification.insert().await?;
+				break;
+			}
+
+			Err(SerenityError::Http(err)) => match &*err {
+				HttpError::UnsuccessfulRequest(ErrorResponse {
+					status_code,
+					..
+				}) if status_code.is_server_error() => {
+					result = Err(SerenityError::Http(err).into());
+				}
+
+				HttpError::UnsuccessfulRequest(ErrorResponse {
+					error, ..
+				}) if error.message == "Cannot send messages to this user" => {
+					let user_state = UserState {
+						user_id: user_id.0.try_into().unwrap(),
+						state: UserStateKind::CannotDm,
+					};
+
+					user_state.set().await?;
+
+					result = Ok(());
+					break;
+				}
+
+				_ => Err(SerenityError::Http(err))?,
+			},
+
+			Err(err) => Err(err)?,
+		}
+
+		delay_for(Duration::from_secs(2)).await;
+	}
+
+	result
+}
+
+pub async fn delete_sent_notifications(
+	ctx: &Context,
+	channel_id: ChannelId,
+	notifications: &[Notification],
+) {
+	for notification in notifications {
+		let user_id = UserId(notification.user_id.try_into().unwrap());
+		let message_id =
+			MessageId(notification.notification_message.try_into().unwrap());
+
+		let result: Result<(), Error> = async {
+			let dm_channel = user_id.create_dm_channel(ctx).await?;
+
+			dm_channel
+				.edit_message(ctx, message_id, |m| {
+					m.embed(|e| {
+						e.description("*Original message deleted*")
+							.color(ERROR_COLOR)
+					})
+				})
+				.await?;
+
+			Ok(())
+		}
+		.await;
+
+		if let Err(e) = result {
+			log_discord_error!(in channel_id, deleted notification.original_message, e);
+		}
+	}
+}
+
+pub async fn update_sent_notifications(
+	ctx: &Context,
+	channel_id: ChannelId,
+	guild_id: GuildId,
+	message: Message,
+	notifications: Vec<Notification>,
+) {
+	let mut to_delete = vec![];
+
+	for notification in notifications {
+		let keyword_range = match find_applicable_match(
+			&notification.keyword,
+			&message.content,
+		) {
+			Some(range) => range,
+			None => {
+				to_delete.push(notification);
+				continue;
+			}
+		};
+
+		let result: Result<(), Error> = async {
+			let message_to_send = build_notification_edit(
+				ctx,
+				&message,
+				&notification.keyword,
+				keyword_range,
+				channel_id,
+				guild_id,
+			)
+			.await?;
+
+			let user_id = UserId(notification.user_id.try_into().unwrap());
+			let message_id = MessageId(
+				notification.notification_message.try_into().unwrap(),
+			);
+
+			let dm_channel = user_id.create_dm_channel(ctx).await?;
+
+			dm_channel
+				.edit_message(ctx, message_id, |m| {
+					*m = message_to_send;
+					m
+				})
+				.await?;
+
+			Ok(())
+		}
+		.await;
+
+		if let Err(e) = result {
+			log_discord_error!(in channel_id, edited message.id, e);
+		}
+	}
+
+	delete_sent_notifications(ctx, channel_id, &to_delete).await;
+
+	for notification in to_delete {
+		if let Err(e) = notification.delete().await {
+			log_discord_error!(in channel_id, edited message.id, e);
 		}
 	}
 }

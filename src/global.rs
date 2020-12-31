@@ -13,6 +13,7 @@ pub const NOTIFICATION_RETRIES: u8 = 5;
 
 /// Color of normal embeds (from help command and notifications).
 pub const EMBED_COLOR: u32 = 0xefff47;
+pub const ERROR_COLOR: u32 = 0xff4747;
 
 /// String containing a mention of the bot, in the format `<@{id}>`.
 static BOT_MENTION: OnceCell<String> = OnceCell::new();

@@ -31,6 +31,16 @@ static COMMAND_TIME_GAUGE: Lazy<GaugeVec, fn() -> GaugeVec> = Lazy::new(|| {
 	.unwrap()
 });
 
+/// Gauge of keyword notification execution time.
+static NOTIFY_TIME_GAUGE: Lazy<GaugeVec, fn() -> GaugeVec> = Lazy::new(|| {
+	register_gauge_vec!(
+		concat!(env!("CARGO_PKG_NAME"), "_notify_time"),
+		"Notification time time, in seconds",
+		&["name"]
+	)
+	.unwrap()
+});
+
 /// Gauge of database query execution time.
 static QUERY_TIME_GAUGE: Lazy<GaugeVec, fn() -> GaugeVec> = Lazy::new(|| {
 	register_gauge_vec!(
@@ -45,6 +55,7 @@ static QUERY_TIME_GAUGE: Lazy<GaugeVec, fn() -> GaugeVec> = Lazy::new(|| {
 enum TimerType {
 	Command,
 	Query,
+	Notification,
 }
 
 /// A timer for measuring and recording how long a command or database query took.
@@ -86,6 +97,17 @@ impl Timer {
 			start: Instant::now(),
 		}
 	}
+
+	/// Creates a timer for a keyword notificationexecution.
+	///
+	/// `name` should be the type of notification, `"create"`, `"edit"`, or `"delete"`.
+	pub fn notification(name: &'static str) -> Self {
+		Self {
+			kind: TimerType::Notification,
+			name,
+			start: Instant::now(),
+		}
+	}
 }
 
 impl Drop for Timer {
@@ -104,6 +126,11 @@ impl Drop for Timer {
 			}
 			TimerType::Query => {
 				QUERY_TIME_GAUGE
+					.with_label_values(&[self.name])
+					.set(elapsed);
+			}
+			TimerType::Notification => {
+				NOTIFY_TIME_GAUGE
 					.with_label_values(&[self.name])
 					.set(elapsed);
 			}
@@ -137,6 +164,20 @@ pub fn avg_command_time() -> Option<f64> {
 /// disabled) this function returns `None`.
 pub fn avg_query_time() -> Option<f64> {
 	avg_metrics(QUERY_TIME_GAUGE.collect())
+}
+
+/// Calculates average keyword notification execution time, in seconds.
+///
+/// This function calculates the average of the times of the most recent keyword notification. This
+/// is not an average that accounts for how many notifications were made, or how recently, it only
+/// goes through each query and averages each of their most recent times. This is not a perfect
+/// reflection of the actual average amount of time a keyword notification takes, but this is what
+/// is recorded when using the prometheus library.
+///
+/// In the event that no notification times have been recorded (such as if performance monitoring is
+/// disabled) this function returns `None`.
+pub fn avg_notify_time() -> Option<f64> {
+	avg_metrics(NOTIFY_TIME_GAUGE.collect())
 }
 
 /// Calculates the average of a collection of `MetricFamily`s.

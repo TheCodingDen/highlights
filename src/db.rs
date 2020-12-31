@@ -11,12 +11,14 @@ mod block;
 mod ignore;
 mod keyword;
 mod mute;
+mod notification;
 mod user_state;
 
 pub use block::Block;
 pub use ignore::Ignore;
 pub use keyword::{Keyword, KeywordKind};
 pub use mute::Mute;
+pub use notification::Notification;
 pub use user_state::{UserState, UserStateKind};
 
 use once_cell::sync::OnceCell;
@@ -65,6 +67,7 @@ pub fn init() {
 	Ignore::create_table();
 	Keyword::create_tables();
 	UserState::create_table();
+	Notification::create_table();
 
 	if settings().database.backup {
 		let backup_dir = data_dir.join("backup");

@@ -39,6 +39,22 @@ macro_rules! log_discord_error {
 			$error
 		);
 	};
+	(in $channel_id:expr, deleted $message_id:expr, $error:expr) => {
+		log::error!(
+			"Error in <#{0}> ({0}), handling deleted message {1}: {2}\n{2:?}",
+			$channel_id,
+			$message_id,
+			$error
+		);
+	};
+	(in $channel_id:expr, edited $message_id:expr, $error:expr) => {
+		log::error!(
+			"Error in <#{0}> ({0}), handling edited message {1}: {2}\n{2:?}",
+			$channel_id,
+			$message_id,
+			$error
+		);
+	};
 }
 
 /// Creates a [`Regex`](::regex::Regex) from a regex literal.

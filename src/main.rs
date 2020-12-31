@@ -11,7 +11,7 @@
 mod commands;
 
 pub mod db;
-use db::{Ignore, Keyword, UserState};
+use db::{Ignore, Keyword, Notification, UserState};
 
 mod error;
 pub use error::Error;
@@ -37,12 +37,14 @@ use serenity::{
 	client::{bridge::gateway::GatewayIntents, Client, Context, EventHandler},
 	model::{
 		channel::Message,
+		event::MessageUpdateEvent,
 		gateway::{Activity, Ready},
-		id::UserId,
+		id::{ChannelId, GuildId, MessageId, UserId},
 	},
 };
 use tokio::task;
 
+use monitoring::Timer;
 use std::{collections::HashMap, convert::TryInto};
 
 /// Type to serve as an event handler.
@@ -93,6 +95,103 @@ impl EventHandler for Handler {
 		if let Err(e) = &result {
 			log_discord_error!(in message.channel_id, by message.author.id, e);
 		}
+	}
+
+	/// Deletes sent notifications if their original messages were deleted.
+	async fn message_delete(
+		&self,
+		ctx: Context,
+		channel_id: ChannelId,
+		message_id: MessageId,
+		guild_id: Option<GuildId>,
+	) {
+		if guild_id.is_none() {
+			return;
+		}
+
+		let notifications =
+			match Notification::notifications_of_message(message_id).await {
+				Ok(n) => n,
+				Err(e) => {
+					log_discord_error!(in channel_id, deleted message_id, e);
+					return;
+				}
+			};
+
+		if notifications.is_empty() {
+			return;
+		}
+
+		let _timer = Timer::notification("delete");
+
+		highlighting::delete_sent_notifications(
+			&ctx,
+			channel_id,
+			&notifications,
+		)
+		.await;
+
+		if let Err(e) =
+			Notification::delete_notifications_of_message(message_id).await
+		{
+			log_discord_error!(in channel_id, deleted message_id, e);
+		}
+	}
+
+	/// Edits notifications if their original messages are edited.
+	///
+	/// Edits the content of a notification to reflect the new content of the original message if
+	/// the original message still contains the keyword the notification was created for. Deletes
+	/// the notification if the new content no longer contains the keyword.
+	async fn message_update(
+		&self,
+		ctx: Context,
+		_: Option<Message>,
+		new: Option<Message>,
+		event: MessageUpdateEvent,
+	) {
+		let guild_id = match event.guild_id {
+			Some(g) => g,
+			None => return,
+		};
+
+		let notifications =
+			match Notification::notifications_of_message(event.id).await {
+				Ok(n) => n,
+				Err(e) => {
+					log_discord_error!(in event.channel_id, edited event.id, e);
+					return;
+				}
+			};
+
+		if notifications.is_empty() {
+			return;
+		}
+
+		let _timer = Timer::notification("edit");
+
+		let message = match new {
+			Some(m) => m,
+			None => {
+				match ctx.http.get_message(event.channel_id.0, event.id.0).await
+				{
+					Ok(m) => m,
+					Err(e) => {
+						log_discord_error!(in event.channel_id, edited event.id, e);
+						return;
+					}
+				}
+			}
+		};
+
+		highlighting::update_sent_notifications(
+			&ctx,
+			event.channel_id,
+			guild_id,
+			message,
+			notifications,
+		)
+		.await;
 	}
 
 	/// Runs minor setup for when the bot starts.
@@ -176,6 +275,7 @@ async fn handle_keywords(
 	ctx: &Context,
 	message: &Message,
 ) -> Result<(), Error> {
+	let _timer = Timer::notification("create");
 	let guild_id = match message.guild_id {
 		Some(id) => id,
 		None => return Ok(()),
