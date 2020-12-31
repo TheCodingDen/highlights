@@ -25,28 +25,15 @@ Once you have `cargo` installed, run `cargo build --release` (or `cargo build` f
 
 ## Configuration
 
-Highlights is configured by environment variables, and also supports dotenv. To use dotenv, create a file `.env` in the directory you run highlights in, and put key-value pairs in it, like the below:
+Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION.PROPERTY`. Highlights also supports dotenv. To use it, create a file `.env` in the directory you run highlights in, and put key-value pairs in it, like the below:
 ```
-HIGHLIGHTS_DISCORD_TOKEN="your bot token goes here"
-HIGHLIGHTS_DATA_DIR="highlights_data"
+HIGHLIGHTS_BOT.TOKEN="your bot token goes here"
+HIGHLIGHTS_DATABASE.PATH="highlights_data"
 ```
-
-### Environment variables
-
-The only required environment variable is `HIGHLIGHTS_DISCORD_TOKEN`, which must be a valid Discord bot token. You can use the following environment variables to configure highlights' other behavior:
-- `HIGHLIGHTS_DATA_DIR`: Configures where highlights stores its database and backup files. Default is `./data`.
-- `HIGHLIGHTS_WEBHOOK_URL`: Should be a Discord webhook url (`https://discord.com/api/webhooks/<webhook ID>/<webhook token>`) to send error messages to. If not set, errors will only be logged to the console. (Highlights uses a webhook instead of the bot account so that it can report panic messages and not just errors.)
-- `HIGHLIGHTS_MAX_KEYWORDS`: Sets the limit of how many keywords users can have.
-- `HIGHLIGHTS_PATIENCE_SECONDS`: Sets how long to wait for activity before sending a notification.
-- `HIGHLIGHTS_LOG_FILTER`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) output; set this to `debug` to enable all console logging or `error` to only log errors. Default is `highlights=info`.
-- `HIGHLIGHTS_LOG_STYLE`: Controls [env_logger](https://docs.rs/env_logger/0.7.1/env_logger/index.html) style; set this to `never` to disable colored console output, or `always` to force colored output. See [env_logger's documentation](https://docs.rs/env_logger/0.7.1/env_logger/index.html) for more information.
-- `HIGHLIGHTS_PROMETHEUS_ADDR`: Sets the address to listen for [Prometheus](https://prometheus.io) monitoring requests.
-- `HIGHLIGHTS_DONT_BACKUP`: Disables automatic database backups.
-- `HIGHLIGHTS_PRIVATE`: Disables sharing the bot invite link.
 
 ## Backups
 
-Unless the `HIGHLIGHTS_DONT_BACKUP` environment variable exists, highlights automatically backs up its database every time it starts, and every 24hrs after that. These backups are saved to `$HIGHLIGHTS_DATA_DIR/backup`. These backups are a full snapshot of the database, so to restore one you can just move it back to `$HIGHLIGHTS_DATA_DIR` and rename it to `data.db`. Highlights doesn't delete any backups from the last 24hrs, but it does clean up older backups automatically:
+Unless backups are disabled in the config, highlights automatically backs up its database every time it starts, and every 24hrs after that. These backups are saved to the `./backups` folder in the configured database path. These backups are a full snapshot of the database, so to restore one you can just move it back to the database path and rename it to `data.db`. Highlights doesn't delete any backups from the last 24hrs, but it does clean up older backups automatically:
 - Roughly one backup per day is kept for the past week
 - Roughly one backup per week is kept for the past month
 - Roughly one backup per month is kept for the past year
@@ -56,7 +43,7 @@ Highlights uses the timestamp embedded in the backup name to determine how old i
 
 ## Monitoring
 
-If you set the `HIGHLIGHTS_PROMETHEUS_ADDR` environment variable, highlights will track command and database query execution times to be reported by [Prometheus](https://prometheus.io). The address should be in the form `address:port`, e.g. `127.0.0.1:9000`.
+If you set the `logging.prometheus` config option, highlights will track command and database query execution times to be reported by [Prometheus](https://prometheus.io). The address should be in the form `address:port`, e.g. `127.0.0.1:9000`.
 
 Example prometheus config to scrape `127.0.0.1:9000`:
 ```yml

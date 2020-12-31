@@ -1,20 +1,30 @@
 # All fields except bot.token are optional, defaults shown below
 
+[bot]
+# Discord bot token
+#token = "..."
+# Disables sharing the bot invite link in about command
+private = false
+
 [behavior]
+# Maximum amount of keywords users can subscribe to
 max_keywords = 100
+# Amount of seconds to wait for activity before sending a notification
 patience_seconds = 120
 
-[bot]
-#token = "..."
-private = true
-
 [logging]
+# Discord webhook to send errors and panics to
 #webhook = "..."
+# IP and port to prometheus monitoring server
 #prometheus = "..."
+# Default log level for entire application
 level = "WARN"
 [logging.filters]
-"highlights" = "INFO"
+# The `highlights` crate will log at INFO instead
+highlights = "INFO"
 
 [database]
+# The folder where database and backups are stored
 path = "./data"
+# Whether to automatically backup database
 backup = true
