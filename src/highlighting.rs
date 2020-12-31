@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Functions for sending, editing, and deleting notifications.
+
 use serenity::{
 	builder::CreateMessage,
 	client::Context,
@@ -24,6 +26,14 @@ use crate::{
 use indoc::indoc;
 use tokio::{select, time::delay_for};
 
+/// Checks if the provided keyword should be highlighted anywhere in the given message.
+///
+/// First each [`Ignore`](Ignore) is checked to determine if it appears in the message. If any do
+/// appear, then the keyword shouldn't be highlighted and `Ok(None)` is returned. Next, the keyword
+/// is similarly searched for in the message content. If it is found, the permissions of the user
+/// are checked to ensure they can read the message. If they can read the message, `Ok(start..end)`
+/// is returned, where `start..end` is the range where the keyword appears in the message's
+/// contents.
 pub async fn should_notify_keyword(
 	ctx: &Context,
 	message: &Message,
@@ -70,6 +80,19 @@ pub async fn should_notify_keyword(
 	Ok(Some(range))
 }
 
+/// Sends a notification about a highlighted keyword.
+///
+/// This will first wait for the configured patience duration for a message or reaction from the
+/// user of the keyword. If they don't send a message or reaction in that time, then an embed is
+/// created to notify them and sent in a DM channel.
+///
+/// If sending the notification fails because of an internal server error, it is retried up to five
+/// times with a delay of two seconds.
+///
+/// If sending the notification fails with `"Cannot send messages to this user"`, a corresponding
+/// [`UserState`](UserState) is created.
+///
+/// Any other errors are logged as normal.
 pub async fn notify_keyword(
 	ctx: Context,
 	message: Message,
@@ -232,8 +255,12 @@ pub async fn notify_keyword(
 	}
 }
 
+/// Finds a match of the keyword in the message content.
+///
+/// If a match is found, the range at which it appears in the message content is returned.
 fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
 	if regex!(r"\s").is_match(keyword) {
+		// if the keyword has a space, only matches of whole phrases should be considered
 		content
 			.match_indices(keyword)
 			.find(|(i, phrase)| {
@@ -252,9 +279,11 @@ fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
 			})
 			.map(|(index, _)| index..index + keyword.len())
 	} else if regex!(r"[^a-zA-Z0-9]").is_match(keyword) {
+		// if the keyword contains non-alphanumeric characters, it could appear anywhere
 		let start = content.find(keyword)?;
 		Some(start..start + keyword.len())
 	} else {
+		// otherwise, it is only alphanumeric and could appear between non-alphanumeric text
 		let mut fragments = regex!(r"[^a-zA-Z0-9]+").split(content);
 
 		let substring =
@@ -268,6 +297,10 @@ fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
 	}
 }
 
+/// Checks the state of the last notification of the user.
+///
+/// If the last notification failed, send a message warning the user they should enable DMs. Clears
+/// the user state afterwards.
 pub async fn check_notify_user_state(
 	ctx: &Context,
 	message: &Message,

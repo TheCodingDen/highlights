@@ -9,6 +9,7 @@ use std::{
 	time::Duration,
 };
 
+/// Visitor to deserialize a `Duration` from a number of seconds.
 struct DurationVisitor;
 impl<'de> de::Visitor<'de> for DurationVisitor {
 	type Value = Duration;
@@ -29,38 +30,55 @@ where
 	d.deserialize_u64(DurationVisitor)
 }
 
+/// Settings for the highlighting behavior of the bot.
 #[derive(Debug, Deserialize)]
 pub struct BehaviorSettings {
+	/// Maximum number of keywords allowed for one user.
 	pub max_keywords: u32,
 
 	#[serde(
 		rename = "patience_seconds",
 		deserialize_with = "deserialize_duration"
 	)]
+	/// Duration to wait for activity before sending a notification.
 	pub patience: Duration,
 }
 
+/// Settings for the account of the bot.
 #[derive(Debug, Deserialize)]
 pub struct BotSettings {
+	/// Bot token to log into Discord with.
 	pub token: String,
+	/// Whether this bot is private or not.
+	///
+	/// Controls whether the `about` command outputs an invite link.
 	pub private: bool,
 }
 
+/// Settings for various logging facilities.
 #[derive(Debug, Deserialize)]
 pub struct LoggingSettings {
+	/// Webhook URL to send error/panic messages to.
 	pub webhook: Option<Url>,
+	/// Address to host an HTTP server for prometheus to scrape.
 	pub prometheus: Option<SocketAddr>,
 
+	/// Global level that log messages should be filtered to.
 	pub level: LevelFilter,
+	/// Per-module log level filters.
 	pub filters: HashMap<String, LevelFilter>,
 }
 
+/// Settings for the database.
 #[derive(Debug, Deserialize)]
 pub struct DatabaseSettings {
+	/// Path to the directory that should hold the database.
 	pub path: PathBuf,
+	/// Whether or not to run automatic daily backups.
 	pub backup: bool,
 }
 
+/// Collection of settings.
 #[derive(Debug, Deserialize)]
 pub struct Settings {
 	pub behavior: BehaviorSettings,
@@ -70,6 +88,7 @@ pub struct Settings {
 }
 
 impl Settings {
+	/// Builds settings from environment variables and the configuration file.
 	pub fn new() -> Result<Self, ConfigError> {
 		let mut s = Config::new();
 

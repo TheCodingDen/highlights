@@ -1,6 +1,9 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Interface for interacting with the sqlite database of keywords and other persistent user
+//! information.
+
 mod backup;
 use backup::start_backup_cycle;
 
@@ -25,8 +28,10 @@ use std::{fs, io::ErrorKind};
 
 use crate::global::settings;
 
+/// Global connection pool to the database.
 static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
 
+/// Gets a connection from the global connection pool.
 pub fn connection() -> PooledConnection<SqliteConnectionManager> {
 	POOL.get()
 		.expect("Database pool was not initialized")
@@ -34,6 +39,9 @@ pub fn connection() -> PooledConnection<SqliteConnectionManager> {
 		.expect("Failed to obtain database connection")
 }
 
+/// Initializes the database.
+///
+/// Creates the data folder and database file if necessary, and starts backups if enabled.
 pub fn init() {
 	let data_dir = &settings().database.path;
 
@@ -65,6 +73,8 @@ pub fn init() {
 	}
 }
 
+/// Convenience macro to make a blocking tokio task and await it, creating a
+/// [`Timer`](crate::monitoring::Timer) for performance monitoring.
 #[macro_export]
 macro_rules! await_db {
 	($name:literal: |$conn:ident| $body:block) => {{

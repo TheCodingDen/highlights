@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Handling for blocked users.
+
 use rusqlite::{params, Error, Row};
 use serenity::model::id::UserId;
 
@@ -8,13 +10,19 @@ use std::convert::TryInto;
 
 use crate::{await_db, db::connection};
 
+/// Represents a blocked user.
 #[derive(Debug, Clone)]
 pub struct Block {
+	/// The user who blocked them.
 	pub user_id: i64,
+	/// The user who was blocked.
 	pub blocked_id: i64,
 }
 
 impl Block {
+	/// Builds a `Block` from a `Row`, in this order:
+	/// - `user_id`: `INTEGER`
+	/// - `blocked_id`: `INTEGER`
 	fn from_row(row: &Row) -> Result<Self, Error> {
 		Ok(Self {
 			user_id: row.get(0)?,
@@ -22,6 +30,7 @@ impl Block {
 		})
 	}
 
+	/// Creates the DB table to store blocked users.
 	pub(super) fn create_table() {
 		let conn = connection();
 		conn.execute(
@@ -35,6 +44,7 @@ impl Block {
 		.expect("Failed to create blocks table");
 	}
 
+	/// Fetches the list of blocks a user has added from the DB.
 	pub async fn user_blocks(user_id: UserId) -> Result<Vec<Block>, Error> {
 		await_db!("user blocks": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
@@ -51,6 +61,7 @@ impl Block {
 		})
 	}
 
+	/// Adds this blocked user to the DB.
 	pub async fn insert(self) -> Result<(), Error> {
 		await_db!("insert block": |conn| {
 			conn.execute(
@@ -63,6 +74,7 @@ impl Block {
 		})
 	}
 
+	/// Checks if this block exists in the DB.
 	pub async fn exists(self) -> Result<bool, Error> {
 		await_db!("block exists": |conn| {
 			conn.query_row(
@@ -74,6 +86,7 @@ impl Block {
 		})
 	}
 
+	/// Deletes this blocked user from the DB (making them not blocked anymore).
 	pub async fn delete(self) -> Result<(), Error> {
 		await_db!("delete block": |conn| {
 			conn.execute(

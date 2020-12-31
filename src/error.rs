@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Extremely basic error handling.
+
 use reqwest::Error as ReqwestError;
 use rusqlite::Error as RusqliteError;
 use serenity::Error as SerenityError;
@@ -10,6 +12,7 @@ use std::{
 	fmt::{self, Display},
 };
 
+/// Basic error type to report only a message.
 #[derive(Debug)]
 struct SimpleError(String);
 
@@ -21,6 +24,10 @@ impl Display for SimpleError {
 
 impl StdError for SimpleError {}
 
+/// Error type containing a boxed `std::error::Error`.
+///
+/// This type is used to unify library error types and simple string error message into one error
+/// type for compatible signatures.
 #[derive(Debug)]
 pub struct Error(Box<dyn StdError + Send + Sync + 'static>);
 

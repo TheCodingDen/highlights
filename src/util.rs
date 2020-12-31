@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Miscellaneous utility functions and macros.
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
@@ -16,6 +18,17 @@ use std::fmt::Display;
 
 use crate::Error;
 
+/// Logs an error that happened handling a command or keyword in Discord.
+///
+/// # Usage
+/// ```
+/// #let channel_id = 4;
+/// #let author_id = 5;
+/// #let some_result = Err::<(), &'static str>("Uh oh!");
+/// if let Err(e) = some_result {
+/// 	log_discord_error!(in channel_id, by author_id, e);
+/// }
+/// ```
 #[macro_export]
 macro_rules! log_discord_error {
 	(in $channel_id:expr, by $user_id:expr, $error:expr) => {
@@ -28,6 +41,16 @@ macro_rules! log_discord_error {
 	};
 }
 
+/// Creates a [`Regex`](::regex::Regex) from a regex literal.
+///
+/// The created regex is static and will only be constructed once through the life of the program.
+///
+/// # Example
+/// ```
+/// let re = regex!(r"[a-z]+");
+///
+/// assert!(re.is_match("hello"));
+/// ```
 #[macro_export]
 macro_rules! regex {
 	($re:literal $(,)?) => {{
@@ -37,21 +60,30 @@ macro_rules! regex {
 		}};
 }
 
+/// Regex for symbols used in Discord-flavor markdown.
+///
+/// Equivalent to the regex `[_*()\[\]~`]`. It includes `()` and `[]` because these are treated as
+/// part of links in embeds, where this is frequently used.
 pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
 	Lazy::new(|| Regex::new(r"[_*()\[\]~`]").unwrap());
 
+/// Reacts to a message with a ✅ emoji.
 pub async fn success(ctx: &Context, message: &Message) -> Result<(), Error> {
 	message.react(ctx, '✅').await?;
 
 	Ok(())
 }
 
+/// Reacts to a message with a ❓ emoji.
 pub async fn question(ctx: &Context, message: &Message) -> Result<(), Error> {
 	message.react(ctx, '❓').await?;
 
 	Ok(())
 }
 
+/// Reacts to a message with a ❌ emoji and send the given response in the same channel.
+///
+/// The response message is stripped of mentions when sent to Discord.
 pub async fn error<S: Display>(
 	ctx: &Context,
 	message: &Message,
@@ -69,6 +101,7 @@ pub async fn error<S: Display>(
 	Ok(())
 }
 
+/// Determines if a user with the given ID can read messages in the provided `GuildChannel`.
 pub async fn user_can_read_channel(
 	ctx: &Context,
 	channel: &GuildChannel,

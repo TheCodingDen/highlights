@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Commands for adding, removing, and listing keywords.
+
 use indoc::indoc;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -28,10 +30,18 @@ use crate::{
 	Error,
 };
 
+/// Pattern for channel-specific keywords.
+///
+/// Matches text such as `"foo" in bar baz`.
 static CHANNEL_KEYWORD_REGEX: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
 	Regex::new(r#"^"((?:\\"|[^"])*)" (?:in|from) ((?:\S+(?:$| ))+)"#).unwrap()
 });
 
+/// Add a keyword.
+///
+/// Usage:
+/// - `@Highlights add <keyword>`
+/// - `@Highlights add "<keyword>" in <space-separated channel names, mentions, or IDs>`
 pub async fn add(
 	ctx: &Context,
 	message: &Message,
@@ -117,6 +127,7 @@ pub async fn add(
 	}
 }
 
+/// Add a guild-wide keyword.
 async fn add_guild_keyword(
 	ctx: &Context,
 	message: &Message,
@@ -147,6 +158,7 @@ async fn add_guild_keyword(
 	success(ctx, message).await
 }
 
+/// Add a channel-specific keyword.
 async fn add_channel_keyword(
 	ctx: &Context,
 	message: &Message,
@@ -268,6 +280,11 @@ async fn add_channel_keyword(
 	Ok(())
 }
 
+/// Remove a keyword.
+///
+/// Usage:
+/// - `@Highlights remove <keyword>`
+/// - `@Highlights remove "<keyword>" from <space-separated channel names, mentions, or IDs>`
 pub async fn remove(
 	ctx: &Context,
 	message: &Message,
@@ -296,6 +313,7 @@ pub async fn remove(
 	}
 }
 
+/// Remove a guild-wide keyword.
 async fn remove_guild_keyword(
 	ctx: &Context,
 	message: &Message,
@@ -317,6 +335,7 @@ async fn remove_guild_keyword(
 	success(ctx, message).await
 }
 
+/// Remove a channel-specific keyword.
 async fn remove_channel_keyword(
 	ctx: &Context,
 	message: &Message,
@@ -444,6 +463,9 @@ async fn remove_channel_keyword(
 	Ok(())
 }
 
+/// Add an ignored phrase.
+///
+/// Usage: `@Highlights ignore <phrase>`
 pub async fn ignore(
 	ctx: &Context,
 	message: &Message,
@@ -477,6 +499,9 @@ pub async fn ignore(
 	success(ctx, message).await
 }
 
+/// Remove an ignored phrase.
+///
+/// Usage: `@Highlights unignore <phrase>`
 pub async fn unignore(
 	ctx: &Context,
 	message: &Message,
@@ -501,6 +526,9 @@ pub async fn unignore(
 	success(ctx, message).await
 }
 
+/// List ignored phrases in the current guild, or in all guilds when used in DMs.
+///
+/// Usage: `@Highlights ignores`
 pub async fn ignores(
 	ctx: &Context,
 	message: &Message,
@@ -590,6 +618,9 @@ pub async fn ignores(
 	Ok(())
 }
 
+/// Remove keywords and ignores in a guild by ID.
+///
+/// Usage: `@Highlights remove-server <guild ID>`
 pub async fn remove_server(
 	ctx: &Context,
 	message: &Message,
@@ -621,6 +652,9 @@ pub async fn remove_server(
 	}
 }
 
+/// List keywords in the current guild, or in all guilds when used in DMs.
+///
+/// Usage: `@Highlights keywords`
 pub async fn keywords(
 	ctx: &Context,
 	message: &Message,

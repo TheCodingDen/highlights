@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Commands for adding, removing, and listing channel mutes.
+
 use super::util::{
 	get_ids_from_args, get_readable_channels_from_args,
 	get_text_channels_in_guild,
@@ -18,6 +20,9 @@ use std::{collections::HashMap, convert::TryInto, fmt::Write};
 
 use crate::{db::Mute, monitoring::Timer, util::error, Error};
 
+/// Mute a channel.
+///
+/// Usage: `@Highlights mute <whitespace-separated channel IDs or mentions>`
 pub async fn mute(
 	ctx: &Context,
 	message: &Message,
@@ -116,6 +121,9 @@ pub async fn mute(
 	Ok(())
 }
 
+/// Unmute a channel.
+///
+/// Usage: `@Highlights unmute <whitespace-separated channel IDs or mentions>`
 pub async fn unmute(
 	ctx: &Context,
 	message: &Message,
@@ -246,6 +254,9 @@ pub async fn unmute(
 	Ok(())
 }
 
+/// List muted channels in the current guild, or all guilds when used in DMs.
+///
+/// Usage: `@Highlights mutes`
 pub async fn mutes(
 	ctx: &Context,
 	message: &Message,

@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Miscellaneous utility functions and macros used by commands.
+
 use serenity::{
 	client::Context,
 	model::{
@@ -13,6 +15,10 @@ use serenity::{
 use crate::{regex, Error};
 use std::{collections::HashMap, iter::FromIterator};
 
+/// Requires the given message to have come from a guild channel.
+///
+/// Uses [`error`](crate::util::error) if the message did not come from a guild channel. Evaluates
+/// to the guild's ID otherwise.
 #[macro_export]
 macro_rules! require_guild {
 	($ctx:expr, $message:expr) => {{
@@ -30,6 +36,9 @@ macro_rules! require_guild {
 		}};
 }
 
+/// Requires the given arguments to be non-empty.
+///
+/// Returns with [`error`](crate::util::error) if the arguments are empty.
 #[macro_export]
 macro_rules! require_nonempty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
@@ -39,6 +48,9 @@ macro_rules! require_nonempty_args {
 		}};
 }
 
+/// Requires the given arguments to be empty.
+///
+/// Returns with [`error`](crate::util::error) if the arguments are non-empty.
 #[macro_export]
 macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
@@ -48,13 +60,21 @@ macro_rules! require_empty_args {
 		}};
 }
 
+/// Results of getting users from a list of args.
 #[derive(Debug, Default)]
 pub struct UsersFromArgs<'args> {
+	/// Users that were successfully found by ID.
 	pub found: Vec<User>,
+	/// IDs that were not resolved to any users.
 	pub not_found: Vec<u64>,
+	/// Arguments that were not valid IDs or mentions.
 	pub invalid: Vec<&'args str>,
 }
 
+/// Gets users from arguments.
+///
+/// `args` is split by whitespace, and each split substring is checked for a user ID or user mention.
+/// `ctx` is used to fetch users by this ID.
 pub async fn get_users_from_args<'args>(
 	ctx: &Context,
 	args: &'args str,
@@ -84,6 +104,7 @@ pub async fn get_users_from_args<'args>(
 	results
 }
 
+/// Convenience function to get a map of all cached text channels in the given guild.
 pub async fn get_text_channels_in_guild(
 	ctx: &Context,
 	guild_id: GuildId,
@@ -101,6 +122,10 @@ pub async fn get_text_channels_in_guild(
 	Ok(channels)
 }
 
+/// Gets channels from arguments, filtering channels that can't be read by the author or the bot.
+///
+/// First gets all channels from the arguments, then checks the bots' and the provided user's
+/// permissions in each to sort them into a `ReadableChannelsFromArgs`.
 pub async fn get_readable_channels_from_args<'args, 'c>(
 	ctx: &Context,
 	author_id: UserId,
@@ -136,12 +161,17 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 	Ok(result)
 }
 
+/// Parses whitespace-separated IDs from the provided arguments.
+///
+/// Each element of the returned `Vec` is `Ok((id, arg))` if `arg` was a valid ID, and `Err(arg)`
+/// if `arg` was an invalid ID.
 pub fn get_ids_from_args(args: &str) -> Vec<Result<(ChannelId, &str), &str>> {
 	args.split_whitespace()
 		.map(|arg| arg.parse().map(|id| (ChannelId(id), arg)).map_err(|_| arg))
 		.collect()
 }
 
+/// Gets channels from the provided map by whitespace-separated arguments in the provided string.
 fn get_channels_from_args<'args, 'c>(
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	args: &'args str,
@@ -151,6 +181,18 @@ fn get_channels_from_args<'args, 'c>(
 		.collect()
 }
 
+/// Gets a channel from an argument.
+///
+/// If `arg` is an ID, and a channel with that ID exists in the provided map, `Ok(channel, arg)`
+/// is returned.
+///
+/// If `arg` is a mention, and a channel with the ID of that mention exists in the provided map,
+/// `Ok(channel, arg)` is returned.
+///
+/// If a channel that has a name matching `arg` exists in the provided map, `Ok(channel, arg)` is
+/// returned.
+///
+/// Otherwise, `Err(arg)` is returned.
 fn get_channel_from_arg<'arg, 'c>(
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	arg: &'arg str,
@@ -187,9 +229,12 @@ fn get_channel_from_arg<'arg, 'c>(
 	Err(arg)
 }
 
+/// Channels from a list of arguments.
 #[derive(Debug, Default)]
 struct ChannelsFromArgs<'args, 'c> {
+	/// Arguments that couldn't be resolved to channels.
 	not_found: Vec<&'args str>,
+	/// Channels and the arguments used to find them.
 	found: Vec<(&'c GuildChannel, &'args str)>,
 }
 
@@ -210,10 +255,15 @@ impl<'args, 'c> FromIterator<Result<(&'c GuildChannel, &'args str), &'args str>>
 	}
 }
 
+/// Readable channels from a list of arguments.
 #[derive(Debug, Default)]
 pub struct ReadableChannelsFromArgs<'args, 'c> {
+	/// Arguments that couldn't be resolved to channels.
 	pub not_found: Vec<&'args str>,
+	/// Channels readable by both the user and the bot.
 	pub found: Vec<&'c GuildChannel>,
+	/// Channels not readable by the user, and the argument provided to find them.
 	pub user_cant_read: Vec<(&'c GuildChannel, &'args str)>,
+	/// Channels readable by the user, but not by the bot.
 	pub self_cant_read: Vec<&'c GuildChannel>,
 }

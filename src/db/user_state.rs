@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Handling for user states; whether or not the last notification DM was successful.
+
 use rusqlite::{params, Error, OptionalExtension, Row};
 use serenity::model::id::UserId;
 
@@ -8,6 +10,7 @@ use std::convert::TryInto;
 
 use crate::{await_db, db::connection};
 
+/// Description of a user's state.
 #[derive(Debug, Clone)]
 pub struct UserState {
 	pub user_id: i64,
@@ -17,12 +20,16 @@ pub struct UserState {
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum UserStateKind {
+	/// Indicates that the last DM sent to notify this user failed.
 	CannotDm = 0,
 }
 
 impl UserState {
 	const CANNOT_DM_STATE: u8 = UserStateKind::CannotDm as u8;
 
+	/// Builds a `UserState` from a `Row`, in this order:
+	/// - user_id: INTEGER
+	/// - state: INTEGER
 	fn from_row(row: &Row) -> Result<Self, Error> {
 		let user_id = row.get(0)?;
 		let state = match row.get(1)? {
@@ -33,6 +40,7 @@ impl UserState {
 		Ok(Self { user_id, state })
 	}
 
+	/// Creates DB table for storing user states
 	pub(super) fn create_table() {
 		let conn = connection();
 		conn.execute(
@@ -45,6 +53,9 @@ impl UserState {
 		.expect("Failed to create user_states table");
 	}
 
+	/// Fetches the state of the user with the given ID from the DB.
+	///
+	/// Returns `None` if the user has no recorded state.
 	pub async fn user_state(user_id: UserId) -> Result<Option<Self>, Error> {
 		await_db!("user state": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
@@ -59,6 +70,7 @@ impl UserState {
 		})
 	}
 
+	/// Sets the state of the user in the DB.
 	pub async fn set(self) -> Result<(), Error> {
 		await_db!("set user state": |conn| {
 			conn.execute(
@@ -73,6 +85,7 @@ impl UserState {
 		})
 	}
 
+	/// Deletes this user state from the DB.
 	pub async fn delete(self) -> Result<(), Error> {
 		await_db!("delete user state": |conn| {
 			conn.execute(
@@ -85,6 +98,7 @@ impl UserState {
 		})
 	}
 
+	/// Clears any state of the user with the given ID.
 	pub async fn clear(user_id: UserId) -> Result<(), Error> {
 		await_db!("delete user state": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();

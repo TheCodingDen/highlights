@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Error and panic reporting to a Discord webhook.
+
 use once_cell::sync::OnceCell;
 use reqwest::{
 	blocking::{self, Client as BlockingClient},
@@ -18,8 +20,10 @@ use simplelog::{
 
 use crate::{global::settings, Error};
 
+/// Global client to use when sending webhook messages.
 static WEBHOOK_CLIENT: OnceCell<AsyncClient> = OnceCell::new();
 
+/// Message that can be serialized to be sent to a webhook.
 #[derive(Serialize)]
 struct WebhookMessage {
 	content: String,
@@ -112,6 +116,7 @@ pub fn init() {
 	CombinedLogger::init(loggers).expect("Failed to set logger");
 }
 
+/// Reports a logged error to `WEBHOOK_URL`.
 async fn report_error(content: String) -> Result<reqwest::Response, Error> {
 	let url = settings()
 		.logging
@@ -131,6 +136,7 @@ async fn report_error(content: String) -> Result<reqwest::Response, Error> {
 		.await?)
 }
 
+/// Reports a panic to `WEBHOOK_URL`.
 fn report_panic(info: &panic::PanicInfo) -> Result<blocking::Response, Error> {
 	let url = settings()
 		.logging

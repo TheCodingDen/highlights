@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Implementations of all of the explicit bot commands.
+
 #[macro_use]
 mod util;
 
@@ -30,6 +32,10 @@ use crate::{
 	Error,
 };
 
+/// Display the ping of the bot.
+///
+/// Returns the API latency in sending a message, and the metrics of command and database time
+/// recorded in [`monitoring`](crate::monitoring).
 pub async fn ping(
 	ctx: &Context,
 	message: &Message,
@@ -69,6 +75,9 @@ pub async fn ping(
 	Ok(())
 }
 
+/// Nicely formats a number of seconds as a string.
+///
+/// Returns `x s` when >= 10 seconds, `x ms` when >= 0.1 ms, and `x μs` when < 0.1 ms.
 fn format_seconds(seconds: f64) -> String {
 	if seconds >= 10.0 {
 		format!("{:.2} s", seconds)
@@ -80,6 +89,9 @@ fn format_seconds(seconds: f64) -> String {
 	}
 }
 
+/// Displays information about the bot.
+///
+/// Displays the cargo package name and version, cargo source, author, and an invite URL.
 pub async fn about(
 	ctx: &Context,
 	message: &Message,
@@ -126,6 +138,10 @@ pub async fn about(
 	Ok(())
 }
 
+/// Displays information about using the bot.
+///
+/// When given no arguments, displays the list of commands. When given an argument, displays
+/// detailed information about the command of that name.
 pub async fn help(
 	ctx: &Context,
 	message: &Message,

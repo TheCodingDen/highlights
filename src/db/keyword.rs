@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Handling for keywords.
+
 use rusqlite::{params, Error, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 
@@ -22,6 +24,10 @@ pub struct Keyword {
 }
 
 impl Keyword {
+	/// Builds a guild-wide `Keyword` from a `Row`, in this order:
+	/// - `keyword`: `TEXT`
+	/// - `user_id`: `INTEGER`
+	/// - `<guild id>`: `INTEGER`
 	fn from_guild_row(row: &Row) -> Result<Self, Error> {
 		Ok(Keyword {
 			keyword: row.get(0)?,
@@ -30,6 +36,10 @@ impl Keyword {
 		})
 	}
 
+	/// Builds a channel-specific `Keyword` from a `Row`, in this order:
+	/// - `keyword`: `TEXT`
+	/// - `user_id`: `INTEGER`
+	/// - `<channel id>`: `INTEGER`
 	fn from_channel_row(row: &Row) -> Result<Self, Error> {
 		Ok(Keyword {
 			keyword: row.get(0)?,
@@ -38,6 +48,7 @@ impl Keyword {
 		})
 	}
 
+	/// Creates the DB tables for storing guild-wide and channel specific keywords.
 	pub(super) fn create_tables() {
 		let conn = connection();
 
@@ -64,6 +75,13 @@ impl Keyword {
 		.expect("Failed to create channel_keywords table");
 	}
 
+	/// Gets keywords that may be relelvant to a message.
+	///
+	/// Fetches all guild-wide keywords in the specified guild, as long as the creator of the
+	/// keyword didn't mute the channel or block the author.
+	///
+	/// Fetches all channel-specific keywords in the specified channel, as long as the creator of
+	/// the keyword didn't block the author.
 	pub async fn get_relevant_keywords(
 		guild_id: GuildId,
 		channel_id: ChannelId,
@@ -121,6 +139,7 @@ impl Keyword {
 		})
 	}
 
+	/// Fetches all guild-wide keywords created by the specified user in the specified guild.
 	pub async fn user_guild_keywords(
 		user_id: UserId,
 		guild_id: GuildId,
@@ -141,6 +160,7 @@ impl Keyword {
 		})
 	}
 
+	/// Fetches all channel-specific keywords created by the specified user in the specified channel.
 	pub async fn user_channel_keywords(
 		user_id: UserId,
 	) -> Result<Vec<Keyword>, Error> {
@@ -159,6 +179,7 @@ impl Keyword {
 		})
 	}
 
+	/// Fetches all guild-wide and channel-specific keywords created by the specified user.
 	pub async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>, Error> {
 		await_db!("user keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
@@ -187,6 +208,7 @@ impl Keyword {
 		})
 	}
 
+	/// Checks if this keyword has already been created by this user.
 	pub async fn exists(self) -> Result<bool, Error> {
 		await_db!("keyword exists": |conn| {
 			match self.kind {
@@ -210,6 +232,7 @@ impl Keyword {
 		})
 	}
 
+	/// Returns the number of keywords this user has created across all guilds and channels.
 	pub async fn user_keyword_count(user_id: UserId) -> Result<u32, Error> {
 		await_db!("count user keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
@@ -233,6 +256,7 @@ impl Keyword {
 		})
 	}
 
+	/// Adds this keyword to the DB.
 	pub async fn insert(self) -> Result<(), Error> {
 		await_db!("insert keyword": |conn| {
 			match self.kind {
@@ -256,6 +280,7 @@ impl Keyword {
 		})
 	}
 
+	/// Deletes this keyword from the DB.
 	pub async fn delete(self) -> Result<(), Error> {
 		await_db!("delete keyword": |conn| {
 			match self.kind {
@@ -279,6 +304,7 @@ impl Keyword {
 		})
 	}
 
+	/// Deletes all guild-wide keywords created by the specified user in the specified guild.
 	pub async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
@@ -294,6 +320,7 @@ impl Keyword {
 		})
 	}
 
+	/// Deletes all channel-specific keywords created by the specified user in the specified channel.
 	pub async fn delete_in_channel(
 		user_id: UserId,
 		channel_id: ChannelId,

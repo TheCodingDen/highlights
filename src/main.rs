@@ -1,6 +1,11 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Highlights is a simple but flexible keyword highlighting bot for Discord.
+//!
+//! The code for highlights is organized into mostly independent modules. This module handles
+//! creating the client and registering event listeners.
+
 #![type_length_limit = "20000000"]
 
 mod commands;
@@ -40,10 +45,16 @@ use tokio::task;
 
 use std::{collections::HashMap, convert::TryInto};
 
+/// Type to serve as an event handler.
 struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
+	/// Message listener to execute commands or check for notifications.
+	///
+	/// This function essentially just checks the message to see if it's a command; if it is, then
+	/// [`handle_command`](handle_command) is called. If not, [`handle_keywords`](handle_keywords)
+	/// is called to check if there are any keywords to notify others of.
 	async fn message(&self, ctx: Context, message: Message) {
 		if message.author.bot {
 			return;
@@ -84,6 +95,10 @@ impl EventHandler for Handler {
 		}
 	}
 
+	/// Runs minor setup for when the bot starts.
+	///
+	/// This calls [`init_mentions`](crate::global::init_mentions), sets the bot's status, and
+	/// logs a ready message.
 	async fn ready(&self, ctx: Context, ready: Ready) {
 		init_mentions(ready.user.id);
 
@@ -96,6 +111,10 @@ impl EventHandler for Handler {
 	}
 }
 
+/// Handles a command.
+///
+/// This function splits message content to determine if there is a command to be handled, then
+/// dispatches to the appropriate function from [`commands`](commands).
 async fn handle_command(
 	ctx: &Context,
 	message: &Message,
@@ -146,6 +165,13 @@ async fn handle_command(
 	}
 }
 
+/// Handles any keywords present in a message.
+///
+/// This function queries for any keywords that could be relevant to the sent message with
+/// [`get_relevant_keywords`](Keyword::get_relevant_keywords), collects [`Ignore`](Ignore)s for any
+/// users with those keywords. It uses (`should_notify_keyword`)[highlighting::should_notify_keyword]
+/// to determine if there is a keyword that should be highlighted, then calls
+/// (`notify_keyword`)[highlighting::notify_keyword].
 async fn handle_keywords(
 	ctx: &Context,
 	message: &Message,
@@ -196,6 +222,7 @@ async fn handle_keywords(
 	Ok(())
 }
 
+/// Entrypoint function to initialize other modules and start the Discord client.
 #[tokio::main]
 async fn main() {
 	init_settings();

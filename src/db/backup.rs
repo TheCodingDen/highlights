@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Automatic backup system.
+
 use chrono::{DateTime, Utc};
 use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
 use tokio::{fs, task, time::interval};
@@ -17,6 +19,9 @@ use super::connection;
 /// doesn't seem to allow file names to contain `:`.
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H_%M_%S%.f%z";
 
+/// Creates the dir at the specified path for backups.
+///
+/// Returns `Ok(())` on success or when the directory already existed.
 async fn ensure_backup_dir_exists(path: &Path) -> Result<(), IoError> {
 	let result = fs::create_dir(path).await;
 	if let Err(error) = &result {
@@ -27,6 +32,7 @@ async fn ensure_backup_dir_exists(path: &Path) -> Result<(), IoError> {
 	result
 }
 
+/// Creates a backup in the specified directory.
 async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 	task::spawn_blocking(move || {
 		let conn = connection();
@@ -52,6 +58,7 @@ async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 	.expect("Failed to join backup task")
 }
 
+/// Cleans up old backups from the specified directory.
 async fn clean_backups(backup_dir: &Path) {
 	#[derive(Default)]
 	struct Backups {
@@ -186,6 +193,10 @@ async fn clean_backups(backup_dir: &Path) {
 	}
 }
 
+/// Starts the automatic backup cycle.
+///
+/// Creates `<data directory>/backup` if it doesn't exist already, creates a backup, cleans up old
+/// backups, and repeats once every 24hrs.
 pub fn start_backup_cycle(backup_dir: PathBuf) {
 	let _ = ensure_backup_dir_exists(&backup_dir);
 

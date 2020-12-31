@@ -1,6 +1,8 @@
 // Copyright 2020 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
+//! Commands for adding, removing, and listing blocked users.
+
 use super::util::get_users_from_args;
 
 use serenity::{client::Context, model::channel::Message};
@@ -9,6 +11,9 @@ use std::convert::TryInto;
 
 use crate::{db::Block, error, monitoring::Timer, Error};
 
+/// Block a user.
+///
+/// Usage: `@Highlights block <whitespace-separated user IDs or mentions>`
 pub async fn block(
 	ctx: &Context,
 	message: &Message,
@@ -94,6 +99,9 @@ pub async fn block(
 	Ok(())
 }
 
+/// Unblock a user.
+///
+/// Usage: `@Highlights block <whitespace-separated user IDs or mentions>`
 pub async fn unblock(
 	ctx: &Context,
 	message: &Message,
@@ -193,6 +201,9 @@ pub async fn unblock(
 	Ok(())
 }
 
+/// Lists blocked users.
+///
+/// Usage: `@Highlights blocks`
 pub async fn blocks(
 	ctx: &Context,
 	message: &Message,
