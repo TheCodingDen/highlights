@@ -1,3 +1,8 @@
+// Copyright 2020 joshyrobot, Benjamin Scherer
+// Licensed under the Open Software License version 3.0
+
+//! Handling of bot configuration for hosters.
+
 use config::{Config, ConfigError, Environment, File};
 use serde::{de, Deserialize, Deserializer};
 
