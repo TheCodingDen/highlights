@@ -198,8 +198,6 @@ async fn handle_keywords(
 
 #[tokio::main]
 async fn main() {
-	let _ = dotenv::dotenv();
-
 	init_settings();
 
 	reporting::init();

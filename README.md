@@ -25,7 +25,7 @@ Once you have `cargo` installed, run `cargo build --release` (or `cargo build` f
 
 ## Configuration
 
-Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION.PROPERTY`. Highlights also supports dotenv. To use it, create a file `.env` in the directory you run highlights in, and put key-value pairs in it, like the below:
+Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION.PROPERTY`. Examples:
 ```
 HIGHLIGHTS_BOT.TOKEN="your bot token goes here"
 HIGHLIGHTS_DATABASE.PATH="highlights_data"
