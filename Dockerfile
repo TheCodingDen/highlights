@@ -13,7 +13,8 @@ ENV RUSTFLAGS=-Clinker=musl-gcc
 WORKDIR /highlights
 COPY ["Cargo.toml", "Cargo.lock", "./"]
 RUN cargo audit -D unsound -D yanked && \
-    cargo fetch
+    cargo fetch && \
+    rm -rf src/*.rs
 COPY [".", "./"]
 RUN cargo fmt -- --check && \
     cargo clippy && \
