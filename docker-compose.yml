@@ -1,0 +1,41 @@
+version: "3.3"
+services:
+  highlights:
+    build: .
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - HIGHLIGHTS_CONFIG=/run/secrets/config.toml
+    networks:
+      - highlights-net
+    secrets:
+      - config.toml
+    volumes:
+      # This should match the HIGHLIGHTS_DATA_DIR environmental variable
+      - backup-data:/var/opt/highlight/data
+
+  prometheus:
+    image: "prom/prometheus:v2.23.0"
+    restart: unless-stopped
+    networks:
+      - highlights-net
+    ports:
+      - 9000:9090
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    command: --web.enable-lifecycle  --config.file=/etc/prometheus/prometheus.yml
+
+networks:
+  highlights-net:
+
+volumes:
+  backup-data:
+  prometheus-data:
+
+secrets:
+  config.toml:
+    file: ./config.toml

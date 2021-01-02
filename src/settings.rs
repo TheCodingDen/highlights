@@ -9,10 +9,7 @@ use serde::{de, Deserialize, Deserializer};
 use log::LevelFilter;
 use url::Url;
 
-use std::{
-	collections::HashMap, env, fmt, net::SocketAddr, path::PathBuf,
-	time::Duration,
-};
+use std::{collections::HashMap, env, fmt, path::PathBuf, time::Duration};
 
 /// Visitor to deserialize a `Duration` from a number of seconds.
 struct DurationVisitor;
@@ -66,7 +63,7 @@ pub struct LoggingSettings {
 	/// Webhook URL to send error/panic messages to.
 	pub webhook: Option<Url>,
 	/// Address to host an HTTP server for prometheus to scrape.
-	pub prometheus: Option<SocketAddr>,
+	pub prometheus: Option<String>,
 
 	/// Global level that log messages should be filtered to.
 	pub level: LevelFilter,
