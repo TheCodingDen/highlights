@@ -9,11 +9,9 @@ RUN USER=root cargo new --bin highlights && \
     printf "[build]\ntarget = \"x86_64-unknown-linux-musl\"" > highlights/.cargo/config
 ENV RUSTFLAGS=-Clinker=musl-gcc
 WORKDIR /highlights
-COPY ./Cargo.toml ./Cargo.toml
+COPY ["Cargo.toml", "Cargo.lock", "./"]
 RUN cargo audit -D unsound -D yanked && \
-    cargo build && \
-    cargo build --release && \
-    rm src/*.rs
+    cargo fetch
 COPY [".", "./"]
 RUN cargo fmt -- --check && \
     cargo clippy && \
