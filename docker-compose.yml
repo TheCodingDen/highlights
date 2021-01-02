@@ -14,8 +14,9 @@ services:
     secrets:
       - config.toml
     volumes:
-      # This should match the HIGHLIGHTS_DATA_DIR environmental variable
-      - backup-data:/var/opt/highlight/data
+      # This should match the configured database path
+      - backup-data:/data
+      - ./data:/var/opt/highlight/data
 
   prometheus:
     image: "prom/prometheus:v2.23.0"

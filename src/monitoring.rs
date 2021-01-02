@@ -208,7 +208,7 @@ pub fn init() {
 			Ok(mut sock_addr) => {
 				ENABLED.set(true).unwrap();
 				tokio::spawn(prometheus_server(
-					sock_addr.next().expect("No socket address provided"),
+					sock_addr.next().expect("Configured Prometheus address produced no socket addresses"),
 				));
 			}
 			Err(e) => {
