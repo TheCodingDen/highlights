@@ -7,11 +7,14 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
 	client::Context,
+	http::error::ErrorResponse,
 	model::{
 		channel::{GuildChannel, Message},
 		guild::{Guild, PartialGuild},
 		id::UserId,
 	},
+	prelude::HttpError,
+	Error as SerenityError,
 };
 
 use std::fmt::Display;
@@ -122,7 +125,7 @@ pub async fn user_can_read_channel(
 	ctx: &Context,
 	channel: &GuildChannel,
 	user_id: UserId,
-) -> Result<bool, Error> {
+) -> Result<Option<bool>, Error> {
 	enum MaybePartialGuild {
 		Partial(PartialGuild),
 		FullGuild(Guild),
@@ -136,8 +139,13 @@ pub async fn user_can_read_channel(
 	};
 
 	let member = match &guild {
-		FullGuild(g) => g.member(ctx, user_id).await?,
-		Partial(g) => g.member(ctx, user_id).await?,
+		FullGuild(g) => optional_result(g.member(ctx, user_id).await)?,
+		Partial(g) => optional_result(g.member(ctx, user_id).await)?,
+	};
+
+	let member = match member {
+		Some(m) => m,
+		None => return Ok(None),
 	};
 
 	let permissions = match &guild {
@@ -145,5 +153,27 @@ pub async fn user_can_read_channel(
 		Partial(g) => g.user_permissions_in(&channel, &member)?,
 	};
 
-	Ok(permissions.read_messages())
+	Ok(Some(permissions.read_messages()))
+}
+
+/// Makes the result of an HTTP call optional.
+///
+/// If the given `Result` is an `Err` containing an error with a 404 HTTP error, `Ok(None)` is
+/// returned. Otherwise, the `Result` is returned, `Ok(x)` being replaced with `Ok(Some(x))`.
+pub fn optional_result<T>(
+	res: Result<T, SerenityError>,
+) -> Result<Option<T>, SerenityError> {
+	match res {
+		Ok(m) => Ok(Some(m)),
+		Err(SerenityError::Http(err)) => match &*err {
+			HttpError::UnsuccessfulRequest(ErrorResponse {
+				status_code,
+				..
+			}) if status_code.as_u16() == 404 => {
+				return Ok(None);
+			}
+			_ => return Err(SerenityError::Http(err)),
+		},
+		Err(err) => return Err(err),
+	}
 }

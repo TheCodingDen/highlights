@@ -20,7 +20,7 @@ use crate::{
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{settings, EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
-	util::{user_can_read_channel, MD_SYMBOL_REGEX},
+	util::{optional_result, user_can_read_channel, MD_SYMBOL_REGEX},
 	Error,
 };
 use indoc::indoc;
@@ -67,17 +67,17 @@ pub async fn should_notify_keyword(
 		},
 	};
 
-	if !user_can_read_channel(
+	match user_can_read_channel(
 		ctx,
 		&channel,
 		UserId(keyword.user_id.try_into().unwrap()),
 	)
-	.await?
+	.await
 	{
-		return Ok(None);
+		Ok(Some(true)) => Ok(Some(range)),
+		Ok(Some(false)) | Ok(None) => Ok(None),
+		Err(e) => Err(e),
 	}
-
-	Ok(Some(range))
 }
 
 /// Sends a notification about a highlighted keyword.
@@ -120,23 +120,15 @@ pub async fn notify_keyword(
 
 	if reply_or_reaction.is_none() {
 		let result: Result<(), Error> = async {
-			let message = match ctx
-				.http
-				.get_message(message.channel_id.0, message.id.0)
-				.await
-			{
-				Ok(m) => m,
-				Err(SerenityError::Http(err)) => match &*err {
-					HttpError::UnsuccessfulRequest(ErrorResponse {
-						status_code,
-						..
-					}) if status_code.as_u16() == 404 => {
-						return Ok(());
-					}
-					_ => return Err(SerenityError::Http(err).into()),
-				},
-				Err(err) => return Err(err.into()),
+			let message = match optional_result(
+				ctx.http
+					.get_message(message.channel_id.0, message.id.0)
+					.await,
+			)? {
+				Some(m) => m,
+				None => return Ok(()),
 			};
+
 			let keyword_range =
 				match should_notify_keyword(&ctx, &message, &keyword, &ignores)
 					.await?
