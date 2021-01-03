@@ -110,11 +110,11 @@ pub async fn add(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		Some(captures) => {
 			let keyword = captures
 				.get(1)
-				.ok_or_else(||anyhow!("Captures didn't contain keyword"))?
+				.ok_or_else(|| anyhow!("Captures didn't contain keyword"))?
 				.as_str();
 			let channel = captures
 				.get(2)
-				.ok_or_else(||anyhow!("Captures didn't contain channel"))?
+				.ok_or_else(|| anyhow!("Captures didn't contain channel"))?
 				.as_str();
 
 			add_channel_keyword(ctx, message, guild_id, keyword, channel).await
@@ -295,11 +295,11 @@ pub async fn remove(
 		Some(captures) => {
 			let keyword = captures
 				.get(1)
-				.ok_or_else(||anyhow!("Captures didn't contain keyword"))?
+				.ok_or_else(|| anyhow!("Captures didn't contain keyword"))?
 				.as_str();
 			let channel = captures
 				.get(2)
-				.ok_or_else(||anyhow!("Captures didn't contain channel"))?
+				.ok_or_else(|| anyhow!("Captures didn't contain channel"))?
 				.as_str();
 
 			remove_channel_keyword(ctx, message, guild_id, keyword, channel)
@@ -550,7 +550,7 @@ pub async fn ignores(
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
 				.await
-				.ok_or_else(||anyhow!("Couldn't get guild to list ignores"))?;
+				.ok_or_else(|| anyhow!("Couldn't get guild to list ignores"))?;
 
 			let response = format!(
 				"{}'s ignored phrases in {}:\n  - {}",
@@ -596,7 +596,9 @@ pub async fn ignores(
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
 					.await
-					.ok_or_else(||anyhow!("Couldn't get guild to list ignores"))?;
+					.ok_or_else(|| {
+						anyhow!("Couldn't get guild to list ignores")
+					})?;
 
 				write!(
 					&mut response,
@@ -707,7 +709,9 @@ pub async fn keywords(
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
 				.await
-				.ok_or_else(||anyhow!("Couldn't get guild to list keywords"))?;
+				.ok_or_else(|| {
+					anyhow!("Couldn't get guild to list keywords")
+				})?;
 
 			let mut response = String::with_capacity(45);
 

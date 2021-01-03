@@ -247,12 +247,12 @@ async fn build_notification_embed(
 		.cache
 		.guild_channel_field(channel_id, |c| c.name.clone())
 		.await
-		.ok_or_else(||anyhow!("Couldn't get channel for keyword"))?;
+		.ok_or_else(|| anyhow!("Couldn't get channel for keyword"))?;
 	let guild_name = ctx
 		.cache
 		.guild_field(guild_id, |g| g.name.clone())
 		.await
-		.ok_or_else(||anyhow!("Couldn't get guild for keyword"))?;
+		.ok_or_else(|| anyhow!("Couldn't get guild for keyword"))?;
 	let title = format!(
 		"Keyword \"{}\" seen in #{} ({})",
 		keyword, channel_name, guild_name

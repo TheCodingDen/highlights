@@ -260,9 +260,9 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	match message.guild_id {
 		Some(guild_id) => {
 			let channels =
-				ctx.cache.guild_channels(guild_id).await.ok_or_else(||anyhow!(
-					"Couldn't get guild channels to list mutes"
-				))?;
+				ctx.cache.guild_channels(guild_id).await.ok_or_else(|| {
+					anyhow!("Couldn't get guild channels to list mutes")
+				})?;
 
 			let mutes = Mute::user_mutes(message.author.id)
 				.await?
@@ -284,7 +284,7 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
 				.await
-				.ok_or_else(||anyhow!("Couldn't get guild to list mutes"))?;
+				.ok_or_else(|| anyhow!("Couldn't get guild to list mutes"))?;
 
 			let response = format!(
 				"{}'s muted channels in {}:\n  - {}",
@@ -338,7 +338,9 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
 					.await
-					.ok_or_else(||anyhow!("Couldn't get guild to list mutes"))?;
+					.ok_or_else(|| {
+						anyhow!("Couldn't get guild to list mutes")
+					})?;
 
 				write!(
 					&mut response,

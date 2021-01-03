@@ -114,7 +114,7 @@ pub async fn get_text_channels_in_guild(
 		.cache
 		.guild_channels(guild_id)
 		.await
-		.ok_or_else(||anyhow!("Couldn't get guild to get channels"))?;
+		.ok_or_else(|| anyhow!("Couldn't get guild to get channels"))?;
 	let channels = channels
 		.into_iter()
 		.filter(|(_, channel)| channel.kind == ChannelType::Text)
@@ -143,9 +143,9 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 		let user_can_read =
 			crate::util::user_can_read_channel(ctx, channel, author_id)
 				.await?
-				.ok_or_else(||anyhow!(
-					"No permissions for user to get readable channels"
-				))?;
+				.ok_or_else(|| {
+					anyhow!("No permissions for user to get readable channels")
+				})?;
 
 		let self_can_read = crate::util::user_can_read_channel(
 			ctx,
@@ -153,7 +153,9 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 			ctx.cache.current_user_id().await,
 		)
 		.await?
-		.ok_or_else(||anyhow!("No permissions for self to get readable channels"))?;
+		.ok_or_else(|| {
+			anyhow!("No permissions for self to get readable channels")
+		})?;
 
 		if !user_can_read {
 			result.user_cant_read.push((channel, arg));

@@ -168,9 +168,7 @@ pub fn optional_result<T>(
 			HttpError::UnsuccessfulRequest(ErrorResponse {
 				status_code,
 				..
-			}) if status_code.as_u16() == 404 => {
-				Ok(None)
-			}
+			}) if status_code.as_u16() == 404 => Ok(None),
 			_ => Err(SerenityError::Http(err)),
 		},
 		Err(err) => Err(err),
