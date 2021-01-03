@@ -500,14 +500,17 @@ pub async fn help(
 		CommandInfo {
 			name: "ping",
 			short_desc: "Show the bot's ping",
-			long_desc: "Show the bot's ping, including current API, command, and database latency.".to_owned(),
+			long_desc: "Show the bot's ping, including current API, command, and database latency."
+				.to_owned(),
 			examples: None,
 		},
 		CommandInfo {
 			name: "about",
-			short_desc: "Show some information about this bot",
+			short_desc: "Show some information about this bot, including an invite link",
 			long_desc:
-				"Show some information about this bot, like version and source code.".to_owned(),
+				"Show some information about this bot, \
+				like its version, source code link, and an invite link."
+					.to_owned(),
 			examples: None,
 		},
 	];
