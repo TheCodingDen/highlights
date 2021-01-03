@@ -21,8 +21,10 @@ RUN cargo fmt -- --check && \
     cargo install --path .
 
 FROM alpine:3.12.3
-RUN addgroup -g 1000 highlights \
+RUN apk add --no-cache --update tini=0.19.0-r0 && \
+    addgroup -g 1000 highlights \
     && adduser -u 1000 -H -D -G highlights -s /bin/sh highlights
+ENTRYPOINT ["/sbin/tini", "--"]
 WORKDIR /bot
 USER highlights
 COPY --from=builder /usr/local/cargo/bin/highlights ./
