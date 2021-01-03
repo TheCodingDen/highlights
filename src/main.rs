@@ -7,6 +7,7 @@
 //! creating the client and registering event listeners.
 
 #![type_length_limit = "20000000"]
+#![allow(clippy::tabs_in_doc_comments)]
 
 mod commands;
 
