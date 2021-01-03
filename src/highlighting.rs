@@ -3,6 +3,7 @@
 
 //! Functions for sending, editing, and deleting notifications.
 
+use anyhow::{anyhow, Result};
 use serenity::{
 	builder::{CreateEmbed, CreateMessage, EditMessage},
 	client::Context,
@@ -21,7 +22,6 @@ use crate::{
 	global::{settings, EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
 	util::{optional_result, user_can_read_channel, MD_SYMBOL_REGEX},
-	Error,
 };
 use indoc::indoc;
 use tokio::{select, time::delay_for};
@@ -39,7 +39,7 @@ pub async fn should_notify_keyword(
 	message: &Message,
 	keyword: &Keyword,
 	ignores: &[Ignore],
-) -> Result<Option<Range<usize>>, Error> {
+) -> Result<Option<Range<usize>>> {
 	let content = &*message.content;
 
 	for ignore in ignores {
@@ -58,11 +58,10 @@ pub async fn should_notify_keyword(
 		None => match ctx.http.get_channel(message.channel_id.0).await? {
 			serenity::model::channel::Channel::Guild(c) => c,
 			_ => {
-				return Err(format!(
+				return Err(anyhow!(
 					"Channel {} wasn't a guild channel",
 					message.channel_id
-				)
-				.into())
+				))
 			}
 		},
 	};
@@ -119,7 +118,7 @@ pub async fn notify_keyword(
 	}
 
 	if reply_or_reaction.is_none() {
-		let result: Result<(), Error> = async {
+		let result: Result<()> = async {
 			let message = match optional_result(
 				ctx.http
 					.get_message(message.channel_id.0, message.id.0)
@@ -171,7 +170,7 @@ async fn build_notification_message(
 	keyword_range: Range<usize>,
 	channel_id: ChannelId,
 	guild_id: GuildId,
-) -> Result<CreateMessage<'static>, Error> {
+) -> Result<CreateMessage<'static>> {
 	let embed = build_notification_embed(
 		ctx,
 		message,
@@ -199,7 +198,7 @@ async fn build_notification_edit(
 	keyword_range: Range<usize>,
 	channel_id: ChannelId,
 	guild_id: GuildId,
-) -> Result<EditMessage, Error> {
+) -> Result<EditMessage> {
 	let embed = build_notification_embed(
 		ctx,
 		message,
@@ -227,7 +226,7 @@ async fn build_notification_embed(
 	keyword_range: Range<usize>,
 	channel_id: ChannelId,
 	guild_id: GuildId,
-) -> Result<CreateEmbed, Error> {
+) -> Result<CreateEmbed> {
 	let re = &*MD_SYMBOL_REGEX;
 	let formatted_content = format!(
 		"{}__**{}**__{}",
@@ -248,12 +247,12 @@ async fn build_notification_embed(
 		.cache
 		.guild_channel_field(channel_id, |c| c.name.clone())
 		.await
-		.ok_or("Couldn't get channel for keyword")?;
+		.ok_or_else(||anyhow!("Couldn't get channel for keyword"))?;
 	let guild_name = ctx
 		.cache
 		.guild_field(guild_id, |g| g.name.clone())
 		.await
-		.ok_or("Couldn't get guild for keyword")?;
+		.ok_or_else(||anyhow!("Couldn't get guild for keyword"))?;
 	let title = format!(
 		"Keyword \"{}\" seen in #{} ({})",
 		keyword, channel_name, guild_name
@@ -288,7 +287,7 @@ async fn send_notification_message(
 	message_id: MessageId,
 	message_to_send: CreateMessage<'static>,
 	keyword: String,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let dm_channel = user_id.create_dm_channel(&ctx).await?;
 
 	let mut result = Ok(());
@@ -357,7 +356,7 @@ pub async fn delete_sent_notifications(
 		let message_id =
 			MessageId(notification.notification_message.try_into().unwrap());
 
-		let result: Result<(), Error> = async {
+		let result: Result<()> = async {
 			let dm_channel = user_id.create_dm_channel(ctx).await?;
 
 			dm_channel
@@ -400,7 +399,7 @@ pub async fn update_sent_notifications(
 			}
 		};
 
-		let result: Result<(), Error> = async {
+		let result: Result<()> = async {
 			let message_to_send = build_notification_edit(
 				ctx,
 				&message,
@@ -492,7 +491,7 @@ fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
 pub async fn check_notify_user_state(
 	ctx: &Context,
 	message: &Message,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let user_id = message.author.id;
 
 	let user_state = match UserState::user_state(user_id).await? {

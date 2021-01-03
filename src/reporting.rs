@@ -12,13 +12,14 @@ use serde::Serialize;
 
 use std::{panic, time::Duration};
 
+use anyhow::{anyhow, Result};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use simplelog::{
 	CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger,
 	TerminalMode,
 };
 
-use crate::{global::settings, Error};
+use crate::global::settings;
 
 /// Global client to use when sending webhook messages.
 static WEBHOOK_CLIENT: OnceCell<AsyncClient> = OnceCell::new();
@@ -117,14 +118,16 @@ pub fn init() {
 }
 
 /// Reports a logged error to `WEBHOOK_URL`.
-async fn report_error(content: String) -> Result<reqwest::Response, Error> {
+async fn report_error(content: String) -> Result<reqwest::Response> {
 	let url = settings()
 		.logging
 		.webhook
 		.as_ref()
-		.ok_or("Webhook URL not set")?
+		.ok_or_else(|| anyhow!("Webhook URL not set"))?
 		.to_owned();
-	let client = WEBHOOK_CLIENT.get().ok_or("Webhook client not set")?;
+	let client = WEBHOOK_CLIENT
+		.get()
+		.ok_or_else(|| anyhow!("Webhook client not set"))?;
 
 	let message = WebhookMessage { content };
 
@@ -137,12 +140,12 @@ async fn report_error(content: String) -> Result<reqwest::Response, Error> {
 }
 
 /// Reports a panic to `WEBHOOK_URL`.
-fn report_panic(info: &panic::PanicInfo) -> Result<blocking::Response, Error> {
+fn report_panic(info: &panic::PanicInfo) -> Result<blocking::Response> {
 	let url = settings()
 		.logging
 		.webhook
 		.as_ref()
-		.ok_or("Webhook URL not set")?
+		.ok_or_else(|| anyhow!("Webhook URL not set"))?
 		.to_owned();
 	let client = BlockingClient::builder().build()?;
 

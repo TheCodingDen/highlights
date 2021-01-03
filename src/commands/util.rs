@@ -3,6 +3,7 @@
 
 //! Miscellaneous utility functions and macros used by commands.
 
+use anyhow::{anyhow, Result};
 use serenity::{
 	client::Context,
 	model::{
@@ -12,7 +13,7 @@ use serenity::{
 	},
 };
 
-use crate::{regex, Error};
+use crate::regex;
 use std::{collections::HashMap, iter::FromIterator};
 
 /// Requires the given message to have come from a guild channel.
@@ -108,12 +109,12 @@ pub async fn get_users_from_args<'args>(
 pub async fn get_text_channels_in_guild(
 	ctx: &Context,
 	guild_id: GuildId,
-) -> Result<HashMap<ChannelId, GuildChannel>, Error> {
+) -> Result<HashMap<ChannelId, GuildChannel>> {
 	let channels = ctx
 		.cache
 		.guild_channels(guild_id)
 		.await
-		.ok_or("Couldn't get guild to get channels")?;
+		.ok_or_else(||anyhow!("Couldn't get guild to get channels"))?;
 	let channels = channels
 		.into_iter()
 		.filter(|(_, channel)| channel.kind == ChannelType::Text)
@@ -131,7 +132,7 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 	author_id: UserId,
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	args: &'args str,
-) -> Result<ReadableChannelsFromArgs<'args, 'c>, Error> {
+) -> Result<ReadableChannelsFromArgs<'args, 'c>> {
 	let all_channels = get_channels_from_args(channels, args);
 
 	let mut result = ReadableChannelsFromArgs::default();
@@ -142,7 +143,9 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 		let user_can_read =
 			crate::util::user_can_read_channel(ctx, channel, author_id)
 				.await?
-				.ok_or("No permissions for user to get readable channels")?;
+				.ok_or_else(||anyhow!(
+					"No permissions for user to get readable channels"
+				))?;
 
 		let self_can_read = crate::util::user_can_read_channel(
 			ctx,
@@ -150,7 +153,7 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 			ctx.cache.current_user_id().await,
 		)
 		.await?
-		.ok_or("No permissions for self to get readable channels")?;
+		.ok_or_else(||anyhow!("No permissions for self to get readable channels"))?;
 
 		if !user_can_read {
 			result.user_cant_read.push((channel, arg));

@@ -3,6 +3,7 @@
 
 //! Miscellaneous utility functions and macros.
 
+use anyhow::Result;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
@@ -18,8 +19,6 @@ use serenity::{
 };
 
 use std::fmt::Display;
-
-use crate::Error;
 
 /// Logs an error that happened handling a command or keyword in Discord.
 ///
@@ -87,14 +86,14 @@ pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
 	Lazy::new(|| Regex::new(r"[_*()\[\]~`]").unwrap());
 
 /// Reacts to a message with a ✅ emoji.
-pub async fn success(ctx: &Context, message: &Message) -> Result<(), Error> {
+pub async fn success(ctx: &Context, message: &Message) -> Result<()> {
 	message.react(ctx, '✅').await?;
 
 	Ok(())
 }
 
 /// Reacts to a message with a ❓ emoji.
-pub async fn question(ctx: &Context, message: &Message) -> Result<(), Error> {
+pub async fn question(ctx: &Context, message: &Message) -> Result<()> {
 	message.react(ctx, '❓').await?;
 
 	Ok(())
@@ -107,7 +106,7 @@ pub async fn error<S: Display>(
 	ctx: &Context,
 	message: &Message,
 	response: S,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _ = message.react(ctx, '❌').await;
 
 	message
@@ -125,7 +124,7 @@ pub async fn user_can_read_channel(
 	ctx: &Context,
 	channel: &GuildChannel,
 	user_id: UserId,
-) -> Result<Option<bool>, Error> {
+) -> Result<Option<bool>> {
 	enum MaybePartialGuild {
 		Partial(PartialGuild),
 		FullGuild(Guild),
@@ -170,10 +169,10 @@ pub fn optional_result<T>(
 				status_code,
 				..
 			}) if status_code.as_u16() == 404 => {
-				return Ok(None);
+				Ok(None)
 			}
-			_ => return Err(SerenityError::Http(err)),
+			_ => Err(SerenityError::Http(err)),
 		},
-		Err(err) => return Err(err),
+		Err(err) => Err(err),
 	}
 }

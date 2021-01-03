@@ -3,6 +3,7 @@
 
 //! Commands for adding, removing, and listing keywords.
 
+use anyhow::{anyhow, Result};
 use indoc::indoc;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -27,7 +28,6 @@ use crate::{
 	global::settings,
 	monitoring::Timer,
 	util::{error, success, MD_SYMBOL_REGEX},
-	Error,
 };
 
 /// Pattern for channel-specific keywords.
@@ -42,11 +42,7 @@ static CHANNEL_KEYWORD_REGEX: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
 /// Usage:
 /// - `@Highlights add <keyword>`
 /// - `@Highlights add "<keyword>" in <space-separated channel names, mentions, or IDs>`
-pub async fn add(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn add(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("add");
 	let guild_id = require_guild!(ctx, message);
 
@@ -114,11 +110,11 @@ pub async fn add(
 		Some(captures) => {
 			let keyword = captures
 				.get(1)
-				.ok_or("Captures didn't contain keyword")?
+				.ok_or_else(||anyhow!("Captures didn't contain keyword"))?
 				.as_str();
 			let channel = captures
 				.get(2)
-				.ok_or("Captures didn't contain channel")?
+				.ok_or_else(||anyhow!("Captures didn't contain channel"))?
 				.as_str();
 
 			add_channel_keyword(ctx, message, guild_id, keyword, channel).await
@@ -133,7 +129,7 @@ async fn add_guild_keyword(
 	message: &Message,
 	guild_id: GuildId,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	if args.len() < 3 {
 		return error(
 			ctx,
@@ -165,7 +161,7 @@ async fn add_channel_keyword(
 	guild_id: GuildId,
 	keyword: &str,
 	channels: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	if keyword.len() < 3 {
 		return error(
 			ctx,
@@ -289,7 +285,7 @@ pub async fn remove(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("remove");
 	let guild_id = require_guild!(ctx, message);
 
@@ -299,11 +295,11 @@ pub async fn remove(
 		Some(captures) => {
 			let keyword = captures
 				.get(1)
-				.ok_or("Captures didn't contain keyword")?
+				.ok_or_else(||anyhow!("Captures didn't contain keyword"))?
 				.as_str();
 			let channel = captures
 				.get(2)
-				.ok_or("Captures didn't contain channel")?
+				.ok_or_else(||anyhow!("Captures didn't contain channel"))?
 				.as_str();
 
 			remove_channel_keyword(ctx, message, guild_id, keyword, channel)
@@ -319,7 +315,7 @@ async fn remove_guild_keyword(
 	message: &Message,
 	guild_id: GuildId,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let keyword = Keyword {
 		keyword: args.to_lowercase(),
 		user_id: message.author.id.0.try_into().unwrap(),
@@ -342,7 +338,7 @@ async fn remove_channel_keyword(
 	guild_id: GuildId,
 	keyword: &str,
 	channels: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let guild_channels = get_text_channels_in_guild(ctx, guild_id).await?;
 
 	let user_id = message.author.id;
@@ -470,7 +466,7 @@ pub async fn ignore(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let guild_id = require_guild!(ctx, message).0.try_into().unwrap();
 
 	require_nonempty_args!(args, ctx, message);
@@ -506,7 +502,7 @@ pub async fn unignore(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let guild_id = require_guild!(ctx, message).0.try_into().unwrap();
 
 	require_nonempty_args!(args, ctx, message);
@@ -533,7 +529,7 @@ pub async fn ignores(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("ignores");
 	require_empty_args!(args, ctx, message);
 	match message.guild_id {
@@ -554,7 +550,7 @@ pub async fn ignores(
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
 				.await
-				.ok_or("Couldn't get guild to list ignores")?;
+				.ok_or_else(||anyhow!("Couldn't get guild to list ignores"))?;
 
 			let response = format!(
 				"{}'s ignored phrases in {}:\n  - {}",
@@ -600,7 +596,7 @@ pub async fn ignores(
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
 					.await
-					.ok_or("Couldn't get guild to list ignores")?;
+					.ok_or_else(||anyhow!("Couldn't get guild to list ignores"))?;
 
 				write!(
 					&mut response,
@@ -625,7 +621,7 @@ pub async fn remove_server(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("removeserver");
 	require_nonempty_args!(args, ctx, message);
 
@@ -659,7 +655,7 @@ pub async fn keywords(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("keywords");
 	require_empty_args!(args, ctx, message);
 	match message.guild_id {
@@ -711,7 +707,7 @@ pub async fn keywords(
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
 				.await
-				.ok_or("Couldn't get guild to list keywords")?;
+				.ok_or_else(||anyhow!("Couldn't get guild to list keywords"))?;
 
 			let mut response = String::with_capacity(45);
 

@@ -5,20 +5,17 @@
 
 use super::util::get_users_from_args;
 
+use anyhow::Result;
 use serenity::{client::Context, model::channel::Message};
 
 use std::convert::TryInto;
 
-use crate::{db::Block, error, monitoring::Timer, Error};
+use crate::{db::Block, error, monitoring::Timer};
 
 /// Block a user.
 ///
 /// Usage: `@Highlights block <whitespace-separated user IDs or mentions>`
-pub async fn block(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("block");
 
 	require_nonempty_args!(args, ctx, message);
@@ -106,7 +103,7 @@ pub async fn unblock(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("unblock");
 
 	require_nonempty_args!(args, ctx, message);
@@ -208,7 +205,7 @@ pub async fn blocks(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("blocks");
 	require_empty_args!(args, ctx, message);
 

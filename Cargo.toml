@@ -22,6 +22,7 @@ hyper = "0.13"
 serde = { version = "1", features = ["derive"] }
 config = { version = "0.10", default-features = false, features = ["toml"] }
 url = { version = "2.2", features = ["serde"] }
+anyhow = "1.0.37"
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"

@@ -17,6 +17,7 @@ pub use mutes::{mute, mutes, unmute};
 mod blocks;
 pub use blocks::{block, blocks, unblock};
 
+use anyhow::Result;
 use indoc::formatdoc;
 use serenity::{
 	client::Context,
@@ -29,18 +30,13 @@ use crate::{
 	global::{settings, EMBED_COLOR},
 	monitoring::{avg_command_time, avg_query_time, Timer},
 	util::question,
-	Error,
 };
 
 /// Display the ping of the bot.
 ///
 /// Returns the API latency in sending a message, and the metrics of command and database time
 /// recorded in [`monitoring`](crate::monitoring).
-pub async fn ping(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn ping(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("ping");
 	require_empty_args!(args, ctx, message);
 	let start = Instant::now();
@@ -92,11 +88,7 @@ fn format_seconds(seconds: f64) -> String {
 /// Displays information about the bot.
 ///
 /// Displays the cargo package name and version, cargo source, author, and an invite URL.
-pub async fn about(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("about");
 	require_empty_args!(args, ctx, message);
 	let invite_url = if settings().bot.private {
@@ -142,11 +134,7 @@ pub async fn about(
 ///
 /// When given no arguments, displays the list of commands. When given an argument, displays
 /// detailed information about the command of that name.
-pub async fn help(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("help");
 	struct CommandInfo {
 		name: &'static str,

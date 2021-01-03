@@ -8,6 +8,7 @@ use super::util::{
 	get_text_channels_in_guild,
 };
 
+use anyhow::{anyhow, Result};
 use serenity::{
 	client::Context,
 	model::{
@@ -18,16 +19,12 @@ use serenity::{
 
 use std::{collections::HashMap, convert::TryInto, fmt::Write};
 
-use crate::{db::Mute, monitoring::Timer, util::error, Error};
+use crate::{db::Mute, monitoring::Timer, util::error};
 
 /// Mute a channel.
 ///
 /// Usage: `@Highlights mute <whitespace-separated channel IDs or mentions>`
-pub async fn mute(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn mute(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("mute");
 	let guild_id = require_guild!(ctx, message);
 
@@ -128,7 +125,7 @@ pub async fn unmute(
 	ctx: &Context,
 	message: &Message,
 	args: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let _timer = Timer::command("unmute");
 	require_nonempty_args!(args, ctx, message);
 
@@ -257,20 +254,15 @@ pub async fn unmute(
 /// List muted channels in the current guild, or all guilds when used in DMs.
 ///
 /// Usage: `@Highlights mutes`
-pub async fn mutes(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<(), Error> {
+pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("mutes");
 	require_empty_args!(args, ctx, message);
 	match message.guild_id {
 		Some(guild_id) => {
-			let channels = ctx
-				.cache
-				.guild_channels(guild_id)
-				.await
-				.ok_or("Couldn't get guild channels to list mutes")?;
+			let channels =
+				ctx.cache.guild_channels(guild_id).await.ok_or_else(||anyhow!(
+					"Couldn't get guild channels to list mutes"
+				))?;
 
 			let mutes = Mute::user_mutes(message.author.id)
 				.await?
@@ -292,7 +284,7 @@ pub async fn mutes(
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
 				.await
-				.ok_or("Couldn't get guild to list mutes")?;
+				.ok_or_else(||anyhow!("Couldn't get guild to list mutes"))?;
 
 			let response = format!(
 				"{}'s muted channels in {}:\n  - {}",
@@ -346,7 +338,7 @@ pub async fn mutes(
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
 					.await
-					.ok_or("Couldn't get guild to list mutes")?;
+					.ok_or_else(||anyhow!("Couldn't get guild to list mutes"))?;
 
 				write!(
 					&mut response,
