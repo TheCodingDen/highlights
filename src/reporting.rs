@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use std::{panic, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Context, Result};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use simplelog::{
 	CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger,
@@ -123,11 +123,9 @@ async fn report_error(content: String) -> Result<reqwest::Response> {
 		.logging
 		.webhook
 		.as_ref()
-		.ok_or_else(|| anyhow!("Webhook URL not set"))?
+		.context("Webhook URL not set")?
 		.to_owned();
-	let client = WEBHOOK_CLIENT
-		.get()
-		.ok_or_else(|| anyhow!("Webhook client not set"))?;
+	let client = WEBHOOK_CLIENT.get().context("Webhook client not set")?;
 
 	let message = WebhookMessage { content };
 
@@ -145,7 +143,7 @@ fn report_panic(info: &panic::PanicInfo) -> Result<blocking::Response> {
 		.logging
 		.webhook
 		.as_ref()
-		.ok_or_else(|| anyhow!("Webhook URL not set"))?
+		.context("Webhook URL not set")?
 		.to_owned();
 	let client = BlockingClient::builder().build()?;
 
