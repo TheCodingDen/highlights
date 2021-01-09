@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use std::{panic, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use simplelog::{
 	CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger,

@@ -3,12 +3,12 @@
 
 //! Commands for adding, removing, and listing keywords.
 
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use indoc::indoc;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
-	client,
+	client::Context,
 	http::error::ErrorResponse,
 	model::{
 		channel::Message,
@@ -42,11 +42,7 @@ static CHANNEL_KEYWORD_REGEX: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
 /// Usage:
 /// - `@Highlights add <keyword>`
 /// - `@Highlights add "<keyword>" in <space-separated channel names, mentions, or IDs>`
-pub async fn add(
-	ctx: &client::Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+pub async fn add(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("add");
 	let guild_id = require_guild!(ctx, message);
 
@@ -129,7 +125,7 @@ pub async fn add(
 
 /// Add a guild-wide keyword.
 async fn add_guild_keyword(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	guild_id: GuildId,
 	args: &str,
@@ -160,7 +156,7 @@ async fn add_guild_keyword(
 
 /// Add a channel-specific keyword.
 async fn add_channel_keyword(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	guild_id: GuildId,
 	keyword: &str,
@@ -286,7 +282,7 @@ async fn add_channel_keyword(
 /// - `@Highlights remove <keyword>`
 /// - `@Highlights remove "<keyword>" from <space-separated channel names, mentions, or IDs>`
 pub async fn remove(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
@@ -315,7 +311,7 @@ pub async fn remove(
 
 /// Remove a guild-wide keyword.
 async fn remove_guild_keyword(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	guild_id: GuildId,
 	args: &str,
@@ -337,7 +333,7 @@ async fn remove_guild_keyword(
 
 /// Remove a channel-specific keyword.
 async fn remove_channel_keyword(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	guild_id: GuildId,
 	keyword: &str,
@@ -467,7 +463,7 @@ async fn remove_channel_keyword(
 ///
 /// Usage: `@Highlights ignore <phrase>`
 pub async fn ignore(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
@@ -503,7 +499,7 @@ pub async fn ignore(
 ///
 /// Usage: `@Highlights unignore <phrase>`
 pub async fn unignore(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
@@ -530,7 +526,7 @@ pub async fn unignore(
 ///
 /// Usage: `@Highlights ignores`
 pub async fn ignores(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
@@ -622,7 +618,7 @@ pub async fn ignores(
 ///
 /// Usage: `@Highlights remove-server <guild ID>`
 pub async fn remove_server(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
@@ -656,7 +652,7 @@ pub async fn remove_server(
 ///
 /// Usage: `@Highlights keywords`
 pub async fn keywords(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {

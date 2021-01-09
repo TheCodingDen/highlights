@@ -3,9 +3,9 @@
 
 //! Miscellaneous utility functions and macros used by commands.
 
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use serenity::{
-	client,
+	client::Context,
 	model::{
 		channel::{ChannelType, GuildChannel},
 		id::{ChannelId, GuildId, UserId},
@@ -77,7 +77,7 @@ pub struct UsersFromArgs<'args> {
 /// `args` is split by whitespace, and each split substring is checked for a user ID or user mention.
 /// `ctx` is used to fetch users by this ID.
 pub async fn get_users_from_args<'args>(
-	ctx: &client::Context,
+	ctx: &Context,
 	args: &'args str,
 ) -> UsersFromArgs<'args> {
 	let mut results = UsersFromArgs::default();
@@ -107,7 +107,7 @@ pub async fn get_users_from_args<'args>(
 
 /// Convenience function to get a map of all cached text channels in the given guild.
 pub async fn get_text_channels_in_guild(
-	ctx: &client::Context,
+	ctx: &Context,
 	guild_id: GuildId,
 ) -> Result<HashMap<ChannelId, GuildChannel>> {
 	let channels = ctx
@@ -128,7 +128,7 @@ pub async fn get_text_channels_in_guild(
 /// First gets all channels from the arguments, then checks the bots' and the provided user's
 /// permissions in each to sort them into a `ReadableChannelsFromArgs`.
 pub async fn get_readable_channels_from_args<'args, 'c>(
-	ctx: &client::Context,
+	ctx: &Context,
 	author_id: UserId,
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	args: &'args str,

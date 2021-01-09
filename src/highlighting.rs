@@ -3,10 +3,10 @@
 
 //! Functions for sending, editing, and deleting notifications.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context as _, Result};
 use serenity::{
 	builder::{CreateEmbed, CreateMessage, EditMessage},
-	client,
+	client::Context,
 	http::{error::ErrorResponse, HttpError},
 	model::{
 		channel::Message,
@@ -35,7 +35,7 @@ use tokio::{select, time::delay_for};
 /// is returned, where `start..end` is the range where the keyword appears in the message's
 /// contents.
 pub async fn should_notify_keyword(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	keyword: &Keyword,
 	ignores: &[Ignore],
@@ -93,7 +93,7 @@ pub async fn should_notify_keyword(
 ///
 /// Any other errors are logged as normal.
 pub async fn notify_keyword(
-	ctx: client::Context,
+	ctx: Context,
 	message: Message,
 	keyword: Keyword,
 	ignores: Vec<Ignore>,
@@ -164,7 +164,7 @@ pub async fn notify_keyword(
 }
 
 async fn build_notification_message(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	keyword: &str,
 	keyword_range: Range<usize>,
@@ -192,7 +192,7 @@ async fn build_notification_message(
 }
 
 async fn build_notification_edit(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	keyword: &str,
 	keyword_range: Range<usize>,
@@ -220,7 +220,7 @@ async fn build_notification_edit(
 }
 
 async fn build_notification_embed(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	keyword: &str,
 	keyword_range: Range<usize>,
@@ -282,7 +282,7 @@ async fn build_notification_embed(
 }
 
 async fn send_notification_message(
-	ctx: &client::Context,
+	ctx: &Context,
 	user_id: UserId,
 	message_id: MessageId,
 	message_to_send: CreateMessage<'static>,
@@ -347,7 +347,7 @@ async fn send_notification_message(
 }
 
 pub async fn delete_sent_notifications(
-	ctx: &client::Context,
+	ctx: &Context,
 	channel_id: ChannelId,
 	notifications: &[Notification],
 ) {
@@ -379,7 +379,7 @@ pub async fn delete_sent_notifications(
 }
 
 pub async fn update_sent_notifications(
-	ctx: &client::Context,
+	ctx: &Context,
 	channel_id: ChannelId,
 	guild_id: GuildId,
 	message: Message,
@@ -489,7 +489,7 @@ fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
 /// If the last notification failed, send a message warning the user they should enable DMs. Clears
 /// the user state afterwards.
 pub async fn check_notify_user_state(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 ) -> Result<()> {
 	let user_id = message.author.id;

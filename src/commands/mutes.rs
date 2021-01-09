@@ -8,9 +8,9 @@ use super::util::{
 	get_text_channels_in_guild,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use serenity::{
-	client,
+	client::Context,
 	model::{
 		channel::{ChannelType, Message},
 		id::ChannelId,
@@ -24,11 +24,7 @@ use crate::{db::Mute, monitoring::Timer, util::error};
 /// Mute a channel.
 ///
 /// Usage: `@Highlights mute <whitespace-separated channel IDs or mentions>`
-pub async fn mute(
-	ctx: &client::Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+pub async fn mute(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("mute");
 	let guild_id = require_guild!(ctx, message);
 
@@ -126,7 +122,7 @@ pub async fn mute(
 ///
 /// Usage: `@Highlights unmute <whitespace-separated channel IDs or mentions>`
 pub async fn unmute(
-	ctx: &client::Context,
+	ctx: &Context,
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
@@ -258,11 +254,7 @@ pub async fn unmute(
 /// List muted channels in the current guild, or all guilds when used in DMs.
 ///
 /// Usage: `@Highlights mutes`
-pub async fn mutes(
-	ctx: &client::Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("mutes");
 	require_empty_args!(args, ctx, message);
 	match message.guild_id {
