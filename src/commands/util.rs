@@ -3,8 +3,9 @@
 
 //! Miscellaneous utility functions and macros used by commands.
 
+use anyhow::{Context, Result};
 use serenity::{
-	client::Context,
+	client,
 	model::{
 		channel::{ChannelType, GuildChannel},
 		id::{ChannelId, GuildId, UserId},
@@ -12,7 +13,7 @@ use serenity::{
 	},
 };
 
-use crate::{regex, Error};
+use crate::regex;
 use std::{collections::HashMap, iter::FromIterator};
 
 /// Requires the given message to have come from a guild channel.
@@ -76,7 +77,7 @@ pub struct UsersFromArgs<'args> {
 /// `args` is split by whitespace, and each split substring is checked for a user ID or user mention.
 /// `ctx` is used to fetch users by this ID.
 pub async fn get_users_from_args<'args>(
-	ctx: &Context,
+	ctx: &client::Context,
 	args: &'args str,
 ) -> UsersFromArgs<'args> {
 	let mut results = UsersFromArgs::default();
@@ -106,14 +107,14 @@ pub async fn get_users_from_args<'args>(
 
 /// Convenience function to get a map of all cached text channels in the given guild.
 pub async fn get_text_channels_in_guild(
-	ctx: &Context,
+	ctx: &client::Context,
 	guild_id: GuildId,
-) -> Result<HashMap<ChannelId, GuildChannel>, Error> {
+) -> Result<HashMap<ChannelId, GuildChannel>> {
 	let channels = ctx
 		.cache
 		.guild_channels(guild_id)
 		.await
-		.ok_or("Couldn't get guild to get channels")?;
+		.context("Couldn't get guild to get channels")?;
 	let channels = channels
 		.into_iter()
 		.filter(|(_, channel)| channel.kind == ChannelType::Text)
@@ -127,11 +128,11 @@ pub async fn get_text_channels_in_guild(
 /// First gets all channels from the arguments, then checks the bots' and the provided user's
 /// permissions in each to sort them into a `ReadableChannelsFromArgs`.
 pub async fn get_readable_channels_from_args<'args, 'c>(
-	ctx: &Context,
+	ctx: &client::Context,
 	author_id: UserId,
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	args: &'args str,
-) -> Result<ReadableChannelsFromArgs<'args, 'c>, Error> {
+) -> Result<ReadableChannelsFromArgs<'args, 'c>> {
 	let all_channels = get_channels_from_args(channels, args);
 
 	let mut result = ReadableChannelsFromArgs::default();
@@ -142,7 +143,7 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 		let user_can_read =
 			crate::util::user_can_read_channel(ctx, channel, author_id)
 				.await?
-				.ok_or("No permissions for user to get readable channels")?;
+				.context("No permissions for user to get readable channels")?;
 
 		let self_can_read = crate::util::user_can_read_channel(
 			ctx,
@@ -150,7 +151,7 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 			ctx.cache.current_user_id().await,
 		)
 		.await?
-		.ok_or("No permissions for self to get readable channels")?;
+		.context("No permissions for self to get readable channels")?;
 
 		if !user_can_read {
 			result.user_cant_read.push((channel, arg));

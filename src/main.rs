@@ -14,9 +14,6 @@ mod commands;
 pub mod db;
 use db::{Ignore, Keyword, Notification, UserState};
 
-mod error;
-pub use error::Error;
-
 pub mod settings;
 
 pub mod global;
@@ -34,6 +31,7 @@ pub mod reporting;
 pub mod util;
 use util::{error, question};
 
+use anyhow::Result;
 use serenity::{
 	client::{bridge::gateway::GatewayIntents, Client, Context, EventHandler},
 	model::{
@@ -219,7 +217,7 @@ async fn handle_command(
 	ctx: &Context,
 	message: &Message,
 	content: &str,
-) -> Result<(), Error> {
+) -> Result<()> {
 	let (command, args) = {
 		let mut iter = regex!(r" +").splitn(content, 2);
 
@@ -272,10 +270,7 @@ async fn handle_command(
 /// users with those keywords. It uses (`should_notify_keyword`)[highlighting::should_notify_keyword]
 /// to determine if there is a keyword that should be highlighted, then calls
 /// (`notify_keyword`)[highlighting::notify_keyword].
-async fn handle_keywords(
-	ctx: &Context,
-	message: &Message,
-) -> Result<(), Error> {
+async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 	let _timer = Timer::notification("create");
 	let guild_id = match message.guild_id {
 		Some(id) => id,
