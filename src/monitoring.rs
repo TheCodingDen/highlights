@@ -5,8 +5,9 @@
 
 use hyper::{
 	header::CONTENT_TYPE,
+	server::Server,
 	service::{make_service_fn, service_fn},
-	Body, Request, Response, Server,
+	Body, Request, Response,
 };
 use once_cell::sync::{Lazy, OnceCell};
 use prometheus::{

@@ -24,7 +24,7 @@ use crate::{
 	util::{optional_result, user_can_read_channel, MD_SYMBOL_REGEX},
 };
 use indoc::indoc;
-use tokio::{select, time::delay_for};
+use tokio::{select, time::sleep};
 
 /// Checks if the provided keyword should be highlighted anywhere in the given message.
 ///
@@ -340,7 +340,7 @@ async fn send_notification_message(
 			Err(err) => Err(err)?,
 		}
 
-		delay_for(Duration::from_secs(2)).await;
+		sleep(Duration::from_secs(2)).await;
 	}
 
 	result
