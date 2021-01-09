@@ -2,9 +2,9 @@ name: Format
 
 on:
   push:
-    branches: [ stable ]
+    branches: [ dev ]
   pull_request:
-    branches: [ stable ]
+    branches: [ dev ]
 
 env:
   CARGO_TERM_COLOR: always
