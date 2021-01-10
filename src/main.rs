@@ -27,6 +27,8 @@ pub mod monitoring;
 
 pub mod reporting;
 
+mod responses;
+
 #[macro_use]
 pub mod util;
 use util::{error, question};
@@ -104,6 +106,8 @@ impl EventHandler for Handler {
 		message_id: MessageId,
 		guild_id: Option<GuildId>,
 	) {
+		responses::delete_command_response(&ctx, channel_id, message_id).await;
+
 		if guild_id.is_none() {
 			return;
 		}
@@ -340,6 +344,8 @@ async fn main() {
 		)
 		.await
 		.expect("Failed to create client");
+
+	responses::init(&client).await;
 
 	client.start().await.expect("Failed to run client");
 }

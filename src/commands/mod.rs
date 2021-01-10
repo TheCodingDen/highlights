@@ -29,6 +29,7 @@ use std::time::Instant;
 use crate::{
 	global::{settings, EMBED_COLOR},
 	monitoring::{avg_command_time, avg_query_time, Timer},
+	responses::insert_command_response,
 	util::question,
 };
 
@@ -68,6 +69,8 @@ pub async fn ping(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 
 	sent_message.edit(&ctx, |m| m.content(reply)).await?;
 
+	insert_command_response(ctx, message.id, sent_message.id).await;
+
 	Ok(())
 }
 
@@ -102,7 +105,7 @@ pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.await?,
 		)
 	};
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.embed(|e| {
@@ -126,6 +129,8 @@ pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 			})
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -503,7 +508,7 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		},
 	];
 
-	if args == "" {
+	let response = if args == "" {
 		message
 			.channel_id
 			.send_message(&ctx, |m| {
@@ -522,7 +527,7 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 						.color(EMBED_COLOR)
 				})
 			})
-			.await?;
+			.await?
 	} else {
 		let info = match commands
 			.iter()
@@ -546,8 +551,10 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 					}
 				})
 			})
-			.await?;
-	}
+			.await?
+	};
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }

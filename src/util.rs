@@ -18,6 +18,7 @@ use serenity::{
 	Error as SerenityError,
 };
 
+use crate::responses::insert_command_response;
 use std::fmt::Display;
 
 /// Logs an error that happened handling a command or keyword in Discord.
@@ -109,12 +110,14 @@ pub async fn error<S: Display>(
 ) -> Result<()> {
 	let _ = message.react(ctx, '❌').await;
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(response).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }

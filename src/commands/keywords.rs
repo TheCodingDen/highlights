@@ -27,6 +27,7 @@ use crate::{
 	db::{Ignore, Keyword, KeywordKind},
 	global::settings,
 	monitoring::Timer,
+	responses::insert_command_response,
 	util::{error, success, MD_SYMBOL_REGEX},
 };
 
@@ -266,12 +267,14 @@ async fn add_channel_keyword(
 		}
 	}
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(msg).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -449,12 +452,14 @@ async fn remove_channel_keyword(
 		message.react(ctx, '❓').await?;
 	}
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(msg).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -532,7 +537,7 @@ pub async fn ignores(
 ) -> Result<()> {
 	let _timer = Timer::command("ignores");
 	require_empty_args!(args, ctx, message);
-	match message.guild_id {
+	let response = match message.guild_id {
 		Some(guild_id) => {
 			let ignores =
 				Ignore::user_guild_ignores(message.author.id, guild_id)
@@ -564,7 +569,7 @@ pub async fn ignores(
 				.send_message(ctx, |m| {
 					m.content(response).allowed_mentions(|m| m.empty_parse())
 				})
-				.await?;
+				.await?
 		}
 		None => {
 			let ignores = Ignore::user_ignores(message.author.id).await?;
@@ -607,9 +612,11 @@ pub async fn ignores(
 				.unwrap();
 			}
 
-			message.channel_id.say(ctx, response).await?;
+			message.channel_id.say(ctx, response).await?
 		}
-	}
+	};
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -658,7 +665,7 @@ pub async fn keywords(
 ) -> Result<()> {
 	let _timer = Timer::command("keywords");
 	require_empty_args!(args, ctx, message);
-	match message.guild_id {
+	let response = match message.guild_id {
 		Some(guild_id) => {
 			let guild_keywords =
 				Keyword::user_guild_keywords(message.author.id, guild_id)
@@ -741,7 +748,7 @@ pub async fn keywords(
 				.send_message(ctx, |m| {
 					m.content(response).allowed_mentions(|m| m.empty_parse())
 				})
-				.await?;
+				.await?
 		}
 		None => {
 			let keywords = Keyword::user_keywords(message.author.id).await?;
@@ -846,9 +853,11 @@ pub async fn keywords(
 				}
 			}
 
-			message.channel_id.say(ctx, response).await?;
+			message.channel_id.say(ctx, response).await?
 		}
-	}
+	};
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }

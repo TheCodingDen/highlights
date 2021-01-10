@@ -10,7 +10,9 @@ use serenity::{client::Context, model::channel::Message};
 
 use std::convert::TryInto;
 
-use crate::{db::Block, error, monitoring::Timer};
+use crate::{
+	db::Block, error, monitoring::Timer, responses::insert_command_response,
+};
 
 /// Block a user.
 ///
@@ -86,12 +88,14 @@ pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		}
 	}
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(msg).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -188,12 +192,14 @@ pub async fn unblock(
 		}
 	}
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(msg).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -224,12 +230,14 @@ pub async fn blocks(
 			blocks.join("\n  - ")
 		);
 
-		message
+		let response = message
 			.channel_id
 			.send_message(ctx, |m| {
 				m.content(msg).allowed_mentions(|m| m.empty_parse())
 			})
 			.await?;
+
+		insert_command_response(ctx, message.id, response.id).await;
 	}
 	Ok(())
 }

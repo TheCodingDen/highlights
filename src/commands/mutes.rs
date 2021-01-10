@@ -19,7 +19,10 @@ use serenity::{
 
 use std::{collections::HashMap, convert::TryInto, fmt::Write};
 
-use crate::{db::Mute, monitoring::Timer, util::error};
+use crate::{
+	db::Mute, monitoring::Timer, responses::insert_command_response,
+	util::error,
+};
 
 /// Mute a channel.
 ///
@@ -108,12 +111,14 @@ pub async fn mute(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		}
 	}
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(msg).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -241,12 +246,14 @@ pub async fn unmute(
 		message.react(ctx, '❓').await?;
 	}
 
-	message
+	let response = message
 		.channel_id
 		.send_message(ctx, |m| {
 			m.content(msg).allowed_mentions(|m| m.empty_parse())
 		})
 		.await?;
+
+	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -294,12 +301,14 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				mutes.join("\n  - ")
 			);
 
-			message
+			let response = message
 				.channel_id
 				.send_message(ctx, |m| {
 					m.content(response).allowed_mentions(|m| m.empty_parse())
 				})
 				.await?;
+
+			insert_command_response(ctx, message.id, response.id).await;
 		}
 		None => {
 			let mutes = Mute::user_mutes(message.author.id).await?;
@@ -359,12 +368,14 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.unwrap();
 			}
 
-			message
+			let response = message
 				.channel_id
 				.send_message(ctx, |m| {
 					m.content(response).allowed_mentions(|m| m.empty_parse())
 				})
 				.await?;
+
+			insert_command_response(ctx, message.id, response.id).await;
 		}
 	}
 
