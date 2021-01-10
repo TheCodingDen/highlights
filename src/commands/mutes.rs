@@ -178,7 +178,11 @@ pub async fn unmute(
 				}
 			}
 
-			for self_unreadable in channel_args.self_cant_read {
+			for self_unreadable in channel_args
+				.found
+				.into_iter()
+				.chain(channel_args.self_cant_read)
+			{
 				let mute = Mute {
 					user_id,
 					channel_id: self_unreadable.id.0.try_into().unwrap(),
