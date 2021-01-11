@@ -88,7 +88,7 @@ pub async fn should_notify_keyword(
 	{
 		Ok(Some(true)) => Ok(Some(range)),
 		Ok(Some(false)) | Ok(None) => Ok(None),
-		Err(e) => Err(e),
+		Err(e) => Err(e).context("Failed to check permissions"),
 	}
 }
 
@@ -136,7 +136,9 @@ pub async fn notify_keyword(
 				ctx.http
 					.get_message(message.channel_id.0, message.id.0)
 					.await,
-			)? {
+			)
+			.context("Failed to fetch original messsage")?
+			{
 				Some(m) => m,
 				None => return Ok(()),
 			};
@@ -301,7 +303,10 @@ async fn send_notification_message(
 	message_to_send: CreateMessage<'static>,
 	keyword: String,
 ) -> Result<()> {
-	let dm_channel = user_id.create_dm_channel(&ctx).await?;
+	let dm_channel = user_id
+		.create_dm_channel(&ctx)
+		.await
+		.context("Failed to create DM channel to notify user")?;
 
 	let mut result = Ok(());
 
@@ -350,7 +355,9 @@ async fn send_notification_message(
 				_ => Err(SerenityError::Http(err))?,
 			},
 
-			Err(err) => Err(err)?,
+			Err(err) => {
+				Err(err).context("Failed to send notification message")?
+			}
 		}
 
 		sleep(Duration::from_secs(2)).await;
@@ -379,7 +386,8 @@ pub async fn delete_sent_notifications(
 							.color(ERROR_COLOR)
 					})
 				})
-				.await?;
+				.await
+				.context("Failed to edit notification message")?;
 
 			Ok(())
 		}
@@ -428,7 +436,9 @@ pub async fn update_sent_notifications(
 				notification.notification_message.try_into().unwrap(),
 			);
 
-			let dm_channel = user_id.create_dm_channel(ctx).await?;
+			let dm_channel = user_id.create_dm_channel(ctx).await.context(
+				"Failed to create DM channel to update notifications",
+			)?;
 
 			dm_channel
 				.edit_message(ctx, message_id, |m| {

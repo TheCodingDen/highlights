@@ -17,7 +17,7 @@ pub use mutes::{mute, mutes, unmute};
 mod blocks;
 pub use blocks::{block, blocks, unblock};
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use indoc::formatdoc;
 use serenity::{
 	client::Context,
@@ -131,7 +131,8 @@ pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				e
 			})
 		})
-		.await?;
+		.await
+		.context("Failed to send about message")?;
 
 	insert_command_response(ctx, message.id, response.id).await;
 

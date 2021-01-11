@@ -3,7 +3,8 @@
 
 //! Handling for sent notification messages.
 
-use rusqlite::{params, Error, Row};
+use anyhow::Result;
+use rusqlite::{params, Row};
 use serenity::model::id::MessageId;
 
 use std::convert::TryInto;
@@ -29,7 +30,7 @@ impl Notification {
 	/// - `notification_message`: `INTEGER`
 	/// - `keyword`: `TEXT`
 	/// - `user_id`: `INTEGER`
-	fn from_row(row: &Row) -> Result<Self, Error> {
+	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Self {
 			original_message: row.get(0)?,
 			notification_message: row.get(1)?,
@@ -56,7 +57,7 @@ impl Notification {
 	/// Fetches the notifications that were sent because of the given message from the DB.
 	pub async fn notifications_of_message(
 		message_id: MessageId,
-	) -> Result<Vec<Self>, Error> {
+	) -> Result<Vec<Self>> {
 		await_db!("notifications from message": |conn| {
 			let message_id: i64 = message_id.0.try_into().unwrap();
 
@@ -68,12 +69,12 @@ impl Notification {
 
 			let notifications = stmt.query_map(params![message_id], Self::from_row)?;
 
-			notifications.collect()
+			notifications.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Inserts this notification into the DB.
-	pub async fn insert(self) -> Result<(), Error> {
+	pub async fn insert(self) -> Result<()> {
 		await_db!("insert notification": |conn| {
 			conn.execute(
 				"INSERT INTO sent_notifications (original_message, notification_message, keyword, user_id)
@@ -86,7 +87,7 @@ impl Notification {
 	}
 
 	/// Removes this notification from the DB.
-	pub async fn delete(self) -> Result<(), Error> {
+	pub async fn delete(self) -> Result<()> {
 		await_db!("delete notification": |conn| {
 			conn.execute(
 				"DELETE FROM sent_notifications
@@ -101,7 +102,7 @@ impl Notification {
 	/// Removes all notifications sent because of the given message from the DB.
 	pub async fn delete_notifications_of_message(
 		message_id: MessageId,
-	) -> Result<(), Error> {
+	) -> Result<()> {
 		await_db!("delete notifications": |conn| {
 			let message_id: i64 = message_id.0.try_into().unwrap();
 

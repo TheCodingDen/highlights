@@ -3,7 +3,8 @@
 
 //! Handling for mutes.
 
-use rusqlite::{params, Error, Row};
+use anyhow::Result;
+use rusqlite::{params, Row};
 use serenity::model::id::UserId;
 
 use std::convert::TryInto;
@@ -23,7 +24,7 @@ impl Mute {
 	/// Builds a `Mute` from a `Row`, in this order:
 	/// - user_id: INTEGER
 	/// - channel_id: INTEGER
-	fn from_row(row: &Row) -> Result<Self, Error> {
+	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Mute {
 			user_id: row.get(0)?,
 			channel_id: row.get(1)?,
@@ -45,7 +46,7 @@ impl Mute {
 	}
 
 	/// Fetches a list of mutes for the user with the given ID from the DB.
-	pub async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>, Error> {
+	pub async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>> {
 		await_db!("user mutes": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
@@ -57,26 +58,26 @@ impl Mute {
 
 			let mutes = stmt.query_map(params![user_id], Mute::from_row)?;
 
-			mutes.collect()
+			mutes.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Checks if this mute exists in the DB.
 	///
 	/// Returns true if a mute with `self.user_id` and `self.channel_id` exists in the DB.
-	pub async fn exists(self) -> Result<bool, Error> {
+	pub async fn exists(self) -> Result<bool> {
 		await_db!("mute exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM mutes
 				WHERE user_id = ? AND channel_id = ?",
 				params![self.user_id, self.channel_id],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
-			)
+			).map_err(Into::into)
 		})
 	}
 
 	/// Inserts this mute into the DB.
-	pub async fn insert(self) -> Result<(), Error> {
+	pub async fn insert(self) -> Result<()> {
 		await_db!("insert mute": |conn| {
 			conn.execute(
 				"INSERT INTO mutes (user_id, channel_id)
@@ -89,7 +90,7 @@ impl Mute {
 	}
 
 	/// Deletes this mute from the DB.
-	pub async fn delete(self) -> Result<(), Error> {
+	pub async fn delete(self) -> Result<()> {
 		await_db!("delete mute": |conn| {
 			conn.execute(
 				"DELETE FROM mutes

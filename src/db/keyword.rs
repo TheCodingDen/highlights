@@ -3,7 +3,8 @@
 
 //! Handling for keywords.
 
-use rusqlite::{params, Error, Row};
+use anyhow::Result;
+use rusqlite::{params, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 
 use std::convert::TryInto;
@@ -28,7 +29,7 @@ impl Keyword {
 	/// - `keyword`: `TEXT`
 	/// - `user_id`: `INTEGER`
 	/// - `<guild id>`: `INTEGER`
-	fn from_guild_row(row: &Row) -> Result<Self, Error> {
+	fn from_guild_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Keyword {
 			keyword: row.get(0)?,
 			user_id: row.get(1)?,
@@ -40,7 +41,7 @@ impl Keyword {
 	/// - `keyword`: `TEXT`
 	/// - `user_id`: `INTEGER`
 	/// - `<channel id>`: `INTEGER`
-	fn from_channel_row(row: &Row) -> Result<Self, Error> {
+	fn from_channel_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Keyword {
 			keyword: row.get(0)?,
 			user_id: row.get(1)?,
@@ -86,7 +87,7 @@ impl Keyword {
 		guild_id: GuildId,
 		channel_id: ChannelId,
 		author_id: UserId,
-	) -> Result<Vec<Keyword>, Error> {
+	) -> Result<Vec<Keyword>> {
 		await_db!("get keywords": |conn| {
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
 			let channel_id: i64 = channel_id.0.try_into().unwrap();
@@ -143,7 +144,7 @@ impl Keyword {
 	pub async fn user_guild_keywords(
 		user_id: UserId,
 		guild_id: GuildId,
-	) -> Result<Vec<Keyword>, Error> {
+	) -> Result<Vec<Keyword>> {
 		await_db!("user guild keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
@@ -156,14 +157,14 @@ impl Keyword {
 
 			let keywords = stmt.query_map(params![user_id, guild_id], Keyword::from_guild_row)?;
 
-			keywords.collect()
+			keywords.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Fetches all channel-specific keywords created by the specified user in the specified channel.
 	pub async fn user_channel_keywords(
 		user_id: UserId,
-	) -> Result<Vec<Keyword>, Error> {
+	) -> Result<Vec<Keyword>> {
 		await_db!("user channel keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
@@ -175,12 +176,12 @@ impl Keyword {
 
 			let keywords = stmt.query_map(params![user_id], Keyword::from_channel_row)?;
 
-			keywords.collect()
+			keywords.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Fetches all guild-wide and channel-specific keywords created by the specified user.
-	pub async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>, Error> {
+	pub async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
 		await_db!("user keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
@@ -209,7 +210,7 @@ impl Keyword {
 	}
 
 	/// Checks if this keyword has already been created by this user.
-	pub async fn exists(self) -> Result<bool, Error> {
+	pub async fn exists(self) -> Result<bool> {
 		await_db!("keyword exists": |conn| {
 			match self.kind {
 				KeywordKind::Channel(channel_id) => {
@@ -218,7 +219,7 @@ impl Keyword {
 						WHERE keyword = ? AND user_id = ? AND channel_id = ?",
 						params![&self.keyword, self.user_id, channel_id],
 						|row| Ok(row.get::<_, u32>(0)? == 1),
-					)
+					).map_err(Into::into)
 				}
 				KeywordKind::Guild(guild_id) => {
 					conn.query_row(
@@ -226,14 +227,14 @@ impl Keyword {
 						WHERE keyword = ? AND user_id = ? AND guild_id = ?",
 						params![&self.keyword, self.user_id, guild_id],
 						|row| Ok(row.get::<_, u32>(0)? == 1),
-					)
+					).map_err(Into::into)
 				}
 			}
 		})
 	}
 
 	/// Returns the number of keywords this user has created across all guilds and channels.
-	pub async fn user_keyword_count(user_id: UserId) -> Result<u32, Error> {
+	pub async fn user_keyword_count(user_id: UserId) -> Result<u32> {
 		await_db!("count user keywords": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_keywords = conn.query_row(
@@ -257,7 +258,7 @@ impl Keyword {
 	}
 
 	/// Adds this keyword to the DB.
-	pub async fn insert(self) -> Result<(), Error> {
+	pub async fn insert(self) -> Result<()> {
 		await_db!("insert keyword": |conn| {
 			match self.kind {
 				KeywordKind::Guild(guild_id) => {
@@ -281,7 +282,7 @@ impl Keyword {
 	}
 
 	/// Deletes this keyword from the DB.
-	pub async fn delete(self) -> Result<(), Error> {
+	pub async fn delete(self) -> Result<()> {
 		await_db!("delete keyword": |conn| {
 			match self.kind {
 				KeywordKind::Guild(guild_id) => {
@@ -308,7 +309,7 @@ impl Keyword {
 	pub async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
-	) -> Result<usize, Error> {
+	) -> Result<usize> {
 		await_db!("delete keywords in guild": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
@@ -316,7 +317,7 @@ impl Keyword {
 				"DELETE FROM guild_keywords
 					WHERE user_id = ? AND guild_id = ?",
 				params![user_id, guild_id]
-			)
+			).map_err(Into::into)
 		})
 	}
 
@@ -324,7 +325,7 @@ impl Keyword {
 	pub async fn delete_in_channel(
 		user_id: UserId,
 		channel_id: ChannelId,
-	) -> Result<usize, Error> {
+	) -> Result<usize> {
 		await_db!("delete keywords in channel": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let channel_id: i64 = channel_id.0.try_into().unwrap();
@@ -332,7 +333,7 @@ impl Keyword {
 				"DELETE FROM channel_keywords
 					WHERE user_id = ? AND channel_id = ?",
 				params![user_id, channel_id]
-			)
+			).map_err(Into::into)
 		})
 	}
 }

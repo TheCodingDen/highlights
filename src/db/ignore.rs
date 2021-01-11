@@ -3,7 +3,8 @@
 
 //! Handling for ignored phrases.
 
-use rusqlite::{params, Error, Row};
+use anyhow::Result;
+use rusqlite::{params, Row};
 use serenity::model::id::{GuildId, UserId};
 
 use std::convert::TryInto;
@@ -26,7 +27,7 @@ impl Ignore {
 	/// - `phrase`: `TEXT`
 	/// - `user_id`: `INTEGER`
 	/// - `guild id`: `INTEGER`
-	fn from_row(row: &Row) -> Result<Self, Error> {
+	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Ignore {
 			phrase: row.get(0)?,
 			user_id: row.get(1)?,
@@ -53,7 +54,7 @@ impl Ignore {
 	pub async fn user_guild_ignores(
 		user_id: UserId,
 		guild_id: GuildId,
-	) -> Result<Vec<Ignore>, Error> {
+	) -> Result<Vec<Ignore>> {
 		await_db!("user guild ignores": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
@@ -66,12 +67,12 @@ impl Ignore {
 
 			let ignores = stmt.query_map(params![user_id, guild_id], Ignore::from_row)?;
 
-			ignores.collect()
+			ignores.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Fetches the list of ignored phrases of the specified user across all guilds from the DB.
-	pub async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>, Error> {
+	pub async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
 		await_db!("user ignores": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
@@ -83,24 +84,24 @@ impl Ignore {
 
 			let ignores = stmt.query_map(params![user_id], Ignore::from_row)?;
 
-			ignores.collect()
+			ignores.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Checks if this ignored phrase already exists in the DB.
-	pub async fn exists(self) -> Result<bool, Error> {
+	pub async fn exists(self) -> Result<bool> {
 		await_db!("ignore exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM guild_ignores
 				WHERE phrase = ? AND user_id = ? AND guild_id = ?",
 				params![&*self.phrase, self.user_id, self.guild_id],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
-			)
+			).map_err(Into::into)
 		})
 	}
 
 	/// Adds this ignored phrase to the DB.
-	pub async fn insert(self) -> Result<(), Error> {
+	pub async fn insert(self) -> Result<()> {
 		await_db!("insert ignore": |conn| {
 			conn.execute(
 				"INSERT INTO guild_ignores (phrase, user_id, guild_id)
@@ -113,7 +114,7 @@ impl Ignore {
 	}
 
 	/// Deletes this ignored phrase from the DB.
-	pub async fn delete(self) -> Result<(), Error> {
+	pub async fn delete(self) -> Result<()> {
 		await_db!("delete ignore": |conn| {
 			conn.execute(
 				"DELETE FROM guild_ignores
@@ -129,7 +130,7 @@ impl Ignore {
 	pub async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
-	) -> Result<usize, Error> {
+	) -> Result<usize> {
 		await_db!("delete ignores in guild": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_id: i64 = guild_id.0.try_into().unwrap();
@@ -137,7 +138,7 @@ impl Ignore {
 				"DELETE FROM guild_ignores
 					WHERE user_id = ? AND guild_id = ?",
 				params![user_id, guild_id]
-			)
+			).map_err(Into::into)
 		})
 	}
 }

@@ -3,7 +3,8 @@
 
 //! Handling for user states; whether or not the last notification DM was successful.
 
-use rusqlite::{params, Error, OptionalExtension, Row};
+use anyhow::Result;
+use rusqlite::{params, OptionalExtension, Row};
 use serenity::model::id::UserId;
 
 use std::convert::TryInto;
@@ -30,11 +31,13 @@ impl UserState {
 	/// Builds a `UserState` from a `Row`, in this order:
 	/// - user_id: INTEGER
 	/// - state: INTEGER
-	fn from_row(row: &Row) -> Result<Self, Error> {
+	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		let user_id = row.get(0)?;
 		let state = match row.get(1)? {
 			Self::CANNOT_DM_STATE => UserStateKind::CannotDm,
-			other => Err(Error::IntegralValueOutOfRange(1, other as i64))?,
+			other => {
+				Err(rusqlite::Error::IntegralValueOutOfRange(1, other as i64))?
+			}
 		};
 
 		Ok(Self { user_id, state })
@@ -56,7 +59,7 @@ impl UserState {
 	/// Fetches the state of the user with the given ID from the DB.
 	///
 	/// Returns `None` if the user has no recorded state.
-	pub async fn user_state(user_id: UserId) -> Result<Option<Self>, Error> {
+	pub async fn user_state(user_id: UserId) -> Result<Option<Self>> {
 		await_db!("user state": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
@@ -66,12 +69,15 @@ impl UserState {
 				WHERE user_id = ?"
 			)?;
 
-			stmt.query_row(params![user_id], Self::from_row).optional()
+			stmt
+				.query_row(params![user_id], Self::from_row)
+				.optional()
+				.map_err(Into::into)
 		})
 	}
 
 	/// Sets the state of the user in the DB.
-	pub async fn set(self) -> Result<(), Error> {
+	pub async fn set(self) -> Result<()> {
 		await_db!("set user state": |conn| {
 			conn.execute(
 				"INSERT INTO user_states (user_id, state)
@@ -86,7 +92,7 @@ impl UserState {
 	}
 
 	/// Deletes this user state from the DB.
-	pub async fn delete(self) -> Result<(), Error> {
+	pub async fn delete(self) -> Result<()> {
 		await_db!("delete user state": |conn| {
 			conn.execute(
 				"DELETE FROM user_states
@@ -99,7 +105,7 @@ impl UserState {
 	}
 
 	/// Clears any state of the user with the given ID.
-	pub async fn clear(user_id: UserId) -> Result<(), Error> {
+	pub async fn clear(user_id: UserId) -> Result<()> {
 		await_db!("delete user state": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 

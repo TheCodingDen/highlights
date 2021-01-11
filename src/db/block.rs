@@ -3,7 +3,8 @@
 
 //! Handling for blocked users.
 
-use rusqlite::{params, Error, Row};
+use anyhow::Result;
+use rusqlite::{params, Row};
 use serenity::model::id::UserId;
 
 use std::convert::TryInto;
@@ -23,7 +24,7 @@ impl Block {
 	/// Builds a `Block` from a `Row`, in this order:
 	/// - `user_id`: `INTEGER`
 	/// - `blocked_id`: `INTEGER`
-	fn from_row(row: &Row) -> Result<Self, Error> {
+	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Self {
 			user_id: row.get(0)?,
 			blocked_id: row.get(1)?,
@@ -45,7 +46,7 @@ impl Block {
 	}
 
 	/// Fetches the list of blocks a user has added from the DB.
-	pub async fn user_blocks(user_id: UserId) -> Result<Vec<Block>, Error> {
+	pub async fn user_blocks(user_id: UserId) -> Result<Vec<Self>> {
 		await_db!("user blocks": |conn| {
 			let user_id: i64 = user_id.0.try_into().unwrap();
 
@@ -57,12 +58,12 @@ impl Block {
 
 			let blocks = stmt.query_map(params![user_id], Self::from_row)?;
 
-			blocks.collect()
+			blocks.map(|res| res.map_err(Into::into)).collect()
 		})
 	}
 
 	/// Adds this blocked user to the DB.
-	pub async fn insert(self) -> Result<(), Error> {
+	pub async fn insert(self) -> Result<()> {
 		await_db!("insert block": |conn| {
 			conn.execute(
 				"INSERT INTO blocks (user_id, blocked_id)
@@ -75,19 +76,19 @@ impl Block {
 	}
 
 	/// Checks if this block exists in the DB.
-	pub async fn exists(self) -> Result<bool, Error> {
+	pub async fn exists(self) -> Result<bool> {
 		await_db!("block exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM blocks
 				WHERE user_id = ? AND blocked_id = ?",
 				params![self.user_id, self.blocked_id],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
-			)
+			).map_err(Into::into)
 		})
 	}
 
 	/// Deletes this blocked user from the DB (making them not blocked anymore).
-	pub async fn delete(self) -> Result<(), Error> {
+	pub async fn delete(self) -> Result<()> {
 		await_db!("delete block": |conn| {
 			conn.execute(
 				"DELETE FROM blocks

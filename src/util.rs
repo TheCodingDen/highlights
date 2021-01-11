@@ -3,7 +3,7 @@
 
 //! Miscellaneous utility functions and macros.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
@@ -36,7 +36,7 @@ use std::fmt::Display;
 macro_rules! log_discord_error {
 	(in $channel_id:expr, by $user_id:expr, $error:expr) => {
 		log::error!(
-			"Error in <#{0}> ({0}) by <@{1}> ({1}): {2}\n{2:?}",
+			"Error in <#{0}> ({0}) by <@{1}> ({1}):\n{2:?}",
 			$channel_id,
 			$user_id,
 			$error
@@ -44,7 +44,7 @@ macro_rules! log_discord_error {
 	};
 	(in $channel_id:expr, deleted $message_id:expr, $error:expr) => {
 		log::error!(
-			"Error in <#{0}> ({0}), handling deleted message {1}: {2}\n{2:?}",
+			"Error in <#{0}> ({0}), handling deleted message {1}:\n{2:?}",
 			$channel_id,
 			$message_id,
 			$error
@@ -52,7 +52,7 @@ macro_rules! log_discord_error {
 	};
 	(in $channel_id:expr, edited $message_id:expr, $error:expr) => {
 		log::error!(
-			"Error in <#{0}> ({0}), handling edited message {1}: {2}\n{2:?}",
+			"Error in <#{0}> ({0}), handling edited message {1}:\n{2:?}",
 			$channel_id,
 			$message_id,
 			$error
@@ -88,14 +88,20 @@ pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
 
 /// Reacts to a message with a ✅ emoji.
 pub async fn success(ctx: &Context, message: &Message) -> Result<()> {
-	message.react(ctx, '✅').await?;
+	message
+		.react(ctx, '✅')
+		.await
+		.context("Failed to add success reaction")?;
 
 	Ok(())
 }
 
 /// Reacts to a message with a ❓ emoji.
 pub async fn question(ctx: &Context, message: &Message) -> Result<()> {
-	message.react(ctx, '❓').await?;
+	message
+		.react(ctx, '❓')
+		.await
+		.context("Failed to add question reaction")?;
 
 	Ok(())
 }
@@ -115,7 +121,8 @@ pub async fn error<S: Display>(
 		.send_message(ctx, |m| {
 			m.content(response).allowed_mentions(|m| m.empty_parse())
 		})
-		.await?;
+		.await
+		.context("Failed to send command usage error message")?;
 
 	insert_command_response(ctx, message.id, response.id).await;
 

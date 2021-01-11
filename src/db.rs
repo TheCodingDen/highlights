@@ -81,13 +81,16 @@ pub fn init() {
 #[macro_export]
 macro_rules! await_db {
 	($name:literal: |$conn:ident| $body:block) => {{
+		use ::anyhow::Context as _;
+
 		let _timer = $crate::monitoring::Timer::query($name);
-		::tokio::task::spawn_blocking(move || {
+		::tokio::task::spawn_blocking(move || -> ::anyhow::Result<_> {
 			let $conn = $crate::db::connection();
 
 			$body
 			})
 		.await
 		.expect(concat!("Failed to join ", $name, " task"))
+		.context(concat!("Failed to run DB query ", $name))
 		}};
 }

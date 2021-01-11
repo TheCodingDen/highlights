@@ -72,9 +72,11 @@ impl EventHandler for Handler {
 			Some(command_content) => {
 				async {
 					handle_command(&ctx, &message, command_content.trim())
-						.await?;
+						.await
+						.context("Failed to handle command")?;
 					highlighting::check_notify_user_state(&ctx, &message)
-						.await?;
+						.await
+						.context("Failed to check user state")?;
 					Ok(())
 				}
 				.await
@@ -82,13 +84,19 @@ impl EventHandler for Handler {
 			None => {
 				if message.guild_id.is_none() {
 					async {
-						handle_command(&ctx, &message, content.trim()).await?;
-						UserState::clear(message.author.id).await?;
+						handle_command(&ctx, &message, content.trim())
+							.await
+							.context("Failed to handle command")?;
+						UserState::clear(message.author.id)
+							.await
+							.context("Failed to clear user state")?;
 						Ok(())
 					}
 					.await
 				} else {
-					handle_keywords(&ctx, &message).await
+					handle_keywords(&ctx, &message)
+						.await
+						.context("Failed to handle keywords")
 				}
 			}
 		};
@@ -277,24 +285,60 @@ async fn handle_command(
 		None => return question(ctx, message).await,
 	};
 
-	let result = match &*command {
-		"add" => commands::add(ctx, message, args).await,
-		"remove" => commands::remove(ctx, message, args).await,
-		"mute" => commands::mute(ctx, message, args).await,
-		"unmute" => commands::unmute(ctx, message, args).await,
-		"ignore" => commands::ignore(ctx, message, args).await,
-		"unignore" => commands::unignore(ctx, message, args).await,
-		"block" => commands::block(ctx, message, args).await,
-		"unblock" => commands::unblock(ctx, message, args).await,
-		"remove-server" => commands::remove_server(ctx, message, args).await,
-		"keywords" => commands::keywords(ctx, message, args).await,
-		"mutes" => commands::mutes(ctx, message, args).await,
-		"ignores" => commands::ignores(ctx, message, args).await,
-		"blocks" => commands::blocks(ctx, message, args).await,
-		"help" => commands::help(ctx, message, args).await,
-		"ping" => commands::ping(ctx, message, args).await,
-		"about" => commands::about(ctx, message, args).await,
-		_ => return question(ctx, message).await,
+	let result = {
+		use commands::*;
+
+		match &*command {
+			"add" => add(ctx, message, args)
+				.await
+				.context("Failed to run add command"),
+			"remove" => remove(ctx, message, args)
+				.await
+				.context("Failed to run remove command"),
+			"mute" => mute(ctx, message, args)
+				.await
+				.context("Failed to run mute command"),
+			"unmute" => unmute(ctx, message, args)
+				.await
+				.context("Failed to run unmute command"),
+			"ignore" => ignore(ctx, message, args)
+				.await
+				.context("Failed to run ignore command"),
+			"unignore" => unignore(ctx, message, args)
+				.await
+				.context("Failed to run unignore command"),
+			"block" => block(ctx, message, args)
+				.await
+				.context("Failed to run block command"),
+			"unblock" => unblock(ctx, message, args)
+				.await
+				.context("Failed to run unblock command"),
+			"remove-server" => remove_server(ctx, message, args)
+				.await
+				.context("Failed to run remove-server command"),
+			"keywords" => keywords(ctx, message, args)
+				.await
+				.context("Failed to run keywords command"),
+			"mutes" => mutes(ctx, message, args)
+				.await
+				.context("Failed to run mutes command"),
+			"ignores" => ignores(ctx, message, args)
+				.await
+				.context("Failed to run ignores command"),
+			"blocks" => blocks(ctx, message, args)
+				.await
+				.context("Failed to run blocks command"),
+			"help" => help(ctx, message, args)
+				.await
+				.context("Failed to run help command"),
+			"ping" => ping(ctx, message, args)
+				.await
+				.context("Failed to run ping command"),
+			"about" => about(ctx, message, args)
+				.await
+				.context("Failed to run about command"),
+			_ => return question(ctx, message).await,
+		}
 	};
 
 	match result {
