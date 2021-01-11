@@ -39,7 +39,7 @@ macro_rules! require_guild {
 
 /// Requires the given arguments to be non-empty.
 ///
-/// Returns with [`error`](crate::util::error) if the arguments are empty.
+/// Returns with [`question`](crate::util::question) if the arguments are empty.
 #[macro_export]
 macro_rules! require_nonempty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
@@ -51,7 +51,7 @@ macro_rules! require_nonempty_args {
 
 /// Requires the given arguments to be empty.
 ///
-/// Returns with [`error`](crate::util::error) if the arguments are non-empty.
+/// Returns with [`question`](crate::util::question) if the arguments are non-empty.
 #[macro_export]
 macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
@@ -59,6 +59,47 @@ macro_rules! require_empty_args {
 			return $crate::util::question($ctx, $message).await;
 			}
 		}};
+}
+
+/// Requires the current bot member to have permission to send embeds.
+///
+/// Uses [`error`](crate::util::error) if the current member does not have permission to send
+/// embeds. Does nothing if used on a message in a DM channel.
+#[macro_export]
+macro_rules! require_embed_perms {
+	($ctx:expr, $message:expr) => {
+		if $message.guild_id.is_some() {
+			use ::anyhow::Context as _;
+			let self_id = $ctx.cache.current_user_id().await;
+
+			let channel = $ctx
+				.cache
+				.guild_channel($message.channel_id)
+				.await
+				.context("Nonexistent guild channel")?;
+
+			let permissions = channel
+				.permissions_for_user($ctx, self_id)
+				.await
+				.context("Failed to get permissions for self")?;
+
+			if !permissions.embed_links() {
+				$message
+					.channel_id
+					.say(
+						$ctx,
+						"Sorry, I need permission to embed links to use \
+							that command 😔",
+					)
+					.await
+					.context(
+						"Failed to send missing embed permission message",
+					)?;
+
+				return Ok(());
+				}
+			}
+	};
 }
 
 /// Results of getting users from a list of args.

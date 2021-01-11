@@ -29,6 +29,7 @@ use std::time::Instant;
 use crate::{
 	global::{settings, EMBED_COLOR},
 	monitoring::{avg_command_time, avg_query_time, Timer},
+	require_embed_perms,
 	responses::insert_command_response,
 	util::question,
 };
@@ -94,6 +95,8 @@ fn format_seconds(seconds: f64) -> String {
 pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("about");
 	require_empty_args!(args, ctx, message);
+	require_embed_perms!(ctx, message);
+
 	let invite_url = if settings().bot.private {
 		None
 	} else {
@@ -141,6 +144,8 @@ pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 /// detailed information about the command of that name.
 pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let _timer = Timer::command("help");
+	require_embed_perms!(ctx, message);
+
 	struct CommandInfo {
 		name: &'static str,
 		short_desc: &'static str,

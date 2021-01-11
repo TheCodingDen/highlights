@@ -33,7 +33,7 @@ mod responses;
 pub mod util;
 use util::{error, question};
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use serenity::{
 	client::{bridge::gateway::GatewayIntents, Client, Context, EventHandler},
 	model::{
@@ -222,6 +222,46 @@ async fn handle_command(
 	message: &Message,
 	content: &str,
 ) -> Result<()> {
+	if message.guild_id.is_some() {
+		let self_id = ctx.cache.current_user_id().await;
+
+		let channel = ctx
+			.cache
+			.guild_channel(message.channel_id)
+			.await
+			.context("Nonexistent guild channel")?;
+
+		let permissions = channel
+			.permissions_for_user(ctx, self_id)
+			.await
+			.context("Failed to check permissions for self")?;
+
+		if permissions.add_reactions() && !permissions.send_messages() {
+			message
+				.react(ctx, '🔇')
+				.await
+				.context("Failed to add muted reaction")?;
+
+			return Ok(());
+		} else if permissions.send_messages() && !permissions.add_reactions() {
+			message
+				.channel_id
+				.say(
+					ctx,
+					"Sorry, I need permission to \
+					add reactions to work right 😔",
+				)
+				.await
+				.context(
+					"Failed to send missing reaction permission message",
+				)?;
+
+			return Ok(());
+		} else if !permissions.send_messages() && !permissions.add_reactions() {
+			return Ok(());
+		}
+	}
+
 	let (command, args) = {
 		let mut iter = regex!(r" +").splitn(content, 2);
 
