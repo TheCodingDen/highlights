@@ -514,7 +514,7 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		},
 	];
 
-	let response = if args == "" {
+	let response = if args.is_empty() {
 		message
 			.channel_id
 			.send_message(&ctx, |m| {

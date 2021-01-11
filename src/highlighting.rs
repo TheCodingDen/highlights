@@ -42,7 +42,7 @@ pub async fn should_notify_keyword(
 ) -> Result<Option<Range<usize>>> {
 	let content = &*message.content;
 
-	for mention in regex!(r"<@!?([0-9]{16,20})>").captures(content) {
+	for mention in regex!(r"<@!?([0-9]{16,20})>").captures_iter(content) {
 		let id: i64 = mention
 			.get(1)
 			.expect("Mention match had no ID")
@@ -352,7 +352,7 @@ async fn send_notification_message(
 					break;
 				}
 
-				_ => Err(SerenityError::Http(err))?,
+				_ => return Err(SerenityError::Http(err).into()),
 			},
 
 			Err(err) => {

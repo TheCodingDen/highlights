@@ -109,7 +109,7 @@ impl Settings {
 		s.set_default("database.backup", true)?;
 
 		let filename = env::var("HIGHLIGHTS_CONFIG")
-			.unwrap_or("./config.toml".to_string());
+			.unwrap_or_else(|_| "./config.toml".to_owned());
 		s.merge(File::with_name(&filename).required(false)).unwrap();
 
 		s.merge(Environment::with_prefix("HIGHLIGHTS"))?;

@@ -99,9 +99,9 @@ pub async fn add(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 							.await?;
 					}
 
-					_ => Err(SerenityError::Http(err))?,
+					_ => return Err(SerenityError::Http(err).into()),
 				},
-				Err(err) => Err(err)?,
+				Err(err) => return Err(err.into()),
 				_ => {}
 			}
 		}

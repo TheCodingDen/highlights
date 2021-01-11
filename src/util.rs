@@ -135,6 +135,7 @@ pub async fn user_can_read_channel(
 	channel: &GuildChannel,
 	user_id: UserId,
 ) -> Result<Option<bool>> {
+	#[allow(clippy::large_enum_variant)]
 	enum MaybePartialGuild {
 		Partial(PartialGuild),
 		FullGuild(Guild),

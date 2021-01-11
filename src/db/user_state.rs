@@ -36,7 +36,10 @@ impl UserState {
 		let state = match row.get(1)? {
 			Self::CANNOT_DM_STATE => UserStateKind::CannotDm,
 			other => {
-				Err(rusqlite::Error::IntegralValueOutOfRange(1, other as i64))?
+				return Err(rusqlite::Error::IntegralValueOutOfRange(
+					1,
+					other as i64,
+				));
 			}
 		};
 

@@ -43,7 +43,7 @@ macro_rules! require_guild {
 #[macro_export]
 macro_rules! require_nonempty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
-		if $args == "" {
+		if $args.is_empty() {
 			return $crate::util::question($ctx, $message).await;
 			}
 		}};
@@ -55,7 +55,7 @@ macro_rules! require_nonempty_args {
 #[macro_export]
 macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
-		if $args != "" {
+		if !$args.is_empty() {
 			return $crate::util::question($ctx, $message).await;
 			}
 		}};
@@ -117,6 +117,7 @@ pub struct UsersFromArgs<'args> {
 ///
 /// `args` is split by whitespace, and each split substring is checked for a user ID or user mention.
 /// `ctx` is used to fetch users by this ID.
+#[allow(clippy::needless_lifetimes)]
 pub async fn get_users_from_args<'args>(
 	ctx: &Context,
 	args: &'args str,
@@ -176,9 +177,10 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 ) -> Result<ReadableChannelsFromArgs<'args, 'c>> {
 	let all_channels = get_channels_from_args(channels, args);
 
-	let mut result = ReadableChannelsFromArgs::default();
-
-	result.not_found = all_channels.not_found;
+	let mut result = ReadableChannelsFromArgs {
+		not_found: all_channels.not_found,
+		..Default::default()
+	};
 
 	for (channel, arg) in all_channels.found {
 		let user_can_read =
