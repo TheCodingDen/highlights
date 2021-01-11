@@ -42,6 +42,19 @@ pub async fn should_notify_keyword(
 ) -> Result<Option<Range<usize>>> {
 	let content = &*message.content;
 
+	for mention in regex!(r"<@!?([0-9]{16,20})>").captures(content) {
+		let id: i64 = mention
+			.get(1)
+			.expect("Mention match had no ID")
+			.as_str()
+			.parse()
+			.expect("Invalid ID in mention");
+
+		if id == keyword.user_id {
+			return Ok(None);
+		}
+	}
+
 	for ignore in ignores {
 		if find_applicable_match(&ignore.phrase, content).is_some() {
 			return Ok(None);
