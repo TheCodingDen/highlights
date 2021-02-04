@@ -263,9 +263,9 @@ async fn build_notification_embed(
 		.guild_channel_field(channel_id, |c| c.name.clone())
 		.await
 		.context("Couldn't get channel for keyword")?;
-	let guild_name = ctx
+	let (guild_name, guild_icon) = ctx
 		.cache
-		.guild_field(guild_id, |g| g.name.clone())
+		.guild_field(guild_id, |g| (g.name.clone(), g.icon_url().clone()))
 		.await
 		.context("Couldn't get guild for keyword")?;
 	let title = format!(
@@ -279,7 +279,13 @@ async fn build_notification_embed(
 	embed
 		.description(formatted_content)
 		.timestamp(&message.timestamp)
-		.author(|a| a.name(title))
+		.author(|a| {
+			a.name(title);
+			if let Some(url) = guild_icon {
+				a.icon_url(url);
+			}
+			a
+		})
 		.field("Channel", channel_mention, true)
 		.field("Message", message_link, true)
 		.footer(|f| {
