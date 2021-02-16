@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
 //! Handling for keywords.
@@ -99,6 +99,11 @@ impl Keyword {
 					WHERE guild_keywords.guild_id = ?
 						AND guild_keywords.user_id != ?
 						AND NOT EXISTS (
+							SELECT opt_outs.user_id
+								FROM opt_outs
+								where opt_outs.user_id = ?
+						)
+						AND NOT EXISTS (
 							SELECT mutes.user_id
 								FROM mutes
 								WHERE mutes.user_id = guild_keywords.user_id
@@ -114,7 +119,13 @@ impl Keyword {
 			)?;
 
 			let guild_keywords = stmt.query_map(
-					params![guild_id, author_id, channel_id, author_id],
+					params![
+						guild_id,
+						author_id,
+						author_id,
+						channel_id,
+						author_id
+					],
 					Keyword::from_guild_row
 				)?;
 
@@ -124,11 +135,22 @@ impl Keyword {
 				"SELECT keyword, user_id, channel_id
 					FROM channel_keywords
 					WHERE user_id != ?
-						AND channel_id = ?"
+						AND channel_id = ?
+						AND NOT EXISTS (
+							SELECT opt_outs.user_id
+								FROM opt_outs
+								where opt_outs.user_id = ?
+						)
+						AND NOT EXISTS (
+							SELECT blocks.user_id
+								FROM blocks
+								WHERE blocks.user_id = channel_keywords.user_id
+									AND blocks.blocked_id = ?
+						)"
 			)?;
 
 			let channel_keywords = stmt.query_map(
-				params![author_id, channel_id],
+				params![author_id, channel_id, author_id, author_id],
 				Keyword::from_channel_row
 			)?;
 

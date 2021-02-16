@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
 //! Implementations of all of the explicit bot commands.
@@ -16,6 +16,9 @@ pub use mutes::{mute, mutes, unmute};
 
 mod blocks;
 pub use blocks::{block, blocks, unblock};
+
+mod opt_out;
+pub use opt_out::{opt_in, opt_out};
 
 use anyhow::{Context as _, Result};
 use indoc::formatdoc;
@@ -476,6 +479,34 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				`@{name} remove-server 126029834632`",
 				name = username
 			)),
+		},
+		CommandInfo {
+			name: "opt-out",
+			short_desc: "Opt-out of having your messages highlighted",
+			long_desc: formatdoc!("
+                Use `@{name} opt-out` to opt-out of having your messages \
+                highlighted.
+
+                If you opt out, nobody will be notified of your messages, even \
+                if your messages include their keywords.",
+				name = username
+			),
+			examples: None,
+		},
+		CommandInfo {
+			name: "opt-in",
+			short_desc: "Undo an opt-out so your messages will be highlighted",
+			long_desc: formatdoc!("
+                Use `@{name} opt-in` to opt-in to having your messages \
+                highlighted after having opted out.
+
+                This command has no effect if you haven't opted out using \
+                `@{name} opt-out`.
+
+				See `@{name} help opt-out` for more information.",
+				name = username
+			),
+			examples: None,
 		},
 		CommandInfo {
 			name: "help",

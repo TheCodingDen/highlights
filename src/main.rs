@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
 //! Highlights is a simple but flexible keyword highlighting bot for Discord.
@@ -328,6 +328,12 @@ async fn handle_command(
 			"blocks" => blocks(ctx, message, args)
 				.await
 				.context("Failed to run blocks command"),
+			"opt-out" => opt_out(ctx, message, args)
+				.await
+				.context("Failed to run opt-out command"),
+			"opt-in" => opt_in(ctx, message, args)
+				.await
+				.context("Failed to run opt-in command"),
 			"help" => help(ctx, message, args)
 				.await
 				.context("Failed to run help command"),

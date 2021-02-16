@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
 //! Interface for interacting with the sqlite database of keywords and other persistent user
@@ -12,6 +12,7 @@ mod ignore;
 mod keyword;
 mod mute;
 mod notification;
+mod opt_out;
 mod user_state;
 
 pub use block::Block;
@@ -19,6 +20,7 @@ pub use ignore::Ignore;
 pub use keyword::{Keyword, KeywordKind};
 pub use mute::Mute;
 pub use notification::Notification;
+pub use opt_out::OptOut;
 pub use user_state::{UserState, UserStateKind};
 
 use once_cell::sync::OnceCell;
@@ -65,6 +67,7 @@ pub fn init() {
 	Mute::create_table();
 	Block::create_table();
 	Ignore::create_table();
+	OptOut::create_table();
 	Keyword::create_tables();
 	UserState::create_table();
 	Notification::create_table();
