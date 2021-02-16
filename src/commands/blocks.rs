@@ -33,7 +33,13 @@ pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let mut blocked = vec![];
 	let mut already_blocked = vec![];
 
+	let mut yourself = None;
+
 	for user in user_args.found {
+		if user == message.author {
+			yourself = Some(user);
+			continue;
+		}
 		let block = Block {
 			user_id: message.author.id.0.try_into().unwrap(),
 			blocked_id: user.id.0.try_into().unwrap(),
@@ -49,7 +55,16 @@ pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 
 	let mut msg = String::with_capacity(45);
 
+	if yourself.is_some() {
+		msg.push_str("You can't block yourself!");
+
+		message.react(ctx, '❌').await?;
+	}
+
 	if !blocked.is_empty() {
+		if !msg.is_empty() {
+			msg.push_str("\n\n");
+		}
 		msg.push_str("Blocked users: ");
 		msg.push_str(&blocked.join(", "));
 
@@ -63,7 +78,9 @@ pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		msg.push_str("Users already blocked: ");
 		msg.push_str(&already_blocked.join(", "));
 
-		message.react(ctx, '❌').await?;
+		if yourself.is_none() {
+			message.react(ctx, '❌').await?;
+		}
 	}
 
 	if !not_found.is_empty() {
@@ -83,7 +100,7 @@ pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		msg.push_str("Invalid arguments (use mentions or IDs): ");
 		msg.push_str(&user_args.invalid.join(", "));
 
-		if already_blocked.is_empty() {
+		if yourself.is_none() && already_blocked.is_empty() {
 			message.react(ctx, '❌').await?;
 		}
 	}
