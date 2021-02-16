@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 Benjamin Scherer
 // Licensed under the Open Software License version 3.0
 
 //! Functions for sending, editing, and deleting notifications.
@@ -265,7 +265,7 @@ async fn build_notification_embed(
 		.context("Couldn't get channel for keyword")?;
 	let (guild_name, guild_icon) = ctx
 		.cache
-		.guild_field(guild_id, |g| (g.name.clone(), g.icon_url().clone()))
+		.guild_field(guild_id, |g| (g.name.clone(), g.icon_url()))
 		.await
 		.context("Couldn't get guild for keyword")?;
 	let title = format!(
