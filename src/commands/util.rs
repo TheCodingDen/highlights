@@ -31,10 +31,10 @@ macro_rules! require_guild {
 					"You must run this command in a server!",
 				)
 				.await
-				}
-			Some(id) => id,
 			}
-		}};
+			Some(id) => id,
+		}
+	}};
 }
 
 /// Requires the given arguments to be non-empty.
@@ -45,8 +45,8 @@ macro_rules! require_nonempty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
 		if $args.is_empty() {
 			return $crate::util::question($ctx, $message).await;
-			}
-		}};
+		}
+	}};
 }
 
 /// Requires the given arguments to be empty.
@@ -57,8 +57,8 @@ macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
 		if !$args.is_empty() {
 			return $crate::util::question($ctx, $message).await;
-			}
-		}};
+		}
+	}};
 }
 
 /// Requires the current bot member to have permission to send embeds.
@@ -97,8 +97,8 @@ macro_rules! require_embed_perms {
 					)?;
 
 				return Ok(());
-				}
 			}
+		}
 	};
 }
 

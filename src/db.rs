@@ -91,9 +91,9 @@ macro_rules! await_db {
 			let $conn = $crate::db::connection();
 
 			$body
-			})
+		})
 		.await
 		.expect(concat!("Failed to join ", $name, " task"))
 		.context(concat!("Failed to run DB query ", $name))
-		}};
+	}};
 }

@@ -76,7 +76,7 @@ macro_rules! regex {
 		static RE: once_cell::sync::OnceCell<regex::Regex> =
 			once_cell::sync::OnceCell::new();
 		RE.get_or_init(|| regex::Regex::new($re).unwrap())
-		}};
+	}};
 }
 
 /// Regex for symbols used in Discord-flavor markdown.
