@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Commands for adding, removing, and listing keywords.
@@ -27,6 +27,7 @@ use crate::{
 	db::{Ignore, Keyword, KeywordKind},
 	global::settings,
 	monitoring::Timer,
+	regex,
 	responses::insert_command_response,
 	util::{error, success, MD_SYMBOL_REGEX},
 };
@@ -140,6 +141,10 @@ async fn add_guild_keyword(
 		.await;
 	}
 
+	if !is_valid_keyword(args) {
+		return error(ctx, message, "You can't add that keyword!").await;
+	}
+
 	let keyword = Keyword {
 		keyword: args.to_lowercase(),
 		user_id: message.author.id.0.try_into().unwrap(),
@@ -170,6 +175,10 @@ async fn add_channel_keyword(
 			"You can't highlight keywords shorter than 3 characters!",
 		)
 		.await;
+	}
+
+	if !is_valid_keyword(keyword) {
+		return error(ctx, message, "You can't add that keyword!").await;
 	}
 
 	let guild_channels = get_text_channels_in_guild(ctx, guild_id).await?;
@@ -277,6 +286,10 @@ async fn add_channel_keyword(
 	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
+}
+
+fn is_valid_keyword(keyword: &str) -> bool {
+	!regex!(r"<([@#&]|a?:)").is_match(keyword)
 }
 
 /// Remove a keyword.

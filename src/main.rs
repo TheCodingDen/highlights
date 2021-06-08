@@ -1,4 +1,4 @@
-// Copyright 2021 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Highlights is a simple but flexible keyword highlighting bot for Discord.
@@ -373,6 +373,8 @@ async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 
 	let channel_id = message.channel_id;
 
+	let lowercase_content = message.content.to_lowercase();
+
 	let keywords =
 		Keyword::get_relevant_keywords(guild_id, channel_id, message.author.id)
 			.await?;
@@ -394,9 +396,14 @@ async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 			}
 		};
 
-		if highlighting::should_notify_keyword(ctx, message, &keyword, &ignores)
-			.await?
-			.is_some()
+		if highlighting::should_notify_keyword(
+			ctx,
+			message,
+			&lowercase_content,
+			&keyword,
+			&ignores,
+		)
+		.await?
 		{
 			let ctx = ctx.clone();
 			task::spawn(highlighting::notify_keyword(

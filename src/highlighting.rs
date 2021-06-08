@@ -1,4 +1,4 @@
-// Copyright 2021 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Functions for sending, editing, and deleting notifications.
@@ -21,7 +21,7 @@ use crate::{
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{settings, EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
-	util::{optional_result, user_can_read_channel, MD_SYMBOL_REGEX},
+	util::{optional_result, user_can_read_channel},
 };
 use indoc::indoc;
 use tokio::{select, time::sleep};
@@ -29,42 +29,32 @@ use tokio::{select, time::sleep};
 /// Checks if the provided keyword should be highlighted anywhere in the given message.
 ///
 /// First each [`Ignore`](Ignore) is checked to determine if it appears in the message. If any do
-/// appear, then the keyword shouldn't be highlighted and `Ok(None)` is returned. Next, the keyword
+/// appear, then the keyword shouldn't be highlighted and `Ok(false)` is returned. Next, the keyword
 /// is similarly searched for in the message content. If it is found, the permissions of the user
-/// are checked to ensure they can read the message. If they can read the message, `Ok(start..end)`
-/// is returned, where `start..end` is the range where the keyword appears in the message's
-/// contents.
+/// are checked to ensure they can read the message. If they can read the message, `Ok(true)`
+/// is returned.
 pub async fn should_notify_keyword(
 	ctx: &Context,
 	message: &Message,
+	content: &str,
 	keyword: &Keyword,
 	ignores: &[Ignore],
-) -> Result<Option<Range<usize>>> {
-	let content = &*message.content;
-
-	for mention in regex!(r"<@!?([0-9]{16,20})>").captures_iter(content) {
-		let id: i64 = mention
-			.get(1)
-			.expect("Mention match had no ID")
-			.as_str()
-			.parse()
-			.expect("Invalid ID in mention");
-
-		if id == keyword.user_id {
-			return Ok(None);
-		}
+) -> Result<bool> {
+	if message.mentions.iter().any(|mention| {
+		mention.id == UserId(keyword.user_id.try_into().unwrap())
+	}) {
+		return Ok(false);
 	}
 
 	for ignore in ignores {
-		if find_applicable_match(&ignore.phrase, content).is_some() {
-			return Ok(None);
+		if keyword_matches(&ignore.phrase, content) {
+			return Ok(false);
 		}
 	}
 
-	let range = match find_applicable_match(&keyword.keyword, content) {
-		Some(range) => range,
-		None => return Ok(None),
-	};
+	if !keyword_matches(&keyword.keyword, content) {
+		return Ok(false);
+	}
 
 	let channel = match ctx.cache.guild_channel(message.channel_id).await {
 		Some(c) => c,
@@ -86,8 +76,8 @@ pub async fn should_notify_keyword(
 	)
 	.await
 	{
-		Ok(Some(true)) => Ok(Some(range)),
-		Ok(Some(false)) | Ok(None) => Ok(None),
+		Ok(Some(true)) => Ok(true),
+		Ok(Some(false)) | Ok(None) => Ok(false),
 		Err(e) => Err(e).context("Failed to check permissions"),
 	}
 }
@@ -143,19 +133,22 @@ pub async fn notify_keyword(
 				None => return Ok(()),
 			};
 
-			let keyword_range =
-				match should_notify_keyword(&ctx, &message, &keyword, &ignores)
-					.await?
-				{
-					Some(range) => range,
-					None => return Ok(()),
-				};
+			if !should_notify_keyword(
+				&ctx,
+				&message,
+				&message.content.to_lowercase(),
+				&keyword,
+				&ignores,
+			)
+			.await?
+			{
+				return Ok(());
+			}
 
 			let message_to_send = build_notification_message(
 				&ctx,
 				&message,
 				&keyword.keyword,
-				keyword_range,
 				channel_id,
 				guild_id,
 			)
@@ -182,19 +175,12 @@ async fn build_notification_message(
 	ctx: &Context,
 	message: &Message,
 	keyword: &str,
-	keyword_range: Range<usize>,
 	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<CreateMessage<'static>> {
-	let embed = build_notification_embed(
-		ctx,
-		message,
-		keyword,
-		keyword_range,
-		channel_id,
-		guild_id,
-	)
-	.await?;
+	let embed =
+		build_notification_embed(ctx, message, keyword, channel_id, guild_id)
+			.await?;
 
 	let mut msg = CreateMessage::default();
 
@@ -210,19 +196,12 @@ async fn build_notification_edit(
 	ctx: &Context,
 	message: &Message,
 	keyword: &str,
-	keyword_range: Range<usize>,
 	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<EditMessage> {
-	let embed = build_notification_embed(
-		ctx,
-		message,
-		keyword,
-		keyword_range,
-		channel_id,
-		guild_id,
-	)
-	.await?;
+	let embed =
+		build_notification_embed(ctx, message, keyword, channel_id, guild_id)
+			.await?;
 
 	let mut msg = EditMessage::default();
 
@@ -238,21 +217,9 @@ async fn build_notification_embed(
 	ctx: &Context,
 	message: &Message,
 	keyword: &str,
-	keyword_range: Range<usize>,
 	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<CreateEmbed> {
-	let re = &*MD_SYMBOL_REGEX;
-	let formatted_content = format!(
-		"{}__**{}**__{}",
-		re.replace_all(&message.content[..keyword_range.start], r"\$0"),
-		re.replace_all(
-			&message.content[keyword_range.start..keyword_range.end],
-			r"\$0"
-		),
-		re.replace_all(&message.content[keyword_range.end..], r"\$0")
-	);
-
 	let message_link = format!(
 		"[(Link)](https://discord.com/channels/{}/{}/{})",
 		guild_id, channel_id, message.id
@@ -277,7 +244,7 @@ async fn build_notification_embed(
 	let mut embed = CreateEmbed::default();
 
 	embed
-		.description(formatted_content)
+		.description(&message.content)
 		.timestamp(&message.timestamp)
 		.author(|a| {
 			a.name(title);
@@ -414,24 +381,19 @@ pub async fn update_sent_notifications(
 ) {
 	let mut to_delete = vec![];
 
+	let lowercase_content = message.content.to_lowercase();
+
 	for notification in notifications {
-		let keyword_range = match find_applicable_match(
-			&notification.keyword,
-			&message.content,
-		) {
-			Some(range) => range,
-			None => {
-				to_delete.push(notification);
-				continue;
-			}
-		};
+		if !keyword_matches(&notification.keyword, &lowercase_content) {
+			to_delete.push(notification);
+			continue;
+		}
 
 		let result: Result<()> = async {
 			let message_to_send = build_notification_edit(
 				ctx,
 				&message,
 				&notification.keyword,
-				keyword_range,
 				channel_id,
 				guild_id,
 			)
@@ -472,44 +434,54 @@ pub async fn update_sent_notifications(
 }
 
 /// Finds a match of the keyword in the message content.
-///
-/// If a match is found, the range at which it appears in the message content is returned.
-fn find_applicable_match(keyword: &str, content: &str) -> Option<Range<usize>> {
+fn keyword_matches(keyword: &str, content: &str) -> bool {
+	fn overlaps_with_mention(range: Range<usize>, content: &str) -> bool {
+		regex!(r"<(@!?|&|#|a?:[a-zA-Z0-9_]*:)[0-9]+>")
+			.find_iter(content)
+			.any(|mention| {
+				let mention = mention.range();
+
+				range.start <= mention.end && range.end >= mention.start
+			})
+	}
+
 	if regex!(r"\s").is_match(keyword) {
 		// if the keyword has a space, only matches of whole phrases should be considered
 		content
 			.match_indices(keyword)
-			.find(|(i, phrase)| {
+			.filter(|(i, phrase)| {
 				if *i != 0 || i + phrase.len() < content.len() {
 					let start = i.saturating_sub(1);
 					let end = usize::min(i + phrase.len() + 1, content.len());
 					content
 						.get(start..end)
-						.map(|around| {
-							regex!(r"(^|\s).*(\s|$)").is_match(around)
-						})
+						.map(|around| regex!(r"^.\b.*\b.$").is_match(around))
 						.unwrap_or(true)
 				} else {
 					true
 				}
 			})
 			.map(|(index, _)| index..index + keyword.len())
-	} else if regex!(r"[^a-zA-Z0-9]").is_match(keyword) {
+			.any(|range| !overlaps_with_mention(range, content))
+	} else if regex!(r"\W").is_match(keyword) {
 		// if the keyword contains non-alphanumeric characters, it could appear anywhere
-		let start = content.find(keyword)?;
-		Some(start..start + keyword.len())
+		content
+			.match_indices(keyword)
+			.map(|(i, _)| i..i + keyword.len())
+			.any(|range| !overlaps_with_mention(range, content))
 	} else {
 		// otherwise, it is only alphanumeric and could appear between non-alphanumeric text
-		let mut fragments = regex!(r"[^a-zA-Z0-9]+").split(content);
+		regex!(r"\W+")
+			.split(content)
+			.filter(|&frag| keyword == frag)
+			.map(|substring| {
+				let substring_start = substring.as_ptr() as usize;
+				let content_start = content.as_ptr() as usize;
+				let substring_index = substring_start - content_start;
 
-		let substring =
-			fragments.find(|frag| keyword.eq_ignore_ascii_case(frag))?;
-
-		let substring_start = substring.as_ptr() as usize;
-		let content_start = content.as_ptr() as usize;
-		let substring_index = substring_start - content_start;
-
-		Some(substring_index..substring_index + keyword.len())
+				substring_index..substring_index + keyword.len()
+			})
+			.any(|range| !overlaps_with_mention(range, content))
 	}
 }
 
@@ -543,4 +515,31 @@ pub async fn check_notify_user_state(
 	user_state.delete().await?;
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn keyword_match_basic() {
+		assert!(keyword_matches("bar", "foo bar baz"));
+	}
+
+	#[test]
+	fn keyword_match_phrase() {
+		assert!(keyword_matches("foo bar", "baz foo bar."));
+	}
+
+	#[test]
+	fn keyword_match_complex() {
+		assert!(keyword_matches("$bar", "foo$bar%baz"));
+	}
+
+	#[test]
+	fn keyword_match_unicode() {
+		assert!(keyword_matches("ဥပမာ", "စမ်းသပ်မှု—ဥပမာ—ကျေးဇူးပြု၍ လျစ်လျူရှုပါ"));
+
+		assert!(!keyword_matches("ဥပမာ", "စမ်းသပ်မှုဥပမာ"));
+	}
 }
