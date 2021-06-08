@@ -8,8 +8,7 @@ RUN cargo audit -D unsound -D yanked
 
 FROM rust:1.49.0-alpine3.12 AS builder
 RUN apk add --no-cache --update musl-dev=1.1.24-r10 && \
-    USER=root cargo new --bin highlights && \
-    rustup component add rustfmt clippy
+    USER=root cargo new --bin highlights
 WORKDIR /highlights
 COPY ["Cargo.toml", "Cargo.lock", "./"]
 RUN cargo fetch && \
