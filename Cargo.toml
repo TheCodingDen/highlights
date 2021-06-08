@@ -1,26 +1,26 @@
 [package]
 name = "highlights"
 version = "1.0.0"
-authors = ["Benjamin Scherer <ThatsNoMoon.Alderaan@gmail.com>"]
+authors = ["ThatsNoMoon <git@thatsnomoon.dev>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"
 edition = "2018"
 
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt", "time", "fs"] }
-rusqlite = { version = "0.24", features = ["bundled", "backup"] }
+rusqlite = { version = "0.25", features = ["bundled", "backup"] }
 r2d2 = "0.8"
-r2d2_sqlite = "0.17"
+r2d2_sqlite = "0.18"
 once_cell = "1.4"
 regex = "1.3"
 chrono = "0.4"
 indoc = "1.0"
 log = { version = "0.4", features = ["std", "serde"] }
-simplelog = "0.9"
-prometheus = "0.11"
+simplelog = "0.10"
+prometheus = "0.12"
 hyper = { version = "0.14", features = ["server"] }
 serde = { version = "1", features = ["derive"] }
-config = { version = "0.10", default-features = false, features = ["toml"] }
+config = { version = "0.11", default-features = false, features = ["toml"] }
 url = { version = "2.2", features = ["serde"] }
 anyhow = "1"
 

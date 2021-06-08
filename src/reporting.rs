@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Error and panic reporting to a Discord webhook.
@@ -15,8 +15,8 @@ use std::{panic, time::Duration};
 use anyhow::{Context as _, Result};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use simplelog::{
-	CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger,
-	TerminalMode,
+	ColorChoice, CombinedLogger, Config, ConfigBuilder, SharedLogger,
+	TermLogger, TerminalMode,
 };
 
 use crate::global::settings;
@@ -78,12 +78,14 @@ pub fn init() {
 			*level,
 			config.build(),
 			TerminalMode::Mixed,
+			ColorChoice::Auto,
 		));
 	}
 	loggers.push(TermLogger::new(
 		settings().logging.level,
 		default_config.build(),
 		TerminalMode::Mixed,
+		ColorChoice::Auto,
 	));
 
 	if settings().logging.webhook.is_some() {
