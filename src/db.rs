@@ -1,4 +1,4 @@
-// Copyright 2021 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Interface for interacting with the sqlite database of keywords and other persistent user
@@ -27,6 +27,7 @@ use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
+use serenity::model::id::{ChannelId, GuildId, MessageId, UserId};
 
 use std::{fs, io::ErrorKind};
 
@@ -97,3 +98,30 @@ macro_rules! await_db {
 		.context(concat!("Failed to run DB query ", $name))
 	}};
 }
+
+trait IdI64Ext {
+	fn into_i64(self) -> i64;
+
+	fn from_i64(x: i64) -> Self;
+}
+
+macro_rules! impl_id_ext {
+	($ty:ty $(, $($tys:ty),*)?) => {
+		impl IdI64Ext for $ty {
+			fn into_i64(self) -> i64 {
+				use ::std::convert::TryInto;
+				self.0.try_into().unwrap()
+			}
+
+			fn from_i64(x: i64) -> Self {
+				use ::std::convert::TryInto;
+				Self(x.try_into().unwrap())
+			}
+		}
+
+		impl_id_ext!($($($tys),*)?);
+	};
+	() => {};
+}
+
+impl_id_ext!(UserId, ChannelId, GuildId, MessageId);

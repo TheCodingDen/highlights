@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for blocked users.
@@ -7,17 +7,17 @@ use anyhow::Result;
 use rusqlite::{params, Row};
 use serenity::model::id::UserId;
 
-use std::convert::TryInto;
-
 use crate::{await_db, db::connection};
+
+use super::IdI64Ext;
 
 /// Represents a blocked user.
 #[derive(Debug, Clone)]
 pub struct Block {
 	/// The user who blocked them.
-	pub user_id: i64,
+	pub user_id: UserId,
 	/// The user who was blocked.
-	pub blocked_id: i64,
+	pub blocked_id: UserId,
 }
 
 impl Block {
@@ -26,8 +26,8 @@ impl Block {
 	/// - `blocked_id`: `INTEGER`
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Self {
-			user_id: row.get(0)?,
-			blocked_id: row.get(1)?,
+			user_id: UserId::from_i64(row.get(0)?),
+			blocked_id: UserId::from_i64(row.get(1)?),
 		})
 	}
 
@@ -48,15 +48,13 @@ impl Block {
 	/// Fetches the list of blocks a user has added from the DB.
 	pub async fn user_blocks(user_id: UserId) -> Result<Vec<Self>> {
 		await_db!("user blocks": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-
 			let mut stmt = conn.prepare(
 				"SELECT user_id, blocked_id
 				FROM blocks
 				WHERE user_id = ?"
 			)?;
 
-			let blocks = stmt.query_map(params![user_id], Self::from_row)?;
+			let blocks = stmt.query_map(params![user_id.into_i64()], Self::from_row)?;
 
 			blocks.map(|res| res.map_err(Into::into)).collect()
 		})
@@ -68,7 +66,10 @@ impl Block {
 			conn.execute(
 				"INSERT INTO blocks (user_id, blocked_id)
 				VALUES (?, ?)",
-				params![self.user_id, self.blocked_id],
+				params![
+					self.user_id.into_i64(),
+					self.blocked_id.into_i64()
+				],
 			)?;
 
 			Ok(())
@@ -81,7 +82,10 @@ impl Block {
 			conn.query_row(
 				"SELECT COUNT(*) FROM blocks
 				WHERE user_id = ? AND blocked_id = ?",
-				params![self.user_id, self.blocked_id],
+				params![
+					self.user_id.into_i64(),
+					self.blocked_id.into_i64()
+				],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			).map_err(Into::into)
 		})
@@ -93,7 +97,10 @@ impl Block {
 			conn.execute(
 				"DELETE FROM blocks
 				WHERE user_id = ? AND blocked_id = ?",
-				params![self.user_id, self.blocked_id],
+				params![
+					self.user_id.into_i64(),
+					self.blocked_id.into_i64()
+				],
 			)?;
 
 			Ok(())

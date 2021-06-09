@@ -1,4 +1,4 @@
-// Copyright 2021 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Commands for opting out (and in) of having messages highlighted.
@@ -6,8 +6,6 @@
 use anyhow::Result;
 
 use serenity::{client::Context, model::channel::Message};
-
-use std::convert::TryInto;
 
 use crate::{
 	db::OptOut,
@@ -29,7 +27,7 @@ pub async fn opt_out(
 	require_empty_args!(args, ctx, message);
 
 	let opt_out = OptOut {
-		user_id: message.author.id.0.try_into().unwrap(),
+		user_id: message.author.id,
 	};
 
 	if opt_out.clone().exists().await? {
@@ -55,7 +53,7 @@ pub async fn opt_in(
 	require_empty_args!(args, ctx, message);
 
 	let opt_out = OptOut {
-		user_id: message.author.id.0.try_into().unwrap(),
+		user_id: message.author.id,
 	};
 
 	if !opt_out.clone().exists().await? {

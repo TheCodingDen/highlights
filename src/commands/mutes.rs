@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Commands for adding, removing, and listing channel mutes.
@@ -11,13 +11,10 @@ use super::util::{
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
-	model::{
-		channel::{ChannelType, Message},
-		id::ChannelId,
-	},
+	model::channel::{ChannelType, Message},
 };
 
-use std::{collections::HashMap, convert::TryInto, fmt::Write};
+use std::{collections::HashMap, fmt::Write};
 
 use crate::{
 	db::Mute, monitoring::Timer, responses::insert_command_response,
@@ -58,8 +55,8 @@ pub async fn mute(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 
 	for channel in channel_args.found {
 		let mute = Mute {
-			user_id: message.author.id.0.try_into().unwrap(),
-			channel_id: channel.id.0.try_into().unwrap(),
+			user_id: message.author.id,
+			channel_id: channel.id,
 		};
 
 		if mute.clone().exists().await? {
@@ -146,7 +143,7 @@ pub async fn unmute(
 		None => None,
 	};
 
-	let user_id: i64 = message.author.id.0.try_into().unwrap();
+	let user_id = message.author.id;
 
 	let mut unmuted = vec![];
 	let mut not_muted = vec![];
@@ -167,7 +164,7 @@ pub async fn unmute(
 			for (user_unreadable, arg) in channel_args.user_cant_read {
 				let mute = Mute {
 					user_id,
-					channel_id: user_unreadable.id.0.try_into().unwrap(),
+					channel_id: user_unreadable.id,
 				};
 
 				if !mute.clone().exists().await? {
@@ -185,7 +182,7 @@ pub async fn unmute(
 			{
 				let mute = Mute {
 					user_id,
-					channel_id: self_unreadable.id.0.try_into().unwrap(),
+					channel_id: self_unreadable.id,
 				};
 
 				if !mute.clone().exists().await? {
@@ -200,7 +197,6 @@ pub async fn unmute(
 			for result in get_ids_from_args(args) {
 				match result {
 					Ok((channel_id, arg)) => {
-						let channel_id = channel_id.0.try_into().unwrap();
 						let mute = Mute {
 							user_id,
 							channel_id,
@@ -279,11 +275,7 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 			let mutes = Mute::user_mutes(message.author.id)
 				.await?
 				.into_iter()
-				.filter(|mute| {
-					let channel_id =
-						ChannelId(mute.channel_id.try_into().unwrap());
-					channels.contains_key(&channel_id)
-				})
+				.filter(|mute| channels.contains_key(&mute.channel_id))
 				.map(|mute| format!("<#{}>", mute.channel_id))
 				.collect::<Vec<_>>();
 
@@ -326,19 +318,20 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 			let mut not_found = Vec::new();
 
 			for mute in mutes {
-				let channel_id = ChannelId(mute.channel_id.try_into().unwrap());
-				let channel = match ctx.cache.guild_channel(channel_id).await {
-					Some(channel) => channel,
-					None => {
-						not_found.push(format!("<#{0}> ({0})", channel_id));
-						continue;
-					}
-				};
+				let channel =
+					match ctx.cache.guild_channel(mute.channel_id).await {
+						Some(channel) => channel,
+						None => {
+							not_found
+								.push(format!("<#{0}> ({0})", mute.channel_id));
+							continue;
+						}
+					};
 
 				mutes_by_guild
 					.entry(channel.guild_id)
 					.or_insert_with(Vec::new)
-					.push(format!("<#{}>", channel_id));
+					.push(format!("<#{}>", mute.channel_id));
 			}
 
 			let mut response = String::new();

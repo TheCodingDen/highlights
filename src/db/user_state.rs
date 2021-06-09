@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for user states; whether or not the last notification DM was successful.
@@ -7,14 +7,14 @@ use anyhow::Result;
 use rusqlite::{params, OptionalExtension, Row};
 use serenity::model::id::UserId;
 
-use std::convert::TryInto;
-
 use crate::{await_db, db::connection};
+
+use super::IdI64Ext;
 
 /// Description of a user's state.
 #[derive(Debug, Clone)]
 pub struct UserState {
-	pub user_id: i64,
+	pub user_id: UserId,
 	pub state: UserStateKind,
 }
 
@@ -32,7 +32,7 @@ impl UserState {
 	/// - user_id: INTEGER
 	/// - state: INTEGER
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {
-		let user_id = row.get(0)?;
+		let user_id = UserId::from_i64(row.get(0)?);
 		let state = match row.get(1)? {
 			Self::CANNOT_DM_STATE => UserStateKind::CannotDm,
 			other => {
@@ -64,7 +64,6 @@ impl UserState {
 	/// Returns `None` if the user has no recorded state.
 	pub async fn user_state(user_id: UserId) -> Result<Option<Self>> {
 		await_db!("user state": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
 
 			let mut stmt = conn.prepare(
 				"SELECT user_id, state
@@ -73,7 +72,7 @@ impl UserState {
 			)?;
 
 			stmt
-				.query_row(params![user_id], Self::from_row)
+				.query_row(params![user_id.into_i64()], Self::from_row)
 				.optional()
 				.map_err(Into::into)
 		})
@@ -87,7 +86,7 @@ impl UserState {
 				VALUES (?, ?)
 				ON CONFLICT (user_id)
 					DO UPDATE SET state = excluded.state",
-				params![self.user_id, self.state as u8],
+				params![self.user_id.into_i64(), self.state as u8],
 			)?;
 
 			Ok(())
@@ -100,7 +99,7 @@ impl UserState {
 			conn.execute(
 				"DELETE FROM user_states
 				WHERE user_id = ?",
-				params![self.user_id],
+				params![self.user_id.into_i64()],
 			)?;
 
 			Ok(())
@@ -110,12 +109,10 @@ impl UserState {
 	/// Clears any state of the user with the given ID.
 	pub async fn clear(user_id: UserId) -> Result<()> {
 		await_db!("delete user state": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-
 			conn.execute(
 				"DELETE FROM user_states
 				WHERE user_id = ?",
-				params![user_id],
+				params![user_id.into_i64()],
 			)?;
 
 			Ok(())

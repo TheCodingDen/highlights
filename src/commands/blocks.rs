@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Commands for adding, removing, and listing blocked users.
@@ -6,9 +6,10 @@
 use super::util::get_users_from_args;
 
 use anyhow::Result;
-use serenity::{client::Context, model::channel::Message};
-
-use std::convert::TryInto;
+use serenity::{
+	client::Context,
+	model::{channel::Message, id::UserId},
+};
 
 use crate::{
 	db::Block, error, monitoring::Timer, responses::insert_command_response,
@@ -41,8 +42,8 @@ pub async fn block(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 			continue;
 		}
 		let block = Block {
-			user_id: message.author.id.0.try_into().unwrap(),
-			blocked_id: user.id.0.try_into().unwrap(),
+			user_id: message.author.id,
+			blocked_id: user.id,
 		};
 
 		if block.clone().exists().await? {
@@ -142,8 +143,8 @@ pub async fn unblock(
 
 	for user in user_args.found {
 		let block = Block {
-			user_id: message.author.id.0.try_into().unwrap(),
-			blocked_id: user.id.0.try_into().unwrap(),
+			user_id: message.author.id,
+			blocked_id: user.id,
 		};
 
 		if !block.clone().exists().await? {
@@ -156,8 +157,8 @@ pub async fn unblock(
 
 	for id in user_args.not_found {
 		let block = Block {
-			user_id: message.author.id.0.try_into().unwrap(),
-			blocked_id: id.try_into().unwrap(),
+			user_id: message.author.id,
+			blocked_id: UserId(id),
 		};
 
 		if !block.clone().exists().await? {

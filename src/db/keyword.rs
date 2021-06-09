@@ -1,4 +1,4 @@
-// Copyright 2021 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for keywords.
@@ -7,20 +7,20 @@ use anyhow::Result;
 use rusqlite::{params, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 
-use std::convert::TryInto;
-
 use crate::{await_db, db::connection};
+
+use super::IdI64Ext;
 
 #[derive(Debug, Clone, Copy)]
 pub enum KeywordKind {
-	Channel(i64),
-	Guild(i64),
+	Channel(ChannelId),
+	Guild(GuildId),
 }
 
 #[derive(Debug, Clone)]
 pub struct Keyword {
 	pub keyword: String,
-	pub user_id: i64,
+	pub user_id: UserId,
 	pub kind: KeywordKind,
 }
 
@@ -32,8 +32,8 @@ impl Keyword {
 	fn from_guild_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Keyword {
 			keyword: row.get(0)?,
-			user_id: row.get(1)?,
-			kind: KeywordKind::Guild(row.get(2)?),
+			user_id: UserId::from_i64(row.get(1)?),
+			kind: KeywordKind::Guild(GuildId::from_i64(row.get(2)?)),
 		})
 	}
 
@@ -44,8 +44,8 @@ impl Keyword {
 	fn from_channel_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Keyword {
 			keyword: row.get(0)?,
-			user_id: row.get(1)?,
-			kind: KeywordKind::Channel(row.get(2)?),
+			user_id: UserId::from_i64(row.get(1)?),
+			kind: KeywordKind::Channel(ChannelId::from_i64(row.get(2)?)),
 		})
 	}
 
@@ -89,9 +89,9 @@ impl Keyword {
 		author_id: UserId,
 	) -> Result<Vec<Keyword>> {
 		await_db!("get keywords": |conn| {
-			let guild_id: i64 = guild_id.0.try_into().unwrap();
-			let channel_id: i64 = channel_id.0.try_into().unwrap();
-			let author_id: i64 = author_id.0.try_into().unwrap();
+			let guild_id = guild_id.into_i64();
+			let channel_id = channel_id.into_i64();
+			let author_id = author_id.into_i64();
 
 			let mut stmt = conn.prepare(
 				"SELECT guild_keywords.keyword, guild_keywords.user_id, guild_keywords.guild_id
@@ -168,8 +168,6 @@ impl Keyword {
 		guild_id: GuildId,
 	) -> Result<Vec<Keyword>> {
 		await_db!("user guild keywords": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-			let guild_id: i64 = guild_id.0.try_into().unwrap();
 
 			let mut stmt = conn.prepare(
 				"SELECT keyword, user_id, guild_id
@@ -177,7 +175,10 @@ impl Keyword {
 				WHERE user_id = ? AND guild_id = ?"
 			)?;
 
-			let keywords = stmt.query_map(params![user_id, guild_id], Keyword::from_guild_row)?;
+			let keywords = stmt.query_map(
+				params![user_id.into_i64(), guild_id.into_i64()],
+				Keyword::from_guild_row
+			)?;
 
 			keywords.map(|res| res.map_err(Into::into)).collect()
 		})
@@ -188,15 +189,16 @@ impl Keyword {
 		user_id: UserId,
 	) -> Result<Vec<Keyword>> {
 		await_db!("user channel keywords": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-
 			let mut stmt = conn.prepare(
 				"SELECT keyword, user_id, channel_id
 				FROM channel_keywords
 				WHERE user_id = ?"
 			)?;
 
-			let keywords = stmt.query_map(params![user_id], Keyword::from_channel_row)?;
+			let keywords = stmt.query_map(
+				params![user_id.into_i64()],
+				Keyword::from_channel_row
+			)?;
 
 			keywords.map(|res| res.map_err(Into::into)).collect()
 		})
@@ -205,15 +207,16 @@ impl Keyword {
 	/// Fetches all guild-wide and channel-specific keywords created by the specified user.
 	pub async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
 		await_db!("user keywords": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-
 			let mut stmt = conn.prepare(
 				"SELECT keyword, user_id, guild_id
 				FROM guild_keywords
 				WHERE user_id = ?"
 			)?;
 
-			let guild_keywords = stmt.query_map(params![user_id], Keyword::from_guild_row)?;
+			let guild_keywords = stmt.query_map(
+				params![user_id.into_i64()],
+				Keyword::from_guild_row
+			)?;
 
 			let mut keywords = guild_keywords.collect::<Result<Vec<_>, _>>()?;
 
@@ -223,7 +226,10 @@ impl Keyword {
 				WHERE user_id = ?"
 			)?;
 
-			let channel_keywords = stmt.query_map(params![user_id], Keyword::from_channel_row)?;
+			let channel_keywords = stmt.query_map(
+				params![user_id.into_i64()],
+				Keyword::from_channel_row
+			)?;
 
 			keywords.extend(channel_keywords.collect::<Result<Vec<_>, _>>()?);
 
@@ -235,19 +241,27 @@ impl Keyword {
 	pub async fn exists(self) -> Result<bool> {
 		await_db!("keyword exists": |conn| {
 			match self.kind {
-				KeywordKind::Channel(channel_id) => {
-					conn.query_row(
-						"SELECT COUNT(*) FROM channel_keywords
-						WHERE keyword = ? AND user_id = ? AND channel_id = ?",
-						params![&self.keyword, self.user_id, channel_id],
-						|row| Ok(row.get::<_, u32>(0)? == 1),
-					).map_err(Into::into)
-				}
 				KeywordKind::Guild(guild_id) => {
 					conn.query_row(
 						"SELECT COUNT(*) FROM guild_keywords
 						WHERE keyword = ? AND user_id = ? AND guild_id = ?",
-						params![&self.keyword, self.user_id, guild_id],
+						params![
+							&self.keyword,
+							self.user_id.into_i64(),
+							guild_id.into_i64()
+						],
+						|row| Ok(row.get::<_, u32>(0)? == 1),
+					).map_err(Into::into)
+				}
+				KeywordKind::Channel(channel_id) => {
+					conn.query_row(
+						"SELECT COUNT(*) FROM channel_keywords
+						WHERE keyword = ? AND user_id = ? AND channel_id = ?",
+						params![
+							&self.keyword,
+							self.user_id.into_i64(),
+							channel_id.into_i64()
+						],
 						|row| Ok(row.get::<_, u32>(0)? == 1),
 					).map_err(Into::into)
 				}
@@ -258,12 +272,11 @@ impl Keyword {
 	/// Returns the number of keywords this user has created across all guilds and channels.
 	pub async fn user_keyword_count(user_id: UserId) -> Result<u32> {
 		await_db!("count user keywords": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
 			let guild_keywords = conn.query_row(
 				"SELECT COUNT(*)
 					FROM guild_keywords
 					WHERE user_id = ?",
-				params![user_id],
+				params![user_id.into_i64()],
 				|row| row.get::<_, u32>(0),
 			)?;
 
@@ -271,7 +284,7 @@ impl Keyword {
 				"SELECT COUNT(*)
 					FROM channel_keywords
 					WHERE user_id = ?",
-				params![user_id],
+				params![user_id.into_i64()],
 				|row| row.get::<_, u32>(0),
 			)?;
 
@@ -287,14 +300,22 @@ impl Keyword {
 					conn.execute(
 						"INSERT INTO guild_keywords (keyword, user_id, guild_id)
 							VALUES (?, ?, ?)",
-						params![&self.keyword, self.user_id, guild_id],
+						params![
+							&self.keyword,
+							self.user_id.into_i64(),
+							guild_id.into_i64()
+						],
 					)?;
 				}
 				KeywordKind::Channel(channel_id) => {
 					conn.execute(
 						"INSERT INTO channel_keywords (keyword, user_id, channel_id)
 							VALUES (?, ?, ?)",
-						params![&self.keyword, self.user_id, channel_id],
+						params![
+							&self.keyword,
+							self.user_id.into_i64(),
+							channel_id.into_i64()
+						],
 					)?;
 				}
 			}
@@ -311,14 +332,22 @@ impl Keyword {
 					conn.execute(
 						"DELETE FROM guild_keywords
 							WHERE keyword = ? AND user_id = ? AND guild_id = ?",
-						params![&self.keyword, self.user_id, guild_id],
+						params![
+							&self.keyword,
+							self.user_id.into_i64(),
+							guild_id.into_i64()
+						],
 					)?;
 				}
 				KeywordKind::Channel(channel_id) => {
 					conn.execute(
 						"DELETE FROM channel_keywords
 							WHERE keyword = ? AND user_id = ? AND channel_id = ?",
-						params![&self.keyword, self.user_id, channel_id],
+						params![
+							&self.keyword,
+							self.user_id.into_i64(),
+							channel_id.into_i64()
+						],
 					)?;
 				}
 			}
@@ -333,12 +362,10 @@ impl Keyword {
 		guild_id: GuildId,
 	) -> Result<usize> {
 		await_db!("delete keywords in guild": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-			let guild_id: i64 = guild_id.0.try_into().unwrap();
 			conn.execute(
 				"DELETE FROM guild_keywords
 					WHERE user_id = ? AND guild_id = ?",
-				params![user_id, guild_id]
+				params![user_id.into_i64(), guild_id.into_i64()]
 			).map_err(Into::into)
 		})
 	}
@@ -349,12 +376,10 @@ impl Keyword {
 		channel_id: ChannelId,
 	) -> Result<usize> {
 		await_db!("delete keywords in channel": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-			let channel_id: i64 = channel_id.0.try_into().unwrap();
 			conn.execute(
 				"DELETE FROM channel_keywords
 					WHERE user_id = ? AND channel_id = ?",
-				params![user_id, channel_id]
+				params![user_id.into_i64(), channel_id.into_i64()]
 			).map_err(Into::into)
 		})
 	}

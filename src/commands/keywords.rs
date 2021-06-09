@@ -10,15 +10,12 @@ use regex::Regex;
 use serenity::{
 	client::Context,
 	http::error::ErrorResponse,
-	model::{
-		channel::Message,
-		id::{ChannelId, GuildId},
-	},
+	model::{channel::Message, id::GuildId},
 	prelude::HttpError,
 	Error as SerenityError,
 };
 
-use std::{collections::HashMap, convert::TryInto, fmt::Write};
+use std::{collections::HashMap, fmt::Write};
 
 use super::util::{
 	get_readable_channels_from_args, get_text_channels_in_guild,
@@ -147,8 +144,8 @@ async fn add_guild_keyword(
 
 	let keyword = Keyword {
 		keyword: args.to_lowercase(),
-		user_id: message.author.id.0.try_into().unwrap(),
-		kind: KeywordKind::Guild(guild_id.0.try_into().unwrap()),
+		user_id: message.author.id,
+		kind: KeywordKind::Guild(guild_id),
 	};
 
 	if keyword.clone().exists().await? {
@@ -206,13 +203,11 @@ async fn add_channel_keyword(
 	let mut added = vec![];
 	let mut already_added = vec![];
 
-	let user_id = user_id.0.try_into().unwrap();
-
 	for channel in channel_args.found {
 		let keyword = Keyword {
 			keyword: keyword.to_lowercase(),
 			user_id,
-			kind: KeywordKind::Channel(channel.id.0.try_into().unwrap()),
+			kind: KeywordKind::Channel(channel.id),
 		};
 
 		if keyword.clone().exists().await? {
@@ -334,8 +329,8 @@ async fn remove_guild_keyword(
 ) -> Result<()> {
 	let keyword = Keyword {
 		keyword: args.to_lowercase(),
-		user_id: message.author.id.0.try_into().unwrap(),
-		kind: KeywordKind::Guild(guild_id.0.try_into().unwrap()),
+		user_id: message.author.id,
+		kind: KeywordKind::Guild(guild_id),
 	};
 
 	if !keyword.clone().exists().await? {
@@ -373,13 +368,11 @@ async fn remove_channel_keyword(
 	let mut not_added = vec![];
 	let mut not_found = channel_args.not_found;
 
-	let user_id = user_id.0.try_into().unwrap();
-
 	for channel in channel_args.found {
 		let keyword = Keyword {
 			keyword: keyword.to_owned(),
 			user_id,
-			kind: KeywordKind::Channel(channel.id.0.try_into().unwrap()),
+			kind: KeywordKind::Channel(channel.id),
 		};
 
 		if !keyword.clone().exists().await? {
@@ -394,9 +387,7 @@ async fn remove_channel_keyword(
 		let keyword = Keyword {
 			keyword: keyword.clone(),
 			user_id,
-			kind: KeywordKind::Channel(
-				user_unreadable.id.0.try_into().unwrap(),
-			),
+			kind: KeywordKind::Channel(user_unreadable.id),
 		};
 
 		if !keyword.clone().exists().await? {
@@ -411,9 +402,7 @@ async fn remove_channel_keyword(
 		let keyword = Keyword {
 			keyword: keyword.clone(),
 			user_id,
-			kind: KeywordKind::Channel(
-				self_unreadable.id.0.try_into().unwrap(),
-			),
+			kind: KeywordKind::Channel(self_unreadable.id),
 		};
 
 		if !keyword.clone().exists().await? {
@@ -485,7 +474,7 @@ pub async fn ignore(
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
-	let guild_id = require_guild!(ctx, message).0.try_into().unwrap();
+	let guild_id = require_guild!(ctx, message);
 
 	require_nonempty_args!(args, ctx, message);
 
@@ -499,7 +488,7 @@ pub async fn ignore(
 	}
 
 	let ignore = Ignore {
-		user_id: message.author.id.0.try_into().unwrap(),
+		user_id: message.author.id,
 		guild_id,
 		phrase: args.to_lowercase(),
 	};
@@ -521,12 +510,12 @@ pub async fn unignore(
 	message: &Message,
 	args: &str,
 ) -> Result<()> {
-	let guild_id = require_guild!(ctx, message).0.try_into().unwrap();
+	let guild_id = require_guild!(ctx, message);
 
 	require_nonempty_args!(args, ctx, message);
 
 	let ignore = Ignore {
-		user_id: message.author.id.0.try_into().unwrap(),
+		user_id: message.author.id,
 		guild_id,
 		phrase: args.to_lowercase(),
 	};
@@ -607,8 +596,6 @@ pub async fn ignores(
 				if !response.is_empty() {
 					response.push_str("\n\n");
 				}
-
-				let guild_id = GuildId(guild_id.try_into().unwrap());
 
 				let guild_name = ctx
 					.cache
@@ -696,9 +683,7 @@ pub async fn keywords(
 				Keyword::user_channel_keywords(message.author.id).await?
 			{
 				let channel_id = match keyword.kind {
-					KeywordKind::Channel(id) => {
-						ChannelId(id.try_into().unwrap())
-					}
+					KeywordKind::Channel(id) => id,
 					_ => {
 						panic!("user_channel_keywords returned a guild keyword")
 					}
@@ -782,8 +767,6 @@ pub async fn keywords(
 			for keyword in keywords {
 				match keyword.kind {
 					KeywordKind::Guild(guild_id) => {
-						let guild_id = GuildId(guild_id.try_into().unwrap());
-
 						let guild_keywords = &mut keywords_by_guild
 							.entry(guild_id)
 							.or_insert_with(|| (Vec::new(), HashMap::new()))
@@ -792,9 +775,6 @@ pub async fn keywords(
 						guild_keywords.push(keyword.keyword);
 					}
 					KeywordKind::Channel(channel_id) => {
-						let channel_id =
-							ChannelId(channel_id.try_into().unwrap());
-
 						let guild_id = ctx
 							.cache
 							.guild_channel_field(channel_id, |c| c.guild_id)

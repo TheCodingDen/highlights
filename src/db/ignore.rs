@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for ignored phrases.
@@ -7,9 +7,9 @@ use anyhow::Result;
 use rusqlite::{params, Row};
 use serenity::model::id::{GuildId, UserId};
 
-use std::convert::TryInto;
-
 use crate::{await_db, db::connection};
+
+use super::IdI64Ext;
 
 /// Represents an ignored phrase.
 #[derive(Debug, Clone)]
@@ -17,9 +17,9 @@ pub struct Ignore {
 	/// The phrase that should be ignored.
 	pub phrase: String,
 	/// The user that ignored this phrase.
-	pub user_id: i64,
+	pub user_id: UserId,
 	/// The guild in which the user ignored the phrase.
-	pub guild_id: i64,
+	pub guild_id: GuildId,
 }
 
 impl Ignore {
@@ -30,8 +30,8 @@ impl Ignore {
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Ignore {
 			phrase: row.get(0)?,
-			user_id: row.get(1)?,
-			guild_id: row.get(2)?,
+			user_id: UserId::from_i64(row.get(1)?),
+			guild_id: GuildId::from_i64(row.get(2)?),
 		})
 	}
 
@@ -56,16 +56,16 @@ impl Ignore {
 		guild_id: GuildId,
 	) -> Result<Vec<Ignore>> {
 		await_db!("user guild ignores": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-			let guild_id: i64 = guild_id.0.try_into().unwrap();
-
 			let mut stmt = conn.prepare(
 				"SELECT phrase, user_id, guild_id
 				FROM guild_ignores
 				WHERE user_id = ? AND guild_id = ?"
 			)?;
 
-			let ignores = stmt.query_map(params![user_id, guild_id], Ignore::from_row)?;
+			let ignores = stmt.query_map(
+				params![user_id.into_i64(), guild_id.into_i64()],
+				Ignore::from_row
+			)?;
 
 			ignores.map(|res| res.map_err(Into::into)).collect()
 		})
@@ -74,15 +74,14 @@ impl Ignore {
 	/// Fetches the list of ignored phrases of the specified user across all guilds from the DB.
 	pub async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
 		await_db!("user ignores": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-
 			let mut stmt = conn.prepare(
 				"SELECT phrase, user_id, guild_id
 				FROM guild_ignores
 				WHERE user_id = ?"
 			)?;
 
-			let ignores = stmt.query_map(params![user_id], Ignore::from_row)?;
+			let ignores =
+				stmt.query_map(params![user_id.into_i64()], Ignore::from_row)?;
 
 			ignores.map(|res| res.map_err(Into::into)).collect()
 		})
@@ -94,7 +93,11 @@ impl Ignore {
 			conn.query_row(
 				"SELECT COUNT(*) FROM guild_ignores
 				WHERE phrase = ? AND user_id = ? AND guild_id = ?",
-				params![&*self.phrase, self.user_id, self.guild_id],
+				params![
+					&*self.phrase,
+					self.user_id.into_i64(),
+					self.guild_id.into_i64()
+				],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			).map_err(Into::into)
 		})
@@ -106,7 +109,11 @@ impl Ignore {
 			conn.execute(
 				"INSERT INTO guild_ignores (phrase, user_id, guild_id)
 				VALUES (?, ?, ?)",
-				params![&*self.phrase, self.user_id, self.guild_id],
+				params![
+					&*self.phrase,
+					self.user_id.into_i64(),
+					self.guild_id.into_i64()
+				],
 			)?;
 
 			Ok(())
@@ -119,7 +126,11 @@ impl Ignore {
 			conn.execute(
 				"DELETE FROM guild_ignores
 				WHERE phrase = ? AND user_id = ? AND guild_id = ?",
-				params![&*self.phrase, self.user_id, self.guild_id],
+				params![
+					&*self.phrase,
+					self.user_id.into_i64(),
+					self.guild_id.into_i64()
+				],
 			)?;
 
 			Ok(())
@@ -132,12 +143,10 @@ impl Ignore {
 		guild_id: GuildId,
 	) -> Result<usize> {
 		await_db!("delete ignores in guild": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
-			let guild_id: i64 = guild_id.0.try_into().unwrap();
 			conn.execute(
 				"DELETE FROM guild_ignores
 					WHERE user_id = ? AND guild_id = ?",
-				params![user_id, guild_id]
+				params![user_id.into_i64(), guild_id.into_i64()]
 			).map_err(Into::into)
 		})
 	}

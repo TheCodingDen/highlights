@@ -15,7 +15,7 @@ use serenity::{
 	Error as SerenityError,
 };
 
-use std::{convert::TryInto, ops::Range, time::Duration};
+use std::{ops::Range, time::Duration};
 
 use crate::{
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
@@ -40,9 +40,11 @@ pub async fn should_notify_keyword(
 	keyword: &Keyword,
 	ignores: &[Ignore],
 ) -> Result<bool> {
-	if message.mentions.iter().any(|mention| {
-		mention.id == UserId(keyword.user_id.try_into().unwrap())
-	}) {
+	if message
+		.mentions
+		.iter()
+		.any(|mention| mention.id == keyword.user_id)
+	{
 		return Ok(false);
 	}
 
@@ -69,13 +71,7 @@ pub async fn should_notify_keyword(
 		},
 	};
 
-	match user_can_read_channel(
-		ctx,
-		&channel,
-		UserId(keyword.user_id.try_into().unwrap()),
-	)
-	.await
-	{
+	match user_can_read_channel(ctx, &channel, keyword.user_id).await {
 		Ok(Some(true)) => Ok(true),
 		Ok(Some(false)) | Ok(None) => Ok(false),
 		Err(e) => Err(e).context("Failed to check permissions"),
@@ -102,7 +98,7 @@ pub async fn notify_keyword(
 	ignores: Vec<Ignore>,
 	guild_id: GuildId,
 ) {
-	let user_id = UserId(keyword.user_id.try_into().unwrap());
+	let user_id = keyword.user_id;
 	let channel_id = message.channel_id;
 
 	let reply_or_reaction;
@@ -294,10 +290,10 @@ async fn send_notification_message(
 				result = Ok(());
 				UserState::clear(user_id).await?;
 				let notification = Notification {
-					original_message: message_id.0.try_into().unwrap(),
-					notification_message: sent_message.id.0.try_into().unwrap(),
+					original_message: message_id,
+					notification_message: sent_message.id,
 					keyword,
-					user_id: user_id.0.try_into().unwrap(),
+					user_id,
 				};
 				notification.insert().await?;
 				break;
@@ -315,7 +311,7 @@ async fn send_notification_message(
 					error, ..
 				}) if error.message == "Cannot send messages to this user" => {
 					let user_state = UserState {
-						user_id: user_id.0.try_into().unwrap(),
+						user_id,
 						state: UserStateKind::CannotDm,
 					};
 
@@ -345,9 +341,8 @@ pub async fn delete_sent_notifications(
 	notifications: &[Notification],
 ) {
 	for notification in notifications {
-		let user_id = UserId(notification.user_id.try_into().unwrap());
-		let message_id =
-			MessageId(notification.notification_message.try_into().unwrap());
+		let user_id = notification.user_id;
+		let message_id = notification.notification_message;
 
 		let result: Result<()> = async {
 			let dm_channel = user_id.create_dm_channel(ctx).await?;
@@ -399,10 +394,8 @@ pub async fn update_sent_notifications(
 			)
 			.await?;
 
-			let user_id = UserId(notification.user_id.try_into().unwrap());
-			let message_id = MessageId(
-				notification.notification_message.try_into().unwrap(),
-			);
+			let user_id = notification.user_id;
+			let message_id = notification.notification_message;
 
 			let dm_channel = user_id.create_dm_channel(ctx).await.context(
 				"Failed to create DM channel to update notifications",

@@ -1,12 +1,15 @@
-// Copyright 2021 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for user opt-outs.
 
 use anyhow::Result;
 use rusqlite::params;
+use serenity::model::id::UserId;
 
 use crate::{await_db, db::connection};
+
+use super::IdI64Ext;
 
 /// Represents an opt-out made by a user.
 ///
@@ -14,7 +17,7 @@ use crate::{await_db, db::connection};
 #[derive(Debug, Clone)]
 pub struct OptOut {
 	/// The user that opted out.
-	pub user_id: i64,
+	pub user_id: UserId,
 }
 
 impl OptOut {
@@ -36,7 +39,7 @@ impl OptOut {
 			conn.query_row(
 				"SELECT COUNT(*) FROM opt_outs
 				WHERE user_id = ?",
-				params![self.user_id],
+				params![self.user_id.into_i64()],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			).map_err(Into::into)
 		})
@@ -48,7 +51,7 @@ impl OptOut {
 			conn.execute(
 				"INSERT INTO opt_outs (user_id)
 				VALUES (?)",
-				params![self.user_id],
+				params![self.user_id.into_i64()],
 			)?;
 
 			Ok(())
@@ -61,7 +64,7 @@ impl OptOut {
 			conn.execute(
 				"DELETE FROM opt_outs
 				WHERE user_id = ?",
-				params![self.user_id],
+				params![self.user_id.into_i64()],
 			)?;
 
 			Ok(())

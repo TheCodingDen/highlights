@@ -1,23 +1,23 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for mutes.
 
 use anyhow::Result;
 use rusqlite::{params, Row};
-use serenity::model::id::UserId;
-
-use std::convert::TryInto;
+use serenity::model::id::{ChannelId, UserId};
 
 use crate::{await_db, db::connection};
+
+use super::IdI64Ext;
 
 /// Represents a muted channel.
 #[derive(Debug, Clone)]
 pub struct Mute {
 	/// The ID of the user who muted the channel.
-	pub user_id: i64,
+	pub user_id: UserId,
 	/// The ID of the channel that was muted.
-	pub channel_id: i64,
+	pub channel_id: ChannelId,
 }
 
 impl Mute {
@@ -26,8 +26,8 @@ impl Mute {
 	/// - channel_id: INTEGER
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {
 		Ok(Mute {
-			user_id: row.get(0)?,
-			channel_id: row.get(1)?,
+			user_id: UserId::from_i64(row.get(0)?),
+			channel_id: ChannelId::from_i64(row.get(1)?),
 		})
 	}
 
@@ -48,7 +48,6 @@ impl Mute {
 	/// Fetches a list of mutes for the user with the given ID from the DB.
 	pub async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>> {
 		await_db!("user mutes": |conn| {
-			let user_id: i64 = user_id.0.try_into().unwrap();
 
 			let mut stmt = conn.prepare(
 				"SELECT user_id, channel_id
@@ -56,7 +55,8 @@ impl Mute {
 				WHERE user_id = ?"
 			)?;
 
-			let mutes = stmt.query_map(params![user_id], Mute::from_row)?;
+			let mutes =
+				stmt.query_map(params![user_id.into_i64()], Mute::from_row)?;
 
 			mutes.map(|res| res.map_err(Into::into)).collect()
 		})
@@ -70,7 +70,7 @@ impl Mute {
 			conn.query_row(
 				"SELECT COUNT(*) FROM mutes
 				WHERE user_id = ? AND channel_id = ?",
-				params![self.user_id, self.channel_id],
+				params![self.user_id.into_i64(), self.channel_id.into_i64()],
 				|row| Ok(row.get::<_, u32>(0)? == 1),
 			).map_err(Into::into)
 		})
@@ -82,7 +82,7 @@ impl Mute {
 			conn.execute(
 				"INSERT INTO mutes (user_id, channel_id)
 				VALUES (?, ?)",
-				params![self.user_id, self.channel_id],
+				params![self.user_id.into_i64(), self.channel_id.into_i64()],
 			)?;
 
 			Ok(())
@@ -95,7 +95,7 @@ impl Mute {
 			conn.execute(
 				"DELETE FROM mutes
 				WHERE user_id = ? AND channel_id = ?",
-				params![self.user_id, self.channel_id],
+				params![self.user_id.into_i64(), self.channel_id.into_i64()],
 			)?;
 
 			Ok(())
