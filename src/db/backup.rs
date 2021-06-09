@@ -1,16 +1,16 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Automatic backup system.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
 use tokio::{fs, task, time::interval};
 
 use std::{
 	io::{Error as IoError, ErrorKind},
 	path::{Path, PathBuf},
-	time::Duration,
+	time::Duration as StdDuration,
 };
 
 use super::connection;
@@ -52,7 +52,7 @@ async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 
 		let backup = Backup::new(&conn, &mut output_conn)?;
 
-		backup.run_to_completion(5, Duration::from_millis(250), None)
+		backup.run_to_completion(5, StdDuration::from_millis(250), None)
 	})
 	.await
 	.expect("Failed to join backup task")
@@ -62,10 +62,7 @@ async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 async fn clean_backups(backup_dir: &Path) {
 	#[derive(Default)]
 	struct Backups {
-		old: Vec<(PathBuf, DateTime<Utc>)>,
-		monthly: Vec<(PathBuf, DateTime<Utc>)>,
-		weekly: Vec<(PathBuf, DateTime<Utc>)>,
-		daily: Vec<(PathBuf, DateTime<Utc>)>,
+		files: Vec<(PathBuf, DateTime<Utc>)>,
 	}
 
 	impl Backups {
@@ -89,65 +86,78 @@ async fn clean_backups(backup_dir: &Path) {
 				None => return Err(path),
 			};
 
-			let elapsed = Utc::now() - backup_time;
-			let days = elapsed.num_days();
-
-			let bucket = if days >= 365 {
-				&mut self.old
-			} else if days >= 30 {
-				&mut self.monthly
-			} else if days >= 7 {
-				&mut self.weekly
-			} else if days >= 1 {
-				&mut self.daily
-			} else {
-				return Ok(());
-			};
-
-			bucket.push((path, backup_time));
+			self.files.push((path, backup_time));
 			Ok(())
 		}
 
-		async fn clean(&mut self) -> Vec<Result<(), IoError>> {
+		async fn clean(mut self) -> Vec<Result<(), IoError>> {
+			if self.files.len() <= 1 {
+				return vec![];
+			}
+
 			let mut results = Vec::new();
 
-			for (old, _) in self.old.drain(..) {
-				results.push(fs::remove_file(old).await);
-			}
+			// sort by most recent first
+			self.files
+				.sort_unstable_by(|(_, time1), (_, time2)| time2.cmp(time1));
 
-			if self.monthly.len() > 12 {
-				self.monthly.sort_unstable_by(|(_, time1), (_, time2)| {
-					time2.cmp(time1)
-				});
+			let mut last_time = self.files.remove(0).1;
+			let now = Utc::now();
 
-				let to_delete = self.monthly.len() - 12;
+			let mut daily_found = 0;
+			let mut weekly_found = 0;
+			let mut monthly_found = 0;
 
-				for (monthly, _) in self.monthly.drain(..to_delete) {
-					results.push(fs::remove_file(monthly).await);
+			for (path, time) in self.files {
+				if now - time < Duration::days(1) {
+					continue;
 				}
-			}
 
-			if self.weekly.len() > 4 {
-				self.weekly.sort_unstable_by(|(_, time1), (_, time2)| {
-					time2.cmp(time1)
-				});
+				let gap = last_time - time;
 
-				let to_delete = self.weekly.len() - 4;
-
-				for (weekly, _) in self.weekly.drain(..to_delete) {
-					results.push(fs::remove_file(weekly).await);
-				}
-			}
-
-			if self.daily.len() > 7 {
-				self.daily.sort_unstable_by(|(_, time1), (_, time2)| {
-					time2.cmp(time1)
-				});
-
-				let to_delete = self.daily.len() - 7;
-
-				for (daily, _) in self.daily.drain(..to_delete) {
-					results.push(fs::remove_file(daily).await);
+				if daily_found < 7 {
+					// includes some wiggle room so backups made 23.99999 hours
+					// apart aren't deleted
+					if gap < Duration::days(1) - Duration::minutes(1) {
+						log::debug!(
+							"Deleting old restart backup from {}",
+							time.date()
+						);
+						results.push(fs::remove_file(path).await);
+					} else {
+						last_time = time;
+						daily_found += 1;
+					}
+				} else if weekly_found < 4 {
+					if gap < Duration::weeks(1) - Duration::minutes(10) {
+						log::debug!(
+							"Deleting old daily backup from {}",
+							time.date()
+						);
+						results.push(fs::remove_file(path).await);
+					} else {
+						last_time = time;
+						weekly_found += 1;
+					}
+				} else if monthly_found < 12 {
+					if gap < Duration::days(30) - Duration::minutes(30) {
+						log::debug!(
+							"Deleting old weekly backup from {}",
+							time.date()
+						);
+						results.push(fs::remove_file(path).await);
+					} else {
+						last_time = time;
+						monthly_found += 1;
+					}
+				} else if gap < Duration::days(364) {
+					log::debug!(
+						"Deleting old monthly backup from {}",
+						time.date()
+					);
+					results.push(fs::remove_file(path).await);
+				} else {
+					last_time = time;
 				}
 			}
 
@@ -201,7 +211,7 @@ pub fn start_backup_cycle(backup_dir: PathBuf) {
 	let _ = ensure_backup_dir_exists(&backup_dir);
 
 	task::spawn(async move {
-		let mut daily = interval(Duration::from_secs(60 * 60 * 24));
+		let mut daily = interval(StdDuration::from_secs(60 * 60 * 24));
 
 		loop {
 			daily.tick().await;

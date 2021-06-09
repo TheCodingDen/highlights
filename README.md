@@ -34,10 +34,12 @@ HIGHLIGHTS_DATABASE.PATH="highlights_data"
 ## Backups
 
 Unless backups are disabled in the config, highlights automatically backs up its database every time it starts, and every 24hrs after that. These backups are saved to the `./backups` folder in the configured database path. These backups are a full snapshot of the database, so to restore one you can just move it back to the database path and rename it to `data.db`. Highlights doesn't delete any backups from the last 24hrs, but it does clean up older backups automatically:
-- Roughly one backup per day is kept for the past week
-- Roughly one backup per week is kept for the past month
-- Roughly one backup per month is kept for the past year
-- Backups older than a year are deleted
+- Seven daily backups are kept
+- Four weekly backups are kept
+- Twelve monthly backups are kept
+- Indefinite yearly backups are kept
+
+Note that highlights will always keep up to these numbers of backups. For example, even if there are not seven backups from the last week, the seven most recent backups made at least a day apart will be saved; likewise, the next four most recent backups made at least a week apart will be saved, and so on.
 
 Highlights uses the timestamp embedded in the backup name to determine how old it is, so don't mess with the file names (it'll log a warning about any files it doesn't recognize).
 
