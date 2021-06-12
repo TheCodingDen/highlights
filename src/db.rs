@@ -31,7 +31,7 @@ use serenity::model::id::{ChannelId, GuildId, MessageId, UserId};
 
 use std::{fs, io::ErrorKind};
 
-use crate::global::settings;
+use crate::settings::settings;
 
 /// Global connection pool to the database.
 static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();

@@ -19,7 +19,7 @@ use simplelog::{
 	TermLogger, TerminalMode,
 };
 
-use crate::global::settings;
+use crate::settings::settings;
 
 /// Global client to use when sending webhook messages.
 static WEBHOOK_CLIENT: OnceCell<AsyncClient> = OnceCell::new();

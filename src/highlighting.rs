@@ -19,8 +19,9 @@ use std::{ops::Range, time::Duration};
 
 use crate::{
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
-	global::{settings, EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
+	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
+	settings::settings,
 	util::{optional_result, user_can_read_channel},
 };
 use indoc::indoc;

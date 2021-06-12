@@ -30,10 +30,11 @@ use serenity::{
 use std::time::Instant;
 
 use crate::{
-	global::{settings, EMBED_COLOR},
+	global::EMBED_COLOR,
 	monitoring::{avg_command_time, avg_query_time, Timer},
 	require_embed_perms,
 	responses::insert_command_response,
+	settings::settings,
 	util::question,
 };
 

@@ -14,11 +14,10 @@ pub mod db;
 use db::{Ignore, Keyword, Notification, UserState};
 
 pub mod settings;
+use settings::settings;
 
 pub mod global;
-use global::{
-	bot_mention, bot_nick_mention, init_mentions, init_settings, settings,
-};
+use global::{bot_mention, bot_nick_mention, init_mentions};
 
 mod highlighting;
 
@@ -415,7 +414,7 @@ async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 /// Entrypoint function to initialize other modules and start the Discord client.
 #[tokio::main]
 async fn main() {
-	init_settings();
+	settings::init();
 
 	reporting::init();
 

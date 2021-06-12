@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Performance monitoring with Prometheus.
@@ -17,7 +17,7 @@ use prometheus::{
 
 use std::{net::SocketAddr, time::Instant};
 
-use crate::global::settings;
+use crate::settings::settings;
 
 /// Indicator of whether performance monitoring is enabled or not.
 static ENABLED: OnceCell<bool> = OnceCell::new();

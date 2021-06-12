@@ -22,10 +22,10 @@ use super::util::{
 };
 use crate::{
 	db::{Ignore, Keyword, KeywordKind},
-	global::settings,
 	monitoring::Timer,
 	regex,
 	responses::insert_command_response,
+	settings::settings,
 	util::{error, success, MD_SYMBOL_REGEX},
 };
 

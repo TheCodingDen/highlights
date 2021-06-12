@@ -1,12 +1,12 @@
-// Copyright 2020 joshyrobot, Benjamin Scherer
+// Copyright 2021 joshyrobot, ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling of bot configuration for hosters.
 
 use config::{Config, ConfigError, Environment, File};
-use serde::{de, Deserialize, Deserializer};
-
 use log::LevelFilter;
+use once_cell::sync::OnceCell;
+use serde::{de, Deserialize, Deserializer};
 use url::Url;
 
 use std::{
@@ -115,5 +115,25 @@ impl Settings {
 		s.merge(Environment::with_prefix("HIGHLIGHTS"))?;
 
 		s.try_into()
+	}
+}
+
+/// Settings configured by the hoster.
+static SETTINGS: OnceCell<Settings> = OnceCell::new();
+
+/// Gets the settings configured by the hoster.
+pub fn settings() -> &'static Settings {
+	SETTINGS.get().expect("Settings were not initialized")
+}
+
+/// Initialize the bot's [`Settings`](Settings).
+pub fn init() {
+	match Settings::new() {
+		Ok(settings) => {
+			let _ = SETTINGS.set(settings);
+		}
+		Err(e) => {
+			panic!("Failed to parse settings: {}", e);
+		}
 	}
 }
