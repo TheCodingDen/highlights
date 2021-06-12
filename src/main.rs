@@ -6,7 +6,6 @@
 //! The code for highlights is organized into mostly independent modules. This module handles
 //! creating the client and registering event listeners.
 
-#![type_length_limit = "20000000"]
 #![allow(clippy::tabs_in_doc_comments)]
 
 mod commands;
@@ -287,71 +286,65 @@ async fn handle_command(
 
 	let result = {
 		use commands::*;
+		use tokio::task::spawn;
+
+		let ctx = ctx.clone();
+		let message = message.clone();
+		let args = args.to_owned();
 
 		match &*command {
-			"add" => add(ctx, message, args)
-				.await
-				.context("Failed to run add command"),
-			"remove" => remove(ctx, message, args)
-				.await
-				.context("Failed to run remove command"),
-			"mute" => mute(ctx, message, args)
-				.await
-				.context("Failed to run mute command"),
-			"unmute" => unmute(ctx, message, args)
-				.await
-				.context("Failed to run unmute command"),
-			"ignore" => ignore(ctx, message, args)
-				.await
-				.context("Failed to run ignore command"),
-			"unignore" => unignore(ctx, message, args)
-				.await
-				.context("Failed to run unignore command"),
-			"block" => block(ctx, message, args)
-				.await
-				.context("Failed to run block command"),
-			"unblock" => unblock(ctx, message, args)
-				.await
-				.context("Failed to run unblock command"),
-			"remove-server" => remove_server(ctx, message, args)
-				.await
-				.context("Failed to run remove-server command"),
-			"keywords" => keywords(ctx, message, args)
-				.await
-				.context("Failed to run keywords command"),
-			"mutes" => mutes(ctx, message, args)
-				.await
-				.context("Failed to run mutes command"),
-			"ignores" => ignores(ctx, message, args)
-				.await
-				.context("Failed to run ignores command"),
-			"blocks" => blocks(ctx, message, args)
-				.await
-				.context("Failed to run blocks command"),
-			"opt-out" => opt_out(ctx, message, args)
-				.await
-				.context("Failed to run opt-out command"),
-			"opt-in" => opt_in(ctx, message, args)
-				.await
-				.context("Failed to run opt-in command"),
-			"help" => help(ctx, message, args)
-				.await
-				.context("Failed to run help command"),
-			"ping" => ping(ctx, message, args)
-				.await
-				.context("Failed to run ping command"),
-			"about" => about(ctx, message, args)
-				.await
-				.context("Failed to run about command"),
-			_ => return question(ctx, message).await,
+			"add" => spawn(async move { add(&ctx, &message, &args).await }),
+			"remove" => {
+				spawn(async move { remove(&ctx, &message, &args).await })
+			}
+			"mute" => spawn(async move { mute(&ctx, &message, &args).await }),
+			"unmute" => {
+				spawn(async move { unmute(&ctx, &message, &args).await })
+			}
+			"ignore" => {
+				spawn(async move { ignore(&ctx, &message, &args).await })
+			}
+			"unignore" => {
+				spawn(async move { unignore(&ctx, &message, &args).await })
+			}
+			"block" => spawn(async move { block(&ctx, &message, &args).await }),
+			"unblock" => {
+				spawn(async move { unblock(&ctx, &message, &args).await })
+			}
+			"remove-server" => {
+				spawn(async move { remove_server(&ctx, &message, &args).await })
+			}
+			"keywords" => {
+				spawn(async move { keywords(&ctx, &message, &args).await })
+			}
+			"mutes" => spawn(async move { mutes(&ctx, &message, &args).await }),
+			"ignores" => {
+				spawn(async move { ignores(&ctx, &message, &args).await })
+			}
+			"blocks" => {
+				spawn(async move { blocks(&ctx, &message, &args).await })
+			}
+			"opt-out" => {
+				spawn(async move { opt_out(&ctx, &message, &args).await })
+			}
+			"opt-in" => {
+				spawn(async move { opt_in(&ctx, &message, &args).await })
+			}
+			"help" => spawn(async move { help(&ctx, &message, &args).await }),
+			"ping" => spawn(async move { ping(&ctx, &message, &args).await }),
+			"about" => spawn(async move { about(&ctx, &message, &args).await }),
+			_ => return question(&ctx, &message).await,
 		}
+		.await
+		.map_err(anyhow::Error::from)
+		.and_then(|r| r)
 	};
 
 	match result {
 		Err(e) => {
 			let _ = error(ctx, message, "Something went wrong running that :(")
 				.await;
-			Err(e)
+			Err(e.context(format!("Failed to run {} command", command)))
 		}
 		Ok(_) => Ok(()),
 	}
