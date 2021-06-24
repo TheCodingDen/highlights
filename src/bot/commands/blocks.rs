@@ -12,7 +12,8 @@ use serenity::{
 };
 
 use crate::{
-	db::Block, error, monitoring::Timer, responses::insert_command_response,
+	bot::responses::insert_command_response, bot::util::error, db::Block,
+	monitoring::Timer,
 };
 
 /// Block a user.

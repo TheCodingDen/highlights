@@ -30,12 +30,11 @@ use serenity::{
 use std::time::Instant;
 
 use crate::{
+	bot::{responses::insert_command_response, util::question},
 	global::EMBED_COLOR,
-	monitoring::{avg_command_time, avg_query_time, Timer},
+	monitoring::Timer,
 	require_embed_perms,
-	responses::insert_command_response,
 	settings::settings,
-	util::question,
 };
 
 /// Display the ping of the bot.
@@ -51,6 +50,18 @@ pub async fn ping(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 
 	let message_latency = format_seconds(seconds);
 
+	let reply = ping_reply(message_latency);
+
+	sent_message.edit(&ctx, |m| m.content(reply)).await?;
+
+	insert_command_response(ctx, message.id, sent_message.id).await;
+
+	Ok(())
+}
+
+#[cfg(feature = "monitoring")]
+fn ping_reply(api_latency: String) -> String {
+	use crate::monitoring::{avg_command_time, avg_query_time};
 	let cmd_latency = avg_command_time()
 		.map(format_seconds)
 		.unwrap_or_else(|| "<None>".to_owned());
@@ -59,7 +70,7 @@ pub async fn ping(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		.map(format_seconds)
 		.unwrap_or_else(|| "<None>".to_owned());
 
-	let reply = formatdoc!(
+	formatdoc!(
 		"
 		🏓 Pong!
 
@@ -67,16 +78,15 @@ pub async fn ping(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 		Average Recent Command Latency: {}
 		Average Recent Database Latency: {}
 		",
-		message_latency,
+		api_latency,
 		cmd_latency,
 		db_latency,
-	);
+	)
+}
 
-	sent_message.edit(&ctx, |m| m.content(reply)).await?;
-
-	insert_command_response(ctx, message.id, sent_message.id).await;
-
-	Ok(())
+#[cfg(not(feature = "monitoring"))]
+fn ping_reply(api_latency: String) -> String {
+	format!("🏓 Pong!\n\nAPI Latency: {}", api_latency)
 }
 
 /// Nicely formats a number of seconds as a string.

@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for sent command responses.

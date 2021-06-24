@@ -18,11 +18,11 @@ use serenity::{
 use std::{ops::Range, time::Duration};
 
 use crate::{
+	bot::util::{optional_result, user_can_read_channel},
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
 	settings::settings,
-	util::{optional_result, user_can_read_channel},
 };
 use indoc::indoc;
 use tokio::{select, time::sleep};

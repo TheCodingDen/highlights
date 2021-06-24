@@ -17,8 +17,9 @@ use serenity::{
 use std::{collections::HashMap, fmt::Write};
 
 use crate::{
-	db::Mute, monitoring::Timer, responses::insert_command_response,
-	util::error,
+	bot::{responses::insert_command_response, util::error},
+	db::Mute,
+	monitoring::Timer,
 };
 
 /// Mute a channel.

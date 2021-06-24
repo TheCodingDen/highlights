@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Miscellaneous utility functions and macros.
@@ -17,9 +17,9 @@ use serenity::{
 	prelude::HttpError,
 	Error as SerenityError,
 };
-
-use crate::responses::insert_command_response;
 use std::fmt::Display;
+
+use super::responses::insert_command_response;
 
 /// Logs an error that happened handling a command or keyword in Discord.
 ///

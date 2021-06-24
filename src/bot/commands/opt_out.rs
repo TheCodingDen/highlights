@@ -8,9 +8,9 @@ use anyhow::Result;
 use serenity::{client::Context, model::channel::Message};
 
 use crate::{
+	bot::util::{error, success},
 	db::OptOut,
 	monitoring::Timer,
-	util::{error, success},
 };
 
 /// Opt-out of being highlighted.

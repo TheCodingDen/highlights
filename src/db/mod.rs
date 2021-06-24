@@ -87,6 +87,7 @@ macro_rules! await_db {
 	($name:literal: |$conn:ident| $body:block) => {{
 		use ::anyhow::Context as _;
 
+		#[cfg(feature = "monitoring")]
 		let _timer = $crate::monitoring::Timer::query($name);
 		::tokio::task::spawn_blocking(move || -> ::anyhow::Result<_> {
 			let $conn = $crate::db::connection();

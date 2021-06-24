@@ -21,12 +21,14 @@ use super::util::{
 	get_readable_channels_from_args, get_text_channels_in_guild,
 };
 use crate::{
+	bot::{
+		responses::insert_command_response,
+		util::{error, success, MD_SYMBOL_REGEX},
+	},
 	db::{Ignore, Keyword, KeywordKind},
 	monitoring::Timer,
 	regex,
-	responses::insert_command_response,
 	settings::settings,
-	util::{error, success, MD_SYMBOL_REGEX},
 };
 
 /// Pattern for channel-specific keywords.

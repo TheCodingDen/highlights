@@ -1,4 +1,4 @@
-// Copyright 2020 Benjamin Scherer
+// Copyright 2021 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Miscellaneous utility functions and macros used by commands.
@@ -25,7 +25,7 @@ macro_rules! require_guild {
 	($ctx:expr, $message:expr) => {{
 		match $message.guild_id {
 			None => {
-				return $crate::util::error(
+				return $crate::bot::util::error(
 					$ctx,
 					$message,
 					"You must run this command in a server!",
@@ -44,7 +44,7 @@ macro_rules! require_guild {
 macro_rules! require_nonempty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
 		if $args.is_empty() {
-			return $crate::util::question($ctx, $message).await;
+			return $crate::bot::util::question($ctx, $message).await;
 		}
 	}};
 }
@@ -56,7 +56,7 @@ macro_rules! require_nonempty_args {
 macro_rules! require_empty_args {
 	($args:expr, $ctx:expr, $message:expr) => {{
 		if !$args.is_empty() {
-			return $crate::util::question($ctx, $message).await;
+			return $crate::bot::util::question($ctx, $message).await;
 		}
 	}};
 }
@@ -184,11 +184,11 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 
 	for (channel, arg) in all_channels.found {
 		let user_can_read =
-			crate::util::user_can_read_channel(ctx, channel, author_id)
+			crate::bot::util::user_can_read_channel(ctx, channel, author_id)
 				.await?
 				.context("No permissions for user to get readable channels")?;
 
-		let self_can_read = crate::util::user_can_read_channel(
+		let self_can_read = crate::bot::util::user_can_read_channel(
 			ctx,
 			channel,
 			ctx.cache.current_user_id().await,
