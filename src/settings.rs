@@ -7,7 +7,7 @@ use config::{Config, ConfigError, Environment, File};
 use log::LevelFilter;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
-#[cfg(feature = "reporting")]
+#[cfg(any(feature = "reporting", feature = "dashboard"))]
 use url::Url;
 
 use std::{collections::HashMap, env, path::PathBuf};
@@ -47,7 +47,7 @@ mod duration_de {
 #[cfg(feature = "bot")]
 use duration_de::deserialize_duration;
 
-#[cfg(feature = "monitoring")]
+#[cfg(any(feature = "monitoring", feature = "dashboard"))]
 mod user_address {
 	use serde::{de, Deserialize, Deserializer};
 	use std::{
@@ -98,7 +98,7 @@ mod user_address {
 	}
 }
 
-#[cfg(feature = "monitoring")]
+#[cfg(any(feature = "monitoring", feature = "dashboard"))]
 pub use user_address::UserAddress;
 
 /// Settings for the highlighting behavior of the bot.
@@ -153,6 +153,33 @@ pub struct DatabaseSettings {
 	pub backup: bool,
 }
 
+/// Settings for the web dashboard.
+#[derive(Debug, Deserialize)]
+#[cfg(feature = "dashboard")]
+pub struct DashboardSettings {
+	/// Discord application client ID.
+	pub client_id: u64,
+	/// Discord application client secret.
+	pub client_secret: String,
+	/// Address to host dashboard on.
+	pub address: UserAddress,
+	/// Public-facing base URL to be used for OAuth redirects.
+	///
+	/// Defaults to `http://address` (from above) or `https://address` if TLS
+	/// settings are present.
+	pub base_url: Option<Url>,
+	/// Options for using TLS (HTTPS)
+	pub tls: Option<TlsSettings>,
+}
+
+/// Settings for using TLS (HTTPS) with the web dashboard.
+#[derive(Debug, Deserialize)]
+#[cfg(feature = "dashboard")]
+pub struct TlsSettings {
+	pub key: PathBuf,
+	pub cert: PathBuf,
+}
+
 /// Collection of settings.
 #[derive(Debug, Deserialize)]
 pub struct Settings {
@@ -161,6 +188,8 @@ pub struct Settings {
 	pub bot: BotSettings,
 	pub logging: LoggingSettings,
 	pub database: DatabaseSettings,
+	#[cfg(feature = "dashboard")]
+	pub dashboard: Option<DashboardSettings>,
 }
 
 impl Settings {

@@ -21,6 +21,9 @@ pub mod reporting;
 #[cfg(feature = "bot")]
 mod bot;
 
+#[cfg(feature = "dashboard")]
+mod dashboard;
+
 /// Entrypoint function to initialize other modules and start the Discord client.
 #[tokio::main]
 async fn main() {
@@ -33,9 +36,12 @@ async fn main() {
 	#[cfg(feature = "monitoring")]
 	monitoring::init();
 
+	#[cfg(feature = "dashboard")]
+	dashboard::init();
+
 	#[cfg(feature = "bot")]
 	bot::init().await;
 
-	#[cfg(not(feature = "bot"))]
+	#[cfg(all(not(feature = "bot"), feature = "dashboard"))]
 	futures_util::future::pending::<()>().await;
 }
