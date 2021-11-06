@@ -4,7 +4,7 @@ version = "1.1.0-beta.0"
 authors = ["ThatsNoMoon <git@thatsnomoon.dev>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["bot", "monitoring", "reporting"]

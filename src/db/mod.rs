@@ -110,12 +110,10 @@ macro_rules! impl_id_ext {
 	($ty:ty $(, $($tys:ty),*)?) => {
 		impl IdI64Ext for $ty {
 			fn into_i64(self) -> i64 {
-				use ::std::convert::TryInto;
 				self.0.try_into().unwrap()
 			}
 
 			fn from_i64(x: i64) -> Self {
-				use ::std::convert::TryInto;
 				Self(x.try_into().unwrap())
 			}
 		}

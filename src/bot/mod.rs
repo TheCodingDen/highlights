@@ -32,7 +32,7 @@ use serenity::{
 };
 use tokio::task;
 
-use std::{collections::HashMap, convert::TryInto};
+use std::collections::HashMap;
 
 /// Type to serve as an event handler.
 struct Handler;
