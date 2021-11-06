@@ -159,8 +159,8 @@ pub async fn user_can_read_channel(
 	};
 
 	let permissions = match &guild {
-		FullGuild(g) => g.user_permissions_in(&channel, &member)?,
-		Partial(g) => g.user_permissions_in(&channel, &member)?,
+		FullGuild(g) => g.user_permissions_in(channel, &member)?,
+		Partial(g) => g.user_permissions_in(channel, &member)?,
 	};
 
 	Ok(Some(permissions.read_messages()))

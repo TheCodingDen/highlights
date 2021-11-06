@@ -253,7 +253,7 @@ fn get_channel_from_arg<'arg, 'c>(
 
 	if let Some(id) = arg
 		.strip_prefix("<#")
-		.and_then(|arg| arg.strip_suffix(">"))
+		.and_then(|arg| arg.strip_suffix('>'))
 		.and_then(|arg| arg.parse::<u64>().ok())
 	{
 		return match channels.get(&ChannelId(id)) {

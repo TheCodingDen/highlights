@@ -381,7 +381,7 @@ async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 			message,
 			&lowercase_content,
 			&keyword,
-			&ignores,
+			ignores,
 		)
 		.await?
 		{

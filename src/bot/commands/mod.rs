@@ -582,7 +582,7 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 			.find(|info| info.name.eq_ignore_ascii_case(args))
 		{
 			Some(info) => info,
-			None => return question(ctx, &message).await,
+			None => return question(ctx, message).await,
 		};
 
 		message
