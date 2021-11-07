@@ -419,6 +419,7 @@ dependencies = [
  "serde",
  "serenity",
  "simplelog",
+ "tinyvec",
  "tokio",
  "url",
 ]

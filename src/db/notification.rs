@@ -97,13 +97,15 @@ impl Notification {
 		})
 	}
 
-	/// Removes this notification from the DB.
-	pub async fn delete(self) -> Result<()> {
+	/// Removes notifications in the given message from the DB.
+	pub async fn delete_notification_message(
+		message_id: MessageId,
+	) -> Result<()> {
 		await_db!("delete notification": |conn| {
 			conn.execute(
 				"DELETE FROM sent_notifications
 				WHERE notification_message = ?",
-				params![self.notification_message.into_i64()],
+				params![message_id.into_i64()],
 			)?;
 
 			Ok(())

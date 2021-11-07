@@ -4,6 +4,7 @@
 //! Functions for sending, editing, and deleting notifications.
 
 use anyhow::{anyhow, Context as _, Result};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use serenity::{
 	builder::{CreateEmbed, CreateMessage, EditMessage},
 	client::Context,
@@ -14,8 +15,9 @@ use serenity::{
 	},
 	Error as SerenityError,
 };
+use tinyvec::TinyVec;
 
-use std::{ops::Range, time::Duration};
+use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
 
 use crate::{
 	bot::util::{optional_result, user_can_read_channel},
@@ -92,14 +94,14 @@ pub async fn should_notify_keyword(
 /// [`UserState`](UserState) is created.
 ///
 /// Any other errors are logged as normal.
-pub async fn notify_keyword(
+pub async fn notify_keywords(
 	ctx: Context,
 	message: Message,
-	keyword: Keyword,
+	keywords: TinyVec<[Keyword; 2]>,
 	ignores: Vec<Ignore>,
+	user_id: UserId,
 	guild_id: GuildId,
 ) {
-	let user_id = keyword.user_id;
 	let channel_id = message.channel_id;
 
 	let reply_or_reaction;
@@ -130,24 +132,34 @@ pub async fn notify_keyword(
 				None => return Ok(()),
 			};
 
-			if !should_notify_keyword(
-				&ctx,
-				&message,
-				&message.content.to_lowercase(),
-				&keyword,
-				&ignores,
-			)
-			.await?
-			{
+			let keywords = {
+				let ctx = &ctx;
+				let message = &message;
+				let lowercase_content = &message.content.to_lowercase();
+				let ignores = &ignores;
+				stream::iter(keywords)
+					.map(Ok::<_, anyhow::Error>) // convert to a TryStream
+					.try_filter_map(|keyword| async move {
+						Ok(should_notify_keyword(
+							ctx,
+							message,
+							lowercase_content,
+							&keyword,
+							ignores,
+						)
+						.await?
+						.then(|| keyword.keyword))
+					})
+					.try_collect::<TinyVec<[String; 2]>>()
+					.await?
+			};
+
+			if keywords.is_empty() {
 				return Ok(());
 			}
 
 			let message_to_send = build_notification_message(
-				&ctx,
-				&message,
-				&keyword.keyword,
-				channel_id,
-				guild_id,
+				&ctx, &message, &keywords, channel_id, guild_id,
 			)
 			.await?;
 
@@ -156,7 +168,7 @@ pub async fn notify_keyword(
 				user_id,
 				message.id,
 				message_to_send,
-				keyword.keyword,
+				keywords,
 			)
 			.await
 		}
@@ -171,12 +183,12 @@ pub async fn notify_keyword(
 async fn build_notification_message(
 	ctx: &Context,
 	message: &Message,
-	keyword: &str,
+	keywords: &[String],
 	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<CreateMessage<'static>> {
 	let embed =
-		build_notification_embed(ctx, message, keyword, channel_id, guild_id)
+		build_notification_embed(ctx, message, keywords, channel_id, guild_id)
 			.await?;
 
 	let mut msg = CreateMessage::default();
@@ -192,12 +204,12 @@ async fn build_notification_message(
 async fn build_notification_edit(
 	ctx: &Context,
 	message: &Message,
-	keyword: &str,
+	keywords: &[String],
 	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<EditMessage> {
 	let embed =
-		build_notification_embed(ctx, message, keyword, channel_id, guild_id)
+		build_notification_embed(ctx, message, keywords, channel_id, guild_id)
 			.await?;
 
 	let mut msg = EditMessage::default();
@@ -213,7 +225,7 @@ async fn build_notification_edit(
 async fn build_notification_embed(
 	ctx: &Context,
 	message: &Message,
-	keyword: &str,
+	keywords: &[String],
 	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<CreateEmbed> {
@@ -232,10 +244,23 @@ async fn build_notification_embed(
 		.guild_field(guild_id, |g| (g.name.clone(), g.icon_url()))
 		.await
 		.context("Couldn't get guild for keyword")?;
-	let title = format!(
-		"Keyword \"{}\" seen in #{} ({})",
-		keyword, channel_name, guild_name
-	);
+	let title = if keywords.len() == 1 {
+		format!(
+			"Keyword \"{}\" seen in #{} ({})",
+			keywords[0], channel_name, guild_name
+		)
+	} else {
+		let mut iter = keywords.iter();
+		let first = iter.next().unwrap();
+		let mut title =
+			iter.fold(format!("Keywords \"{}\"", first), |mut s, keyword| {
+				write!(s, ", \"{}\"", keyword).unwrap();
+				s
+			});
+
+		write!(title, " seen in #{} ({})", channel_name, guild_name).unwrap();
+		title
+	};
 	let channel_mention = format!("<#{}>", message.channel_id);
 
 	let mut embed = CreateEmbed::default();
@@ -271,7 +296,7 @@ async fn send_notification_message(
 	user_id: UserId,
 	message_id: MessageId,
 	message_to_send: CreateMessage<'static>,
-	keyword: String,
+	keywords: TinyVec<[String; 2]>,
 ) -> Result<()> {
 	let dm_channel = user_id
 		.create_dm_channel(&ctx)
@@ -290,13 +315,15 @@ async fn send_notification_message(
 			Ok(sent_message) => {
 				result = Ok(());
 				UserState::clear(user_id).await?;
-				let notification = Notification {
-					original_message: message_id,
-					notification_message: sent_message.id,
-					keyword,
-					user_id,
-				};
-				notification.insert().await?;
+				for keyword in keywords {
+					let notification = Notification {
+						original_message: message_id,
+						notification_message: sent_message.id,
+						keyword,
+						user_id,
+					};
+					notification.insert().await?;
+				}
 				break;
 			}
 
@@ -339,12 +366,10 @@ async fn send_notification_message(
 pub async fn delete_sent_notifications(
 	ctx: &Context,
 	channel_id: ChannelId,
-	notifications: &[Notification],
+	original_message: MessageId,
+	notification_messages: &[(UserId, MessageId)],
 ) {
-	for notification in notifications {
-		let user_id = notification.user_id;
-		let message_id = notification.notification_message;
-
+	for (user_id, message_id) in notification_messages {
 		let result: Result<()> = async {
 			let dm_channel = user_id.create_dm_channel(ctx).await?;
 
@@ -363,7 +388,7 @@ pub async fn delete_sent_notifications(
 		.await;
 
 		if let Err(e) = result {
-			log_discord_error!(in channel_id, deleted notification.original_message, e);
+			log_discord_error!(in channel_id, deleted original_message, e);
 		}
 	}
 }
@@ -379,24 +404,35 @@ pub async fn update_sent_notifications(
 
 	let lowercase_content = message.content.to_lowercase();
 
-	for notification in notifications {
-		if !keyword_matches(&notification.keyword, &lowercase_content) {
-			to_delete.push(notification);
+	let notifications_by_message = notifications.into_iter().fold(
+		HashMap::new(),
+		|mut map, notification| {
+			map.entry(notification.notification_message)
+				.or_insert_with(|| {
+					(notification.user_id, TinyVec::<[String; 2]>::new())
+				})
+				.1
+				.push(notification.keyword);
+			map
+		},
+	);
+
+	for (message_id, (user_id, keywords)) in notifications_by_message {
+		let keywords = keywords
+			.into_iter()
+			.filter(|keyword| keyword_matches(keyword, &lowercase_content))
+			.collect::<TinyVec<[String; 2]>>();
+
+		if keywords.is_empty() {
+			to_delete.push((user_id, message_id));
 			continue;
 		}
 
 		let result: Result<()> = async {
 			let message_to_send = build_notification_edit(
-				ctx,
-				&message,
-				&notification.keyword,
-				channel_id,
-				guild_id,
+				ctx, &message, &keywords, channel_id, guild_id,
 			)
 			.await?;
-
-			let user_id = notification.user_id;
-			let message_id = notification.notification_message;
 
 			let dm_channel = user_id.create_dm_channel(ctx).await.context(
 				"Failed to create DM channel to update notifications",
@@ -418,10 +454,13 @@ pub async fn update_sent_notifications(
 		}
 	}
 
-	delete_sent_notifications(ctx, channel_id, &to_delete).await;
+	delete_sent_notifications(ctx, channel_id, message.id, &to_delete).await;
 
-	for notification in to_delete {
-		if let Err(e) = notification.delete().await {
+	for (_, notification_message) in to_delete {
+		if let Err(e) =
+			Notification::delete_notification_message(notification_message)
+				.await
+		{
 			log_discord_error!(in channel_id, edited message.id, e);
 		}
 	}

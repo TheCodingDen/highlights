@@ -7,6 +7,8 @@ mod commands;
 
 #[macro_use]
 mod util;
+use futures_util::{stream, StreamExt, TryStreamExt};
+use tinyvec::TinyVec;
 use util::{error, question};
 
 mod highlighting;
@@ -27,7 +29,7 @@ use serenity::{
 		channel::Message,
 		event::MessageUpdateEvent,
 		gateway::{Activity, Ready},
-		id::{ChannelId, GuildId, MessageId, UserId},
+		id::{ChannelId, GuildId, MessageId},
 	},
 };
 use tokio::task;
@@ -108,7 +110,15 @@ impl EventHandler for Handler {
 
 		let notifications =
 			match Notification::notifications_of_message(message_id).await {
-				Ok(n) => n,
+				Ok(n) => n
+					.into_iter()
+					.map(|notification| {
+						(
+							notification.user_id,
+							notification.notification_message,
+						)
+					})
+					.collect::<Vec<_>>(),
 				Err(e) => {
 					log_discord_error!(in channel_id, deleted message_id, e);
 					return;
@@ -124,6 +134,7 @@ impl EventHandler for Handler {
 		highlighting::delete_sent_notifications(
 			&ctx,
 			channel_id,
+			message_id,
 			&notifications,
 		)
 		.await;
@@ -353,47 +364,56 @@ async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 
 	let channel_id = message.channel_id;
 
-	let lowercase_content = message.content.to_lowercase();
+	let lowercase_content = &message.content.to_lowercase();
 
-	let keywords =
+	let keywords_by_user =
 		Keyword::get_relevant_keywords(guild_id, channel_id, message.author.id)
-			.await?;
+			.await?
+			.into_iter()
+			.fold(HashMap::new(), |mut map, keyword| {
+				map.entry(keyword.user_id)
+					.or_insert_with(|| tinyvec::tiny_vec![[Keyword; 2]])
+					.push(keyword);
+				map
+			});
 
 	let mut ignores_by_user = HashMap::new();
 
-	for keyword in keywords {
-		let ignores = match ignores_by_user.get(&keyword.user_id) {
+	for (user_id, keywords) in keywords_by_user {
+		let ignores = match ignores_by_user.get(&user_id) {
 			Some(ignores) => ignores,
 			None => {
-				let user_ignores = Ignore::user_guild_ignores(
-					UserId(keyword.user_id.try_into().unwrap()),
-					guild_id,
-				)
-				.await?;
-				ignores_by_user
-					.entry(keyword.user_id)
-					.or_insert(user_ignores)
+				let user_ignores =
+					Ignore::user_guild_ignores(user_id, guild_id).await?;
+				ignores_by_user.entry(user_id).or_insert(user_ignores)
 			}
 		};
 
-		if highlighting::should_notify_keyword(
+		let keywords = stream::iter(keywords)
+			.map(Ok::<_, anyhow::Error>) // convert to a TryStream
+			.try_filter_map(|keyword| async move {
+				Ok(highlighting::should_notify_keyword(
+					ctx,
+					message,
+					lowercase_content,
+					&keyword,
+					ignores,
+				)
+				.await?
+				.then(|| keyword))
+			})
+			.try_collect::<TinyVec<[Keyword; 2]>>()
+			.await?;
+
+		let ctx = ctx.clone();
+		task::spawn(highlighting::notify_keywords(
 			ctx,
-			message,
-			&lowercase_content,
-			&keyword,
-			ignores,
-		)
-		.await?
-		{
-			let ctx = ctx.clone();
-			task::spawn(highlighting::notify_keyword(
-				ctx,
-				message.clone(),
-				keyword,
-				ignores.clone(),
-				guild_id,
-			));
-		}
+			message.clone(),
+			keywords,
+			ignores.clone(),
+			user_id,
+			guild_id,
+		));
 	}
 
 	Ok(())

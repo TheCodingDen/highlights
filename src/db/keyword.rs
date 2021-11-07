@@ -17,7 +17,13 @@ pub enum KeywordKind {
 	Guild(GuildId),
 }
 
-#[derive(Debug, Clone)]
+impl Default for KeywordKind {
+	fn default() -> Self {
+		Self::Channel(ChannelId(0))
+	}
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Keyword {
 	pub keyword: String,
 	pub user_id: UserId,
