@@ -35,7 +35,7 @@ use crate::{
 ///
 /// Matches text such as `"foo" in bar baz`.
 static CHANNEL_KEYWORD_REGEX: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
-	Regex::new(r#"^"((?:\\"|[^"])*)" (?:in|from) ((?:\S+(?:$| ))+)"#).unwrap()
+	Regex::new(r#"^"((?:\\"|[^"])*)" (?:in|from) ((?:\S+(?:$| ))+)$"#).unwrap()
 });
 
 /// Add a keyword.

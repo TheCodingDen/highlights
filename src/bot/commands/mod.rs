@@ -173,7 +173,8 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 	let commands = [
 		CommandInfo {
 			name: "add",
-			short_desc: "Add a keyword to highlight in the current server",
+			short_desc:
+				"Add a keyword to highlight in the current server or a specific channel",
 			long_desc: formatdoc!("
 				Use `@{name} add [keyword]` to add a keyword to highlight in the current server. \
 				{name} will notify you (in DMs) about any messages containing your keywords \
