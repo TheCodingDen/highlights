@@ -23,41 +23,17 @@ use std::{collections::HashMap, iter::FromIterator};
 /// to the guild's ID otherwise.
 #[macro_export]
 macro_rules! require_guild {
-	($ctx:expr, $message:expr) => {{
-		match $message.guild_id {
+	($ctx:expr, $command:expr) => {{
+		match $command.guild_id {
 			None => {
-				return $crate::bot::util::error(
+				return $crate::bot::util::respond_eph(
 					$ctx,
-					$message,
-					"You must run this command in a server!",
+					$command,
+					"❌ You must run this command in a server!",
 				)
 				.await
 			}
 			Some(id) => id,
-		}
-	}};
-}
-
-/// Requires the given arguments to be non-empty.
-///
-/// Returns with [`question`](crate::util::question) if the arguments are empty.
-#[macro_export]
-macro_rules! require_nonempty_args {
-	($args:expr, $ctx:expr, $message:expr) => {{
-		if $args.is_empty() {
-			return $crate::bot::util::question($ctx, $message).await;
-		}
-	}};
-}
-
-/// Requires the given arguments to be empty.
-///
-/// Returns with [`question`](crate::util::question) if the arguments are non-empty.
-#[macro_export]
-macro_rules! require_empty_args {
-	($args:expr, $ctx:expr, $message:expr) => {{
-		if !$args.is_empty() {
-			return $crate::bot::util::question($ctx, $message).await;
 		}
 	}};
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Commands for adding, removing, and listing channel mutes.
@@ -11,261 +11,134 @@ use super::util::{
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
-	model::channel::{ChannelType, Message},
+	model::{
+		channel::{ChannelType, Message},
+		interactions::application_command::ApplicationCommandInteraction as Command,
+	},
 };
 
 use std::{collections::HashMap, fmt::Write};
 
 use crate::{
-	bot::{responses::insert_command_response, util::error},
+	bot::{
+		responses::insert_command_response,
+		util::{respond_eph, user_can_read_channel},
+	},
 	db::Mute,
 	monitoring::Timer,
 };
 
 /// Mute a channel.
 ///
-/// Usage: `@Highlights mute <whitespace-separated channel IDs or mentions>`
-pub async fn mute(ctx: &Context, message: &Message, args: &str) -> Result<()> {
+/// Usage: `/mute <channel>`
+pub async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("mute");
-	let guild_id = require_guild!(ctx, message);
+	let guild_id = require_guild!(ctx, &command);
 
-	require_nonempty_args!(args, ctx, message);
+	let channel_id = command
+		.data
+		.resolved
+		.channels
+		.drain()
+		.next()
+		.map(|(id, _)| id)
+		.context("No channel to mute provided")?;
 
-	let channels = get_text_channels_in_guild(ctx, guild_id).await?;
+	let channel = ctx
+		.cache
+		.guild_channel(channel_id)
+		.await
+		.context("Failed to get guild channel to mute")?;
 
-	let channel_args = get_readable_channels_from_args(
+	match user_can_read_channel(
 		ctx,
-		message.author.id,
-		&channels,
-		args,
+		&channel,
+		ctx.cache.current_user_id().await,
 	)
-	.await?;
+	.await
+	{
+		Ok(Some(true)) => {
+			let mute = Mute {
+				user_id: command.user.id,
+				channel_id,
+			};
 
-	let mut not_found = channel_args.not_found;
-	not_found
-		.extend(channel_args.user_cant_read.into_iter().map(|(_, arg)| arg));
-
-	let cant_mute = channel_args
-		.self_cant_read
-		.into_iter()
-		.map(|c| format!("<#{}>", c.id))
-		.collect::<Vec<_>>();
-
-	let mut muted = vec![];
-	let mut already_muted = vec![];
-
-	for channel in channel_args.found {
-		let mute = Mute {
-			user_id: message.author.id,
-			channel_id: channel.id,
-		};
-
-		if mute.clone().exists().await? {
-			already_muted.push(format!("<#{}>", channel.id));
-		} else {
-			muted.push(format!("<#{}>", channel.id));
-			mute.insert().await?;
+			if mute.clone().exists().await? {
+				respond_eph(
+					ctx,
+					&command,
+					format!("❌ You've already muted <#{}>!", channel_id),
+				)
+				.await
+			} else {
+				mute.insert().await?;
+				respond_eph(
+					ctx,
+					&command,
+					format!("✅ Muted <#{}>", channel_id),
+				)
+				.await
+			}
 		}
-	}
-
-	let mut msg = String::with_capacity(45);
-
-	if !muted.is_empty() {
-		msg.push_str("Muted channels: ");
-		msg.push_str(&muted.join(", "));
-
-		message.react(ctx, '✅').await?;
-	}
-
-	if !already_muted.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
+		Ok(Some(false)) => {
+			respond_eph(
+				ctx,
+				&command,
+				format!("❌ I can't read <#{}>!", channel_id),
+			)
+			.await
 		}
-		msg.push_str("Channels already muted: ");
-		msg.push_str(&already_muted.join(", "));
-
-		message.react(ctx, '❌').await?;
+		Ok(None) => Err(anyhow::anyhow!(
+			"Self permissions not found in channel {} in guild {}",
+			channel_id,
+			guild_id
+		)),
+		Err(e) => Err(e.context(
+			"Failed to check for self permissions to read muted channel",
+		)),
 	}
-
-	if !not_found.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Couldn't find channels: ");
-		msg.push_str(&not_found.join(", "));
-
-		message.react(ctx, '❓').await?;
-	}
-
-	if !cant_mute.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Unable to mute channels: ");
-		msg.push_str(&cant_mute.join(", "));
-
-		if already_muted.is_empty() {
-			message.react(ctx, '❌').await?;
-		}
-	}
-
-	let response = message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.content(msg).allowed_mentions(|m| m.empty_parse())
-		})
-		.await?;
-
-	insert_command_response(ctx, message.id, response.id).await;
-
-	Ok(())
 }
 
 /// Unmute a channel.
 ///
-/// Usage: `@Highlights unmute <whitespace-separated channel IDs or mentions>`
-pub async fn unmute(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+/// Usage: `/unmute <channel>`
+pub async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("unmute");
-	require_nonempty_args!(args, ctx, message);
 
-	let channels = match message.guild_id {
-		Some(guild_id) => {
-			ctx.cache.guild_channels(guild_id).await.map(|channels| {
-				channels
-					.into_iter()
-					.filter(|(_, channel)| channel.kind == ChannelType::Text)
-					.collect()
-			})
-		}
-		None => None,
+	let channel_id = command
+		.data
+		.resolved
+		.channels
+		.drain()
+		.next()
+		.map(|(id, _)| id)
+		.context("No channel to mute provided")?;
+
+	let mute = Mute {
+		user_id: command.user.id,
+		channel_id,
 	};
 
-	let user_id = message.author.id;
-
-	let mut unmuted = vec![];
-	let mut not_muted = vec![];
-	let mut not_found = vec![];
-
-	match channels.as_ref() {
-		Some(channels) => {
-			let channel_args = get_readable_channels_from_args(
-				ctx,
-				message.author.id,
-				channels,
-				args,
-			)
-			.await?;
-
-			not_found = channel_args.not_found;
-
-			for (user_unreadable, arg) in channel_args.user_cant_read {
-				let mute = Mute {
-					user_id,
-					channel_id: user_unreadable.id,
-				};
-
-				if !mute.clone().exists().await? {
-					not_found.push(arg);
-				} else {
-					unmuted.push(format!("<#{0}> ({0})", user_unreadable.id));
-					mute.delete().await?;
-				}
-			}
-
-			for self_unreadable in channel_args
-				.found
-				.into_iter()
-				.chain(channel_args.self_cant_read)
-			{
-				let mute = Mute {
-					user_id,
-					channel_id: self_unreadable.id,
-				};
-
-				if !mute.clone().exists().await? {
-					not_muted.push(format!("<#{0}>", self_unreadable.id));
-				} else {
-					unmuted.push(format!("<#{0}>", self_unreadable.id));
-					mute.delete().await?;
-				}
-			}
-		}
-		None => {
-			for result in get_ids_from_args(args) {
-				match result {
-					Ok((channel_id, arg)) => {
-						let mute = Mute {
-							user_id,
-							channel_id,
-						};
-
-						if !mute.clone().exists().await? {
-							not_found.push(arg);
-						} else {
-							unmuted.push(format!("<#{0}> ({0})", channel_id));
-							mute.delete().await?;
-						}
-					}
-					Err(arg) => {
-						not_found.push(arg);
-					}
-				}
-			}
-		}
+	if !mute.clone().exists().await? {
+		respond_eph(
+			ctx,
+			&command,
+			format!("❌ You haven't muted <#{}>!", channel_id),
+		)
+		.await
+	} else {
+		mute.delete().await?;
+		respond_eph(ctx, &command, format!("✅ Unmuted <#{}>", channel_id))
+			.await
 	}
-
-	let mut msg = String::with_capacity(50);
-
-	if !unmuted.is_empty() {
-		msg.push_str("Unmuted channels: ");
-		msg.push_str(&unmuted.join(", "));
-
-		message.react(ctx, '✅').await?;
-	}
-
-	if !not_muted.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Channels weren't muted: ");
-		msg.push_str(&not_muted.join(", "));
-
-		message.react(ctx, '❌').await?;
-	}
-
-	if !not_found.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Couldn't find channels: ");
-		msg.push_str(&not_found.join(", "));
-
-		message.react(ctx, '❓').await?;
-	}
-
-	let response = message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.content(msg).allowed_mentions(|m| m.empty_parse())
-		})
-		.await?;
-
-	insert_command_response(ctx, message.id, response.id).await;
-
-	Ok(())
 }
 
-/// List muted channels in the current guild, or all guilds when used in DMs.
+/// List muted channels in the current guild.
 ///
-/// Usage: `@Highlights mutes`
-pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
+/// Usage: `/mutes`
+pub async fn mutes(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("mutes");
-	require_empty_args!(args, ctx, message);
-	match message.guild_id {
+	match command.guild_id {
 		Some(guild_id) => {
 			let channels = ctx
 				.cache
@@ -273,7 +146,7 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.await
 				.context("Couldn't get guild channels to list mutes")?;
 
-			let mutes = Mute::user_mutes(message.author.id)
+			let mutes = Mute::user_mutes(command.user.id)
 				.await?
 				.into_iter()
 				.filter(|mute| channels.contains_key(&mute.channel_id))
@@ -281,8 +154,12 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.collect::<Vec<_>>();
 
 			if mutes.is_empty() {
-				return error(ctx, message, "You haven't muted any channels!")
-					.await;
+				return respond_eph(
+					ctx,
+					&command,
+					"❌ You haven't muted any channels!",
+				)
+				.await;
 			}
 
 			let guild_name = ctx
@@ -292,27 +169,23 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.context("Couldn't get guild to list mutes")?;
 
 			let response = format!(
-				"{}'s muted channels in {}:\n  - {}",
-				message.author.name,
+				"Your muted channels in {}:\n  - {}",
 				guild_name,
 				mutes.join("\n  - ")
 			);
 
-			let response = message
-				.channel_id
-				.send_message(ctx, |m| {
-					m.content(response).allowed_mentions(|m| m.empty_parse())
-				})
-				.await?;
-
-			insert_command_response(ctx, message.id, response.id).await;
+			respond_eph(ctx, &command, response).await
 		}
 		None => {
-			let mutes = Mute::user_mutes(message.author.id).await?;
+			let mutes = Mute::user_mutes(command.user.id).await?;
 
 			if mutes.is_empty() {
-				return error(ctx, message, "You haven't muted any channels!")
-					.await;
+				return respond_eph(
+					ctx,
+					&command,
+					"❌ You haven't muted any channels!",
+				)
+				.await;
 			}
 
 			let mut mutes_by_guild = HashMap::new();
@@ -366,16 +239,7 @@ pub async fn mutes(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				.unwrap();
 			}
 
-			let response = message
-				.channel_id
-				.send_message(ctx, |m| {
-					m.content(response).allowed_mentions(|m| m.empty_parse())
-				})
-				.await?;
-
-			insert_command_response(ctx, message.id, response.id).await;
+			respond_eph(ctx, &command, response).await
 		}
 	}
-
-	Ok(())
 }

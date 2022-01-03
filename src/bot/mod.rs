@@ -201,8 +201,8 @@ impl EventHandler for Handler {
 			match &*name {
 				// "add" => spawn(async move { add(&ctx, command).await }),
 				// "remove" => spawn(async move { remove(&ctx, command).await }),
-				// "mute" => spawn(async move { mute(&ctx, command).await }),
-				// "unmute" => spawn(async move { unmute(&ctx, command).await }),
+				"mute" => spawn(async move { mute(&ctx, command).await }),
+				"unmute" => spawn(async move { unmute(&ctx, command).await }),
 				// "ignore" => spawn(async move { ignore(&ctx, command).await }),
 				// "unignore" => {
 				// 	spawn(async move { unignore(&ctx, command).await })
@@ -215,7 +215,7 @@ impl EventHandler for Handler {
 				// "keywords" => {
 				// 	spawn(async move { keywords(&ctx, command).await })
 				// }
-				// "mutes" => spawn(async move { mutes(&ctx, command).await }),
+				"mutes" => spawn(async move { mutes(&ctx, command).await }),
 				// "ignores" => spawn(async move { ignores(&ctx, command).await }),
 				"blocks" => spawn(async move { blocks(&ctx, command).await }),
 				"opt-out" => spawn(async move { opt_out(&ctx, command).await }),

@@ -11,8 +11,8 @@ mod util;
 // 	add, ignore, ignores, keywords, remove, remove_server, unignore,
 // };
 
-// mod mutes;
-// pub use mutes::{mute, mutes, unmute};
+mod mutes;
+pub use mutes::{mute, mutes, unmute};
 
 mod blocks;
 pub use blocks::{block, blocks, unblock};
@@ -48,6 +48,7 @@ use crate::{
 };
 
 pub async fn create_commands(ctx: Context) {
+	log::info!("Registering slash commands");
 	for command in COMMAND_INFO.iter() {
 		if let Some(guild) = settings().bot.test_guild {
 			guild
