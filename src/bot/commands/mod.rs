@@ -6,28 +6,38 @@
 #[macro_use]
 mod util;
 
-mod keywords;
-pub use keywords::{
-	add, ignore, ignores, keywords, remove, remove_server, unignore,
-};
+// mod keywords;
+// pub use keywords::{
+// 	add, ignore, ignores, keywords, remove, remove_server, unignore,
+// };
 
-mod mutes;
-pub use mutes::{mute, mutes, unmute};
+// mod mutes;
+// pub use mutes::{mute, mutes, unmute};
 
-mod blocks;
-pub use blocks::{block, blocks, unblock};
+// mod blocks;
+// pub use blocks::{block, blocks, unblock};
 
-mod opt_out;
-pub use opt_out::{opt_in, opt_out};
+// mod opt_out;
+// pub use opt_out::{opt_in, opt_out};
 
 use anyhow::{Context as _, Result};
-use indoc::formatdoc;
+use indoc::indoc;
+use once_cell::sync::Lazy;
 use serenity::{
+	builder::CreateApplicationCommandOption,
 	client::Context,
-	model::{channel::Message, Permissions},
+	model::{
+		channel::Message,
+		interactions::{
+			application_command::{
+				ApplicationCommand, ApplicationCommandInteraction as Command,
+			},
+			InteractionApplicationCommandCallbackDataFlags as ResponseFlags,
+		},
+		oauth2::OAuth2Scope,
+		Permissions,
+	},
 };
-
-use std::time::Instant;
 
 use crate::{
 	bot::{responses::insert_command_response, util::question},
@@ -37,31 +47,52 @@ use crate::{
 	settings::settings,
 };
 
+pub async fn create_commands(ctx: Context) {
+	for command in COMMAND_INFO.iter() {
+		if let Some(guild) = settings().bot.test_guild {
+			guild
+				.create_application_command(&ctx, |create| {
+					create
+						.name(command.name)
+						.description(command.short_desc)
+						.set_options(command.options.clone())
+				})
+				.await
+				.expect("Failed to create guild application command");
+		}
+		ApplicationCommand::create_global_application_command(&ctx, |create| {
+			create
+				.name(command.name)
+				.description(command.short_desc)
+				.set_options(command.options.clone())
+		})
+		.await
+		.expect("Failed to create application command");
+	}
+}
+
 /// Display the ping of the bot.
 ///
 /// Returns the API latency in sending a message, and the metrics of command and database time
 /// recorded in [`monitoring`](crate::monitoring).
-pub async fn ping(ctx: &Context, message: &Message, args: &str) -> Result<()> {
+pub async fn ping(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("ping");
-	require_empty_args!(args, ctx, message);
-	let start = Instant::now();
-	let mut sent_message = message.channel_id.say(ctx, "Ping... 🏓").await?;
-	let seconds = start.elapsed().as_secs_f64();
 
-	let message_latency = format_seconds(seconds);
+	let reply = ping_reply();
 
-	let reply = ping_reply(message_latency);
-
-	sent_message.edit(&ctx, |m| m.content(reply)).await?;
-
-	insert_command_response(ctx, message.id, sent_message.id).await;
+	command
+		.create_interaction_response(ctx, |create| {
+			create.interaction_response_data(|m| m.content(reply))
+		})
+		.await?;
 
 	Ok(())
 }
 
 #[cfg(feature = "monitoring")]
-fn ping_reply(api_latency: String) -> String {
+fn ping_reply() -> String {
 	use crate::monitoring::{avg_command_time, avg_query_time};
+	use indoc::formatdoc;
 	let cmd_latency = avg_command_time()
 		.map(format_seconds)
 		.unwrap_or_else(|| "<None>".to_owned());
@@ -74,24 +105,18 @@ fn ping_reply(api_latency: String) -> String {
 		"
 		🏓 Pong!
 
-		API Latency: {}
 		Average Recent Command Latency: {}
 		Average Recent Database Latency: {}
 		",
-		api_latency,
 		cmd_latency,
 		db_latency,
 	)
 }
 
-#[cfg(not(feature = "monitoring"))]
-fn ping_reply(api_latency: String) -> String {
-	format!("🏓 Pong!\n\nAPI Latency: {}", api_latency)
-}
-
 /// Nicely formats a number of seconds as a string.
 ///
 /// Returns `x s` when >= 10 seconds, `x ms` when >= 0.1 ms, and `x μs` when < 0.1 ms.
+#[cfg(feature = "monitoring")]
 fn format_seconds(seconds: f64) -> String {
 	if seconds >= 10.0 {
 		format!("{:.2} s", seconds)
@@ -103,52 +128,61 @@ fn format_seconds(seconds: f64) -> String {
 	}
 }
 
+#[cfg(not(feature = "monitoring"))]
+fn ping_reply() -> String {
+	"🏓 Pong!".to_owned()
+}
+
 /// Displays information about the bot.
 ///
 /// Displays the cargo package name and version, cargo source, author, and an invite URL.
-pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
+pub async fn about(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("about");
-	require_empty_args!(args, ctx, message);
-	require_embed_perms!(ctx, message);
+	require_embed_perms!(ctx, command);
 
 	let invite_url = if settings().bot.private {
 		None
 	} else {
+		let scopes = [OAuth2Scope::Bot, OAuth2Scope::ApplicationsCommands];
 		Some(
 			ctx.cache
 				.current_user()
 				.await
-				.invite_url(&ctx, Permissions::empty())
+				.invite_url_with_oauth2_scopes(
+					&ctx,
+					Permissions::empty(),
+					&scopes,
+				)
 				.await?,
 		)
 	};
-	let response = message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.embed(|e| {
-				e.title(concat!(
-					env!("CARGO_PKG_NAME"),
-					" ",
-					env!("CARGO_PKG_VERSION")
-				))
-				.field("Source", env!("CARGO_PKG_REPOSITORY"), true)
-				.field("Author", "ThatsNoMoon#0175", true)
-				.color(EMBED_COLOR);
 
-				if let Some(invite_url) = invite_url {
-					e.field(
-						"Invite",
-						format!("[Add me to your server]({})", invite_url),
-						true,
-					);
-				};
-				e
+	command
+		.create_interaction_response(&ctx, |r| {
+			r.interaction_response_data(|m| {
+				m.create_embed(|e| {
+					e.title(concat!(
+						env!("CARGO_PKG_NAME"),
+						" ",
+						env!("CARGO_PKG_VERSION")
+					))
+					.field("Source", env!("CARGO_PKG_REPOSITORY"), true)
+					.field("Author", "ThatsNoMoon#0175", true)
+					.color(EMBED_COLOR);
+
+					if let Some(invite_url) = invite_url {
+						e.field(
+							"Invite",
+							format!("[Add me to your server]({})", invite_url),
+							true,
+						);
+					};
+					e
+				})
 			})
 		})
 		.await
 		.context("Failed to send about message")?;
-
-	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -157,27 +191,96 @@ pub async fn about(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 ///
 /// When given no arguments, displays the list of commands. When given an argument, displays
 /// detailed information about the command of that name.
-pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
+pub async fn help(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("help");
-	require_embed_perms!(ctx, message);
-
-	struct CommandInfo {
-		name: &'static str,
-		short_desc: &'static str,
-		long_desc: String,
-		examples: Option<String>,
-	}
+	require_embed_perms!(ctx, command);
 
 	let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
 
-	let commands = [
+	match command.data.options.get(0) {
+		None => {
+			command
+				.create_interaction_response(&ctx, |r| {
+					r.interaction_response_data(|m| {
+						m.flags(ResponseFlags::EPHEMERAL).create_embed(|e| {
+							e.title(format!("{} – Help", username))
+								.description(
+									"Use `/help [command]` to see more \
+									information about a specified command",
+								)
+								.fields(COMMAND_INFO.iter().map(|info| {
+									(info.name, info.short_desc, true)
+								}))
+								.color(EMBED_COLOR)
+						})
+					})
+				})
+				.await?
+		}
+		Some(option) => {
+			let name = option
+				.value
+				.as_ref()
+				.context("Command option has no value")?
+				.as_str()
+				.context("Command option is not string")?;
+			let info = match COMMAND_INFO
+				.iter()
+				.find(|info| info.name.eq_ignore_ascii_case(name))
+			{
+				Some(info) => info,
+				None => {
+					return Err(anyhow::anyhow!(
+						"Invalid command name passed to help: {}",
+						name
+					));
+				}
+			};
+
+			command
+				.create_interaction_response(&ctx, |r| {
+					r.interaction_response_data(|m| {
+						m.flags(ResponseFlags::EPHEMERAL).create_embed(|e| {
+							e.title(format!("Help – {}", info.name))
+								.description(&info.long_desc)
+								.color(EMBED_COLOR);
+
+							match info.examples.as_ref() {
+								Some(ex) => e.field("Example Usage", ex, false),
+								None => e,
+							}
+						})
+					})
+				})
+				.await?
+		}
+	}
+
+	Ok(())
+}
+
+struct CommandInfo {
+	name: &'static str,
+	short_desc: &'static str,
+	long_desc: &'static str,
+	examples: Option<&'static str>,
+	options: Vec<CreateApplicationCommandOption>,
+}
+
+static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
+	Lazy::new(|| {
+		use serenity::{
+			builder::CreateApplicationCommandOption as Option,
+			model::interactions::application_command::ApplicationCommandOptionType as OptionType,
+		};
+		[
 		CommandInfo {
 			name: "add",
 			short_desc:
 				"Add a keyword to highlight in the current server or a specific channel",
-			long_desc: formatdoc!("
-				Use `@{name} add [keyword]` to add a keyword to highlight in the current server. \
-				{name} will notify you (in DMs) about any messages containing your keywords \
+			long_desc: indoc!("
+				Use `/add [keyword]` to add a keyword to highlight in the current server. \
+				You'll be notified (in DMs) about any messages containing your keywords \
 				(other than messages in muted channels or messages with ignored phrases).
 
 				In this usage, all of the text after `add` will be treated as one keyword.
@@ -185,7 +288,7 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				Keywords are case-insensitive.
 
 				You can also add a keyword in just a specific channel or channels with \
-				`@{name} add \"[keyword]\" in [channels]`. \
+				`/add \"[keyword]\" in [channels]`. \
 				You'll only be notified of keywords added this way when they appear in the \
 				specified channel(s) (not when they appear anywhere else). \
 				The keyword must be surrounded with quotes, and you can use `\\\"` to add a \
@@ -194,60 +297,94 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				You can specify multiple channels, separated by spaces, to add the keyword in \
 				all of them at once.
 
-				You can remove keywords later with `@{name} remove [keyword]`; see \
-				`@{name} help remove` for more information.
+				You can remove keywords later with `/ remove [keyword]`; see \
+				`/ help remove` for more information.
 
-				You can list your current keywords with `@{name} keywords`.",
-				name = username,
+				You can list your current keywords with `/keywords`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Add the keyword \"rust\" in the current server:
-				`@{name} add rust`
+				`/add rust`
 
 				Add the keyword \"optimize\" in only the #javascript channel:
-				`@{name} add \"optimize\" in javascript`
+				`/add \"optimize\" in javascript`
 
 				Add the keyword \"hello world\" in the current server:
-				`@{name} add hello world`",
-				name = username
+				`/add hello world`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("keyword")
+						.description("The keyword to listen to")
+						.kind(OptionType::String)
+						.required(true);
+					opt
+				},
+				{
+					let mut opt = Option::default();
+					opt
+						.name("channel")
+						.description("A specific channel for this keyword")
+						.kind(OptionType::Channel);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "remove",
 			short_desc: "Remove a keyword to highlight in the current server",
-			long_desc: formatdoc!("
-				Use `@{name} remove [keyword]` to remove a keyword that you previously added \
-				with `@{name} add` in the current server.
+			long_desc: indoc!("
+				Use `/remove [keyword]` to remove a keyword that you previously added \
+				with `/add` in the current server.
 
 				In this usage, all of the text after `remove` will be treated as one keyword.
 
 				Keywords are case-insensitive.
 
 				You can also remove a keyword that you added to a specific channel or channels \
-				with `@{name} remove \"[keyword]\" from [channels]`. \
+				with `/remove \"[keyword]\" from [channels]`. \
 				The keyword must be surrounded with quotes, and you can use `\\\"` to remove a \
 				keyword with a quote in it. \
 				`[channels]` may be channel mentions, channel names, or channel IDs. \
 				You can specify multiple channels, separated by spaces, to remove the keyword \
 				from all of them at once.
 
-				You can list your current keywords with `@{name} keywords`.",
-				name = username,
+				You can list your current keywords with `/keywords`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Remove the keyword \"node\" from the current server:
-				`@{name} remove node`
+				`/remove node`
 
 				Remove the keyword \"go\" from the #general channel:
-				`@{name} remove \"go\" from general`",
-				name = username,
+				`/remove \"go\" from general`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("keyword")
+						.description("The keyword to listen to")
+						.kind(OptionType::String)
+						.required(true);
+					opt
+				},
+				{
+					let mut opt = Option::default();
+					opt
+						.name("channel")
+						.description("The specific channel for this keyword")
+						.kind(OptionType::Channel);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "mute",
 			short_desc: "Mute a channel to prevent server keywords from being highlighted there",
-			long_desc: formatdoc!("
-				Use `@{name} mute [channels]` to mute the specified channel(s) and \
+			long_desc: indoc!("
+				Use `/mute [channels]` to mute the specified channel(s) and \
 				prevent notifications about your server-wide keywords appearing there. \
 				`[channels]` may be channel mentions, channel names, or channel IDs. \
 				You can specify multiple channels, separated by spaces, to mute all of them \
@@ -255,143 +392,197 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 
 				You'll still be notified about any channel-specific keywords you add to muted \
 				channels. \
-				See `@{name} help add` for more information about channel-specific keywords.
+				See `/help add` for more information about channel-specific keywords.
 
-				You can unmute channels later with `@{name} unmute [channels]`.
+				You can unmute channels later with `/unmute [channels]`.
 
-				You can list your currently muted channels with `@{name} mutes`.",
-				name = username,
+				You can list your currently muted channels with `/mutes`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Mute the #memes channel:
-				`@{name} mute memes`
+				`/mute memes`
 
 				Mute the #general channel, and the off-topic channel, and the channel with an ID of 73413749283:
-				`@{name} mute #general off-topic 73413749283`",
-				name = username
+				`/mute #general off-topic 73413749283`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("channel")
+						.description("The channel to mute")
+						.kind(OptionType::Channel)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "unmute",
 			short_desc:
 				"Unmute a channel, enabling notifications about server keywords appearing there",
-			long_desc: formatdoc!("
-				Use `@{name} unmute [channels]` to unmute channels you previously muted and \
+			long_desc: indoc!("
+				Use `/unmute [channels]` to unmute channels you previously muted and \
 				re-enable notifications about your keywords appearing there. \
 				`[channels]` may be channel mentions, channel names, or channel IDs. \
 				You can specify multiple channels, separated by spaces, to unmute all of them at \
 				once.
 
-				You can list your currently muted channels with `@{name} mutes`.",
-				name = username,
+				You can list your currently muted channels with `/mutes`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Unmute the #rust channel:
-				`@{name} unmute rust`
+				`/unmute rust`
 
 				Unmute the #functional channel, and the elixir channel, and the channel with an ID of 73413749283:
-				`@{name} unmute #functional elixir 73413749283`",
-				name = username
+				`/unmute #functional elixir 73413749283`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("channel")
+						.description("The channel to unmute")
+						.kind(OptionType::Channel)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "block",
 			short_desc: "Block a user to prevent your keywords in their messages from being highlighted",
-			long_desc: formatdoc!("
-				Use `@{name} block [users]` to block the specified users(s) and \
+			long_desc: indoc!("
+				Use `/block [users]` to block the specified users(s) and \
 				prevent notifications about your keywords in their messages. \
 				`[users]` may be user mentions or user IDs. \
 				You can specify multiple users, separated by spaces, to block all of them \
 				at once.
 
-				You can unblock users later with `@{name} unblock [users]`.
+				You can unblock users later with `/unblock [users]`.
 
-				You can list your currently blocked users with `@{name} blocks`.",
-				name = username,
+				You can list your currently blocked users with `/blocks`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Block AnnoyingUser:
-				`@{name} block @AnnoyingUser`
+				`/block @AnnoyingUser`
 
 				Block RidiculousPerson and the user with ID 669274872716
-				`@{name} mute @RidiculousPerson 669274872716`",
-				name = username
+				`/mute @RidiculousPerson 669274872716`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("user")
+						.description("The user to block")
+						.kind(OptionType::User)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "unblock",
 			short_desc:
 				"Unblock a user, enabling notifications about your keywords in their messages",
-			long_desc: formatdoc!("
-				Use `@{name} unblock [users]` to unblock users you previously blocked and \
+			long_desc: indoc!("
+				Use `/unblock [users]` to unblock users you previously blocked and \
 				re-enable notifications about your keywords appearing in their messages. \
 				`[users]` may be user mentions or user IDs. You can specify multiple users, \
 				separated by spaces, to unblock all of them at once.
 
-				You can list your currently blocked users with `@{name} blocks`.",
-				name = username,
+				You can list your currently blocked users with `/blocks`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Unblock the user RedemptionArc:
-				`@{name} unblock @RedemptionArc`
+				`/unblock @RedemptionArc`
 
 				Unmute the user AccidentallyTrollish and the user with an ID of 669274872716:
-				`@{name} unblock @AccidentallyTrollish 669274872716`",
-				name = username
+				`/unblock @AccidentallyTrollish 669274872716`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("user")
+						.description("The user to unblock")
+						.kind(OptionType::User)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "ignore",
 			short_desc: "Add a phrase to ignore in the current server",
-			long_desc: formatdoc!("
-				Use `@{name} ignore [phrase]` to add a phrase to ignore in the current server.
+			long_desc: indoc!("
+				Use `/ignore [phrase]` to add a phrase to ignore in the current server.
 
 				You won't be notified of any messages that contain ignored phrases, even if they \
 				contain one of your keywords.
 
 				Phrases are case-insensitive.
 
-				You can remove ignored phrases later with `@{name} unignore [phrase]`; see \
-				`@{name} help unignore` for more information.
+				You can remove ignored phrases later with `/unignore [phrase]`; see \
+				`/help unignore` for more information.
 
-				You can list your current keywords with `@{name} ignores`.",
-				name = username,
+				You can list your current keywords with `/ignores`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Ignore messages containing \"meme\" in the current server:
-				`@{name} ignore meme`
+				`/ignore meme`
 
 				Ignore messages containing \"hello world\" in the current server:
-				`@{name} ignore hello world`",
-				name = username
+				`/ignore hello world`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("phrase")
+						.description("The phrase to ignore")
+						.kind(OptionType::String)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "unignore",
 			short_desc: "Remove an ignored phrase in the current server",
-			long_desc: formatdoc!("
-				Use `@{name} ignore [phrase]` to remove a phrase you previously ignored in the \
+			long_desc: indoc!("
+				Use `/ignore [phrase]` to remove a phrase you previously ignored in the \
 				current server.
 
 				Phrases are case-insensitive.
 
-				You can list your current keywords with `@{name} ignores`.",
-				name = username,
+				You can list your current keywords with `/ignores`.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Stop ignoring messages containing \"haskell\" in the current server:
-				`@{name} unignore haskell`
+				`/unignore haskell`
 
 				Stop ignoring messages containing \"map-reduce\" in the current server:
-				`@{name} ignore map-reduce`",
-				name = username
+				`/ignore map-reduce`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("phrase")
+						.description("The phrase to unignore")
+						.kind(OptionType::String)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "keywords",
 			short_desc: "List your current highlighted keywords",
-			long_desc: formatdoc!("
-				Use `@{name} keywords` to list your current highlighted keywords.
+			long_desc: indoc!("
+				Use `/keywords` to list your current highlighted keywords.
 
 				Using `keywords` in a server will show you only the keywords you've highlighted \
 				in that server, including all channel-specific keywords there.
@@ -403,20 +594,19 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				If the bot can't find information about a server you have keywords in, \
 				its ID will be in parentheses, so you can remove them with `remove-server` \
 				if desired. \
-				See `@{name} help remove-server` for more details.",
-				name = username
+				See `/help remove-server` for more details.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Display your current keywords:
-				`@{name} keywords`",
-				name = username
+				`/keywords`",
 			)),
+			options: vec![],
 		},
 		CommandInfo {
 			name: "mutes",
 			short_desc: "List your currently muted channels",
-			long_desc: formatdoc!("
-				Use `@{name} mutes` to list your currently muted channels.
+			long_desc: indoc!("
+				Use `/mutes` to list your currently muted channels.
 
 				Using `mutes` in a server will only show you the channels you've muted in that \
 				server.
@@ -425,32 +615,30 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				all servers, including deleted channels or channels in servers this bot is \
 				no longer a member of. If the bot can't find information on a channel you \
 				previously muted, its ID will be in parentheses.",
-				name = username
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Display your currently muted channels:
-				`@{name} mutes`",
-				name = username
+				`/mutes`",
 			)),
+			options: vec![],
 		},
 		CommandInfo {
 			name: "blocks",
 			short_desc: "List your currently blocked users",
-			long_desc: formatdoc!("
-				Use `@{name} blocks` to list your currently blocked users.",
-				name = username
+			long_desc: indoc!("
+				Use `/blocks` to list your currently blocked users.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Display your currently blocked users:
-				`@{name} blocks`",
-				name = username
+				`/blocks`",
 			)),
+			options: vec![],
 		},
 		CommandInfo {
 			name: "ignores",
 			short_desc: "List your currently ignored phrases",
-			long_desc: formatdoc!("
-				Use `@{name} ignores` to list your currently ignored phrases.
+			long_desc: indoc!("
+				Use `/ignores` to list your currently ignored phrases.
 
 				Using `ignores` in a server will only show you the phrases you've ignored in that \
 				server.
@@ -461,19 +649,18 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				If the bot can't find information on a server you ignored phrases in, its ID will \
 				be in parentheses, so you can use `remove-server` to remove the ignores there if \
 				desired.",
-				name = username
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Display your currently ignored phrases:
-				`@{name} ignores`",
-				name = username
+				`/ignores`",
 			)),
+			options: vec![],
 		},
 		CommandInfo {
 			name: "remove-server",
 			short_desc: "Remove all keywords and ignores on a given server",
-			long_desc: formatdoc!("
-				Use `@{name} remove-server [server ID]` to remove all keywords **and** ignores on \
+			long_desc: indoc!("
+				Use `/remove-server [server ID]` to remove all keywords **and** ignores on \
 				the server with the given ID.
 
 				This won't remove channel-specific keywords in the given server; you can use the \
@@ -483,127 +670,94 @@ pub async fn help(ctx: &Context, message: &Message, args: &str) -> Result<()> {
 				where you added keywords, you can clean up your keywords list by using `keywords` \
 				in DMs to see all keywords, and this command to remove any server IDs the bot \
 				can't find. ",
-				name = username
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Remove all server-wide keywords and ignores added to the server with an ID of \
 				126029834632:
-				`@{name} remove-server 126029834632`",
-				name = username
+				`/remove-server 126029834632`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("server")
+						.description("The ID of the server to remove")
+						.kind(OptionType::String)
+						.required(true);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "opt-out",
 			short_desc: "Opt-out of having your messages highlighted",
-			long_desc: formatdoc!("
-                Use `@{name} opt-out` to opt-out of having your messages \
+			long_desc: indoc!("
+                Use `/opt-out` to opt-out of having your messages \
                 highlighted.
 
                 If you opt out, nobody will be notified of your messages, even \
                 if your messages include their keywords.",
-				name = username
 			),
 			examples: None,
+			options: vec![],
 		},
 		CommandInfo {
 			name: "opt-in",
 			short_desc: "Undo an opt-out so your messages will be highlighted",
-			long_desc: formatdoc!("
-                Use `@{name} opt-in` to opt-in to having your messages \
+			long_desc: indoc!("
+                Use `/opt-in` to opt-in to having your messages \
                 highlighted after having opted out.
 
                 This command has no effect if you haven't opted out using \
-                `@{name} opt-out`.
+                `/opt-out`.
 
-				See `@{name} help opt-out` for more information.",
-				name = username
+				See `/help opt-out` for more information.",
 			),
 			examples: None,
+			options: vec![],
 		},
 		CommandInfo {
 			name: "help",
 			short_desc: "Show this help message",
-			long_desc: formatdoc!("
-				Use `@{name} help` to see a list of commands and short descriptions.
-				Use `@{name} help [command]` to see additional information about \
+			long_desc: indoc!("
+				Use `/help` to see a list of commands and short descriptions.
+				Use `/help [command]` to see additional information about \
 				the specified command.
-				Use `@{name} about` to see information about this bot.",
-				name = username
+				Use `/about` to see information about this bot.",
 			),
-			examples: Some(formatdoc!("
+			examples: Some(indoc!("
 				Display the list of commands:
-				`@{name} help`
+				`/help`
 
 				Display the help for the `add` command:
-				`@{name} help add`",
-				name = username
+				`/help add`",
 			)),
+			options: vec![
+				{
+					let mut opt = Option::default();
+					opt
+						.name("command")
+						.description("Command to view help for")
+						.kind(OptionType::String);
+					opt
+				}
+			],
 		},
 		CommandInfo {
 			name: "ping",
 			short_desc: "Show the bot's ping",
-			long_desc: "Show the bot's ping, including current API, command, and database latency."
-				.to_owned(),
+			long_desc: "Show the bot's ping, including current API, command, and database latency.",
 			examples: None,
+			options: vec![],
 		},
 		CommandInfo {
 			name: "about",
 			short_desc: "Show some information about this bot, including an invite link",
 			long_desc:
 				"Show some information about this bot, \
-				like its version, source code link, and an invite link."
-					.to_owned(),
+				like its version, source code link, and an invite link.",
 			examples: None,
+			options: vec![],
 		},
-	];
-
-	let response = if args.is_empty() {
-		message
-			.channel_id
-			.send_message(&ctx, |m| {
-				m.embed(|e| {
-					e.title(format!("{} – Help", username))
-						.description(format!(
-							"Use `@{} help [command]` to see more information \
-							about a specified command",
-							username
-						))
-						.fields(
-							commands
-								.iter()
-								.map(|info| (info.name, info.short_desc, true)),
-						)
-						.color(EMBED_COLOR)
-				})
-			})
-			.await?
-	} else {
-		let info = match commands
-			.iter()
-			.find(|info| info.name.eq_ignore_ascii_case(args))
-		{
-			Some(info) => info,
-			None => return question(ctx, message).await,
-		};
-
-		message
-			.channel_id
-			.send_message(&ctx, |m| {
-				m.embed(|e| {
-					e.title(format!("Help – {}", info.name))
-						.description(&info.long_desc)
-						.color(EMBED_COLOR);
-
-					match info.examples.as_ref() {
-						Some(ex) => e.field("Example Usage", ex, false),
-						None => e,
-					}
-				})
-			})
-			.await?
-	};
-
-	insert_command_response(ctx, message.id, response.id).await;
-
-	Ok(())
-}
+	]
+	});

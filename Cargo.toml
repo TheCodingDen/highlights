@@ -1,22 +1,24 @@
 [package]
 name = "highlights"
-version = "1.1.0-beta.0"
+version = "2.0.0"
 authors = ["ThatsNoMoon <git@thatsnomoon.dev>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"
 edition = "2021"
 
 [features]
-default = ["bot", "monitoring", "reporting"]
+default = ["bot"]
 bot = [
     "regex",
     "indoc",
+    "serde_json",
     "serenity/builder",
     "serenity/cache",
     "serenity/client",
     "serenity/collector",
     "serenity/gateway",
-    "serenity/http"
+    "serenity/http",
+    "serenity/unstable_discord_api"
 ]
 monitoring = ["prometheus", "hyper"]
 reporting = ["reqwest", "url"]
@@ -36,6 +38,7 @@ simplelog = "0.10"
 prometheus = { version = "0.12", optional = true }
 hyper = { version = "0.14", features = ["server"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
 config = { version = "0.11", default-features = false, features = ["toml"] }
 url = { version = "2.2", features = ["serde"], optional = true }
 anyhow = "1.0"

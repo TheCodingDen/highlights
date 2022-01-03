@@ -6,6 +6,7 @@
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
+	http::CacheHttp,
 	model::{
 		channel::{ChannelType, GuildChannel},
 		id::{ChannelId, GuildId, UserId},
@@ -13,7 +14,7 @@ use serenity::{
 	},
 };
 
-use crate::regex;
+use crate::{bot::util::user_can_read_channel, regex};
 use std::{collections::HashMap, iter::FromIterator};
 
 /// Requires the given message to have come from a guild channel.
@@ -67,14 +68,14 @@ macro_rules! require_empty_args {
 /// embeds. Does nothing if used on a message in a DM channel.
 #[macro_export]
 macro_rules! require_embed_perms {
-	($ctx:expr, $message:expr) => {
-		if $message.guild_id.is_some() {
+	($ctx:expr, $command:expr) => {
+		if $command.guild_id.is_some() {
 			use ::anyhow::Context as _;
 			let self_id = $ctx.cache.current_user_id().await;
 
 			let channel = $ctx
 				.cache
-				.guild_channel($message.channel_id)
+				.guild_channel($command.channel_id)
 				.await
 				.context("Nonexistent guild channel")?;
 
@@ -84,13 +85,18 @@ macro_rules! require_embed_perms {
 				.context("Failed to get permissions for self")?;
 
 			if !permissions.embed_links() {
-				$message
-					.channel_id
-					.say(
-						$ctx,
-						"Sorry, I need permission to embed links to use \
-							that command 😔",
-					)
+				#[rustfmt::skip]
+				let ephemeral = ::serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL;
+				$command
+					.create_interaction_response($ctx, |r| {
+						r.interaction_response_data(|m| {
+							m.content(
+								"Sorry, I need permission to embed links \
+									to use that command 😔",
+							)
+							.flags(ephemeral)
+						})
+					})
 					.await
 					.context(
 						"Failed to send missing embed permission message",
@@ -170,7 +176,7 @@ pub async fn get_text_channels_in_guild(
 /// First gets all channels from the arguments, then checks the bots' and the provided user's
 /// permissions in each to sort them into a `ReadableChannelsFromArgs`.
 pub async fn get_readable_channels_from_args<'args, 'c>(
-	ctx: &Context,
+	ctx: &impl CacheHttp,
 	author_id: UserId,
 	channels: &'c HashMap<ChannelId, GuildChannel>,
 	args: &'args str,
@@ -182,19 +188,16 @@ pub async fn get_readable_channels_from_args<'args, 'c>(
 		..Default::default()
 	};
 
-	for (channel, arg) in all_channels.found {
-		let user_can_read =
-			crate::bot::util::user_can_read_channel(ctx, channel, author_id)
-				.await?
-				.context("No permissions for user to get readable channels")?;
+	let self_id = ctx.cache().unwrap().current_user_id().await;
 
-		let self_can_read = crate::bot::util::user_can_read_channel(
-			ctx,
-			channel,
-			ctx.cache.current_user_id().await,
-		)
-		.await?
-		.context("No permissions for self to get readable channels")?;
+	for (channel, arg) in all_channels.found {
+		let user_can_read = user_can_read_channel(ctx, channel, author_id)
+			.await?
+			.context("No permissions for user to get readable channels")?;
+
+		let self_can_read = user_can_read_channel(ctx, channel, self_id)
+			.await?
+			.context("No permissions for self to get readable channels")?;
 
 		if !user_can_read {
 			result.user_cant_read.push((channel, arg));

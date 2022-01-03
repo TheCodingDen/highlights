@@ -15,7 +15,7 @@ mod highlighting;
 
 use crate::{
 	db::{Ignore, Keyword, Notification, UserState},
-	global::{bot_mention, bot_nick_mention, init_mentions},
+	global::{bot_mention, bot_nick_mention, init_cache, init_mentions},
 	log_discord_error,
 	monitoring::Timer,
 	regex,
@@ -30,6 +30,7 @@ use serenity::{
 		event::MessageUpdateEvent,
 		gateway::{Activity, Ready},
 		id::{ChannelId, GuildId, MessageId},
+		interactions::Interaction,
 	},
 };
 use tokio::task;
@@ -51,45 +52,10 @@ impl EventHandler for Handler {
 			return;
 		}
 
-		let content = message.content.as_str();
-
-		let result = match content
-			.strip_prefix(bot_mention())
-			.or_else(|| content.strip_prefix(bot_nick_mention()))
+		if let Err(e) = handle_keywords(&ctx, &message)
+			.await
+			.context("Failed to handle keywords")
 		{
-			Some(command_content) => {
-				async {
-					handle_command(&ctx, &message, command_content.trim())
-						.await
-						.context("Failed to handle command")?;
-					highlighting::check_notify_user_state(&ctx, &message)
-						.await
-						.context("Failed to check user state")?;
-					Ok(())
-				}
-				.await
-			}
-			None => {
-				if message.guild_id.is_none() {
-					async {
-						handle_command(&ctx, &message, content.trim())
-							.await
-							.context("Failed to handle command")?;
-						UserState::clear(message.author.id)
-							.await
-							.context("Failed to clear user state")?;
-						Ok(())
-					}
-					.await
-				} else {
-					handle_keywords(&ctx, &message)
-						.await
-						.context("Failed to handle keywords")
-				}
-			}
-		};
-
-		if let Err(e) = &result {
 			log_discord_error!(in message.channel_id, by message.author.id, e);
 		}
 	}
@@ -209,142 +175,102 @@ impl EventHandler for Handler {
 	async fn ready(&self, ctx: Context, ready: Ready) {
 		init_mentions(ready.user.id);
 
-		let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
+		ctx.set_activity(Activity::listening("/help")).await;
 
-		ctx.set_activity(Activity::listening(&format!("@{} help", username)))
-			.await;
+		commands::create_commands(ctx).await;
 
 		log::info!("Ready to highlight!");
 	}
-}
 
-/// Handles a command.
-///
-/// This function splits message content to determine if there is a command to be handled, then
-/// dispatches to the appropriate function from [`commands`](commands).
-async fn handle_command(
-	ctx: &Context,
-	message: &Message,
-	content: &str,
-) -> Result<()> {
-	if message.guild_id.is_some() {
-		let self_id = ctx.cache.current_user_id().await;
+	/// Responds to slash commands.
+	async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+		let command = match interaction {
+			Interaction::ApplicationCommand(cmd) => cmd,
+			_ => return,
+		};
+		let name = command.data.name.clone();
+		let channel_id = command.channel_id;
+		let user_id = command.user.id;
 
-		let channel = ctx
-			.cache
-			.guild_channel(message.channel_id)
+		let result = {
+			use commands::*;
+			use tokio::task::spawn;
+
+			let ctx = ctx.clone();
+
+			match &*name {
+				// "add" => spawn(async move { add(&ctx, &message, &args).await }),
+				// "remove" => {
+				// 	spawn(async move { remove(&ctx, &message, &args).await })
+				// }
+				// "mute" => {
+				// 	spawn(async move { mute(&ctx, &message, &args).await })
+				// }
+				// "unmute" => {
+				// 	spawn(async move { unmute(&ctx, &message, &args).await })
+				// }
+				// "ignore" => {
+				// 	spawn(async move { ignore(&ctx, &message, &args).await })
+				// }
+				// "unignore" => {
+				// 	spawn(async move { unignore(&ctx, &message, &args).await })
+				// }
+				// "block" => {
+				// 	spawn(async move { block(&ctx, &message, &args).await })
+				// }
+				// "unblock" => {
+				// 	spawn(async move { unblock(&ctx, &message, &args).await })
+				// }
+				// "remove-server" => {
+				// 	spawn(
+				// 		async move { remove_server(&ctx, &message, &args).await },
+				// 	)
+				// }
+				// "keywords" => {
+				// 	spawn(async move { keywords(&ctx, &message, &args).await })
+				// }
+				// "mutes" => {
+				// 	spawn(async move { mutes(&ctx, &message, &args).await })
+				// }
+				// "ignores" => {
+				// 	spawn(async move { ignores(&ctx, &message, &args).await })
+				// }
+				// "blocks" => {
+				// 	spawn(async move { blocks(&ctx, &message, &args).await })
+				// }
+				// "opt-out" => {
+				// 	spawn(async move { opt_out(&ctx, &message, &args).await })
+				// }
+				// "opt-in" => {
+				// 	spawn(async move { opt_in(&ctx, &message, &args).await })
+				// }
+				"help" => spawn(async move { help(&ctx, command).await }),
+				"ping" => spawn(async move { ping(&ctx, command).await }),
+				"about" => spawn(async move { about(&ctx, command).await }),
+				_ => {
+					let err = anyhow::anyhow!(
+						"Unknown slash command received: {}",
+						name
+					);
+
+					spawn(async move { Err(err) })
+				}
+			}
 			.await
-			.context("Nonexistent guild channel")?;
+			.map_err(anyhow::Error::from)
+			.and_then(|r| r)
+		};
 
-		let permissions = channel
-			.permissions_for_user(ctx, self_id)
-			.await
-			.context("Failed to check permissions for self")?;
+		if let Err(e) = result {
+			// TODO: tell the user it failed
 
-		if permissions.add_reactions() && !permissions.send_messages() {
-			message
-				.react(ctx, '🔇')
-				.await
-				.context("Failed to add muted reaction")?;
-
-			return Ok(());
-		} else if permissions.send_messages() && !permissions.add_reactions() {
-			message
-				.channel_id
-				.say(
-					ctx,
-					"Sorry, I need permission to \
-					add reactions to work right 😔",
-				)
-				.await
-				.context(
-					"Failed to send missing reaction permission message",
-				)?;
-
-			return Ok(());
-		} else if !permissions.send_messages() && !permissions.add_reactions() {
-			return Ok(());
+			log::error!(
+				"Error in <#{0}> ({0}) by <@{1}> ({1}):\n{2:?}",
+				channel_id,
+				user_id,
+				e
+			);
 		}
-	}
-
-	let (command, args) = {
-		let mut iter = regex!(r" +").splitn(content, 2);
-
-		let command = iter.next().map(str::to_lowercase);
-
-		let args = iter.next().map(|s| s.trim()).unwrap_or("");
-
-		(command, args)
-	};
-
-	let command = match command {
-		Some(command) => command,
-		None => return question(ctx, message).await,
-	};
-
-	let result = {
-		use commands::*;
-		use tokio::task::spawn;
-
-		let ctx = ctx.clone();
-		let message = message.clone();
-		let args = args.to_owned();
-
-		match &*command {
-			"add" => spawn(async move { add(&ctx, &message, &args).await }),
-			"remove" => {
-				spawn(async move { remove(&ctx, &message, &args).await })
-			}
-			"mute" => spawn(async move { mute(&ctx, &message, &args).await }),
-			"unmute" => {
-				spawn(async move { unmute(&ctx, &message, &args).await })
-			}
-			"ignore" => {
-				spawn(async move { ignore(&ctx, &message, &args).await })
-			}
-			"unignore" => {
-				spawn(async move { unignore(&ctx, &message, &args).await })
-			}
-			"block" => spawn(async move { block(&ctx, &message, &args).await }),
-			"unblock" => {
-				spawn(async move { unblock(&ctx, &message, &args).await })
-			}
-			"remove-server" => {
-				spawn(async move { remove_server(&ctx, &message, &args).await })
-			}
-			"keywords" => {
-				spawn(async move { keywords(&ctx, &message, &args).await })
-			}
-			"mutes" => spawn(async move { mutes(&ctx, &message, &args).await }),
-			"ignores" => {
-				spawn(async move { ignores(&ctx, &message, &args).await })
-			}
-			"blocks" => {
-				spawn(async move { blocks(&ctx, &message, &args).await })
-			}
-			"opt-out" => {
-				spawn(async move { opt_out(&ctx, &message, &args).await })
-			}
-			"opt-in" => {
-				spawn(async move { opt_in(&ctx, &message, &args).await })
-			}
-			"help" => spawn(async move { help(&ctx, &message, &args).await }),
-			"ping" => spawn(async move { ping(&ctx, &message, &args).await }),
-			"about" => spawn(async move { about(&ctx, &message, &args).await }),
-			_ => return question(&ctx, &message).await,
-		}
-		.await
-		.map_err(anyhow::Error::from)
-		.and_then(|r| r)
-	};
-
-	match result {
-		Err(e) => {
-			let _ = error(ctx, message, "Something went wrong running that :(")
-				.await;
-			Err(e.context(format!("Failed to run {} command", command)))
-		}
-		Ok(_) => Ok(()),
 	}
 }
 
@@ -429,10 +355,13 @@ pub async fn init() {
 				| GatewayIntents::GUILDS
 				| GatewayIntents::GUILD_MEMBERS,
 		)
+		.application_id(settings().bot.application_id)
 		.await
 		.expect("Failed to create client");
 
 	responses::init(&client).await;
+
+	init_cache(client.cache_and_http.clone());
 
 	client.start().await.expect("Failed to run client");
 }

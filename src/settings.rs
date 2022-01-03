@@ -7,6 +7,7 @@ use config::{Config, ConfigError, Environment, File};
 use log::LevelFilter;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
+use serenity::model::id::GuildId;
 #[cfg(feature = "reporting")]
 use url::Url;
 
@@ -122,10 +123,13 @@ pub struct BehaviorSettings {
 pub struct BotSettings {
 	/// Bot token to log into Discord with.
 	pub token: String,
+	/// ID of the bot's application.
+	pub application_id: u64,
 	/// Whether this bot is private or not.
 	///
 	/// Controls whether the `about` command outputs an invite link.
 	pub private: bool,
+	pub test_guild: Option<GuildId>,
 }
 
 /// Settings for various logging facilities.

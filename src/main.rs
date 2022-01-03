@@ -7,6 +7,7 @@
 //! creating the client and registering event listeners.
 
 #![allow(clippy::tabs_in_doc_comments)]
+#![allow(unused_imports, dead_code)]
 
 pub mod db;
 

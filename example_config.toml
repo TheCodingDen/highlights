@@ -1,8 +1,11 @@
-# All fields except bot.token are optional, defaults shown below
+# All fields other than bot.token and bot.application_id are optional
+# Defaults shown below
 
 [bot]
 # Discord bot token
 #token = "..."
+# Discord application (not bot account!) ID
+#application_id = "..."
 # Disables sharing the bot invite link in about command
 private = false
 

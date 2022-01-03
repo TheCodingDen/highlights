@@ -8,7 +8,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
 	client::Context,
-	http::error::ErrorResponse,
+	http::{error::ErrorResponse, CacheHttp},
 	model::{
 		channel::{GuildChannel, Message},
 		guild::{Guild, PartialGuild},
@@ -131,7 +131,7 @@ pub async fn error<S: Display>(
 
 /// Determines if a user with the given ID can read messages in the provided `GuildChannel`.
 pub async fn user_can_read_channel(
-	ctx: &Context,
+	ctx: &impl CacheHttp,
 	channel: &GuildChannel,
 	user_id: UserId,
 ) -> Result<Option<bool>> {
@@ -143,9 +143,9 @@ pub async fn user_can_read_channel(
 
 	use MaybePartialGuild::*;
 
-	let guild = match ctx.cache.guild(channel.guild_id).await {
+	let guild = match ctx.cache().unwrap().guild(channel.guild_id).await {
 		Some(g) => FullGuild(g),
-		None => Partial(ctx.http.get_guild(channel.guild_id.0).await?),
+		None => Partial(ctx.http().get_guild(channel.guild_id.0).await?),
 	};
 
 	let member = match &guild {
