@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Miscellaneous utility functions and macros.
@@ -13,6 +13,10 @@ use serenity::{
 		channel::{GuildChannel, Message},
 		guild::{Guild, PartialGuild},
 		id::UserId,
+		interactions::{
+			application_command::ApplicationCommandInteraction as Command,
+			InteractionApplicationCommandCallbackDataFlags as ResponseFlags,
+		},
 	},
 	prelude::HttpError,
 	Error as SerenityError,
@@ -86,45 +90,46 @@ macro_rules! regex {
 pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
 	Lazy::new(|| Regex::new(r"[_*()\[\]~`]").unwrap());
 
-/// Reacts to a message with a ✅ emoji.
-pub async fn success(ctx: &Context, message: &Message) -> Result<()> {
-	message
-		.react(ctx, '✅')
+/// Responds to a command with a ✅ emoji.
+#[inline]
+pub async fn success(ctx: &Context, command: &Command) -> Result<()> {
+	respond_eph(ctx, command, "✅\u{200b}") // zero-width space to force small emoji
 		.await
 		.context("Failed to add success reaction")?;
 
 	Ok(())
 }
 
-/// Reacts to a message with a ❓ emoji.
-pub async fn question(ctx: &Context, message: &Message) -> Result<()> {
-	message
-		.react(ctx, '❓')
+/// Responds to a command with the given message.
+pub async fn respond<S: Display>(
+	ctx: &Context,
+	command: &Command,
+	response: S,
+) -> Result<()> {
+	command
+		.create_interaction_response(ctx, |r| {
+			r.interaction_response_data(|m| m.content(response))
+		})
 		.await
-		.context("Failed to add question reaction")?;
+		.context("Failed to send command response")?;
 
 	Ok(())
 }
 
-/// Reacts to a message with a ❌ emoji and send the given response in the same channel.
-///
-/// The response message is stripped of mentions when sent to Discord.
-pub async fn error<S: Display>(
+/// Responds to a command with the given message ephemerally.
+pub async fn respond_eph<S: Display>(
 	ctx: &Context,
-	message: &Message,
+	command: &Command,
 	response: S,
 ) -> Result<()> {
-	let _ = message.react(ctx, '❌').await;
-
-	let response = message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.content(response).allowed_mentions(|m| m.empty_parse())
+	command
+		.create_interaction_response(ctx, |r| {
+			r.interaction_response_data(|m| {
+				m.flags(ResponseFlags::EPHEMERAL).content(response)
+			})
 		})
 		.await
-		.context("Failed to send command usage error message")?;
-
-	insert_command_response(ctx, message.id, response.id).await;
+		.context("Failed to send command response")?;
 
 	Ok(())
 }

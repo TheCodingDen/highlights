@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Miscellaneous utility functions and macros used by commands.
@@ -85,22 +85,14 @@ macro_rules! require_embed_perms {
 				.context("Failed to get permissions for self")?;
 
 			if !permissions.embed_links() {
-				#[rustfmt::skip]
-				let ephemeral = ::serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL;
-				$command
-					.create_interaction_response($ctx, |r| {
-						r.interaction_response_data(|m| {
-							m.content(
-								"Sorry, I need permission to embed links \
-									to use that command 😔",
-							)
-							.flags(ephemeral)
-						})
-					})
-					.await
-					.context(
-						"Failed to send missing embed permission message",
-					)?;
+				$crate::bot::util::respond_eph(
+					&$ctx,
+					&$command,
+					"Sorry, I need permission to embed links to use that \
+					command 😔",
+				)
+				.await
+				.context("Failed to send missing embed permission message")?;
 
 				return Ok(());
 			}

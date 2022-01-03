@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 mod responses;
@@ -9,7 +9,7 @@ mod commands;
 mod util;
 use futures_util::{stream, StreamExt, TryStreamExt};
 use tinyvec::TinyVec;
-use util::{error, question};
+use util::respond_eph;
 
 mod highlighting;
 
@@ -199,51 +199,27 @@ impl EventHandler for Handler {
 			let ctx = ctx.clone();
 
 			match &*name {
-				// "add" => spawn(async move { add(&ctx, &message, &args).await }),
-				// "remove" => {
-				// 	spawn(async move { remove(&ctx, &message, &args).await })
-				// }
-				// "mute" => {
-				// 	spawn(async move { mute(&ctx, &message, &args).await })
-				// }
-				// "unmute" => {
-				// 	spawn(async move { unmute(&ctx, &message, &args).await })
-				// }
-				// "ignore" => {
-				// 	spawn(async move { ignore(&ctx, &message, &args).await })
-				// }
+				// "add" => spawn(async move { add(&ctx, command).await }),
+				// "remove" => spawn(async move { remove(&ctx, command).await }),
+				// "mute" => spawn(async move { mute(&ctx, command).await }),
+				// "unmute" => spawn(async move { unmute(&ctx, command).await }),
+				// "ignore" => spawn(async move { ignore(&ctx, command).await }),
 				// "unignore" => {
-				// 	spawn(async move { unignore(&ctx, &message, &args).await })
+				// 	spawn(async move { unignore(&ctx, command).await })
 				// }
-				// "block" => {
-				// 	spawn(async move { block(&ctx, &message, &args).await })
-				// }
-				// "unblock" => {
-				// 	spawn(async move { unblock(&ctx, &message, &args).await })
-				// }
+				"block" => spawn(async move { block(&ctx, command).await }),
+				"unblock" => spawn(async move { unblock(&ctx, command).await }),
 				// "remove-server" => {
-				// 	spawn(
-				// 		async move { remove_server(&ctx, &message, &args).await },
-				// 	)
+				// 	spawn(async move { remove_server(&ctx, command).await })
 				// }
 				// "keywords" => {
-				// 	spawn(async move { keywords(&ctx, &message, &args).await })
+				// 	spawn(async move { keywords(&ctx, command).await })
 				// }
-				// "mutes" => {
-				// 	spawn(async move { mutes(&ctx, &message, &args).await })
-				// }
-				// "ignores" => {
-				// 	spawn(async move { ignores(&ctx, &message, &args).await })
-				// }
-				// "blocks" => {
-				// 	spawn(async move { blocks(&ctx, &message, &args).await })
-				// }
-				// "opt-out" => {
-				// 	spawn(async move { opt_out(&ctx, &message, &args).await })
-				// }
-				// "opt-in" => {
-				// 	spawn(async move { opt_in(&ctx, &message, &args).await })
-				// }
+				// "mutes" => spawn(async move { mutes(&ctx, command).await }),
+				// "ignores" => spawn(async move { ignores(&ctx, command).await }),
+				"blocks" => spawn(async move { blocks(&ctx, command).await }),
+				"opt-out" => spawn(async move { opt_out(&ctx, command).await }),
+				"opt-in" => spawn(async move { opt_in(&ctx, command).await }),
 				"help" => spawn(async move { help(&ctx, command).await }),
 				"ping" => spawn(async move { ping(&ctx, command).await }),
 				"about" => spawn(async move { about(&ctx, command).await }),

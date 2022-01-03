@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Implementations of all of the explicit bot commands.
@@ -14,11 +14,11 @@ mod util;
 // mod mutes;
 // pub use mutes::{mute, mutes, unmute};
 
-// mod blocks;
-// pub use blocks::{block, blocks, unblock};
+mod blocks;
+pub use blocks::{block, blocks, unblock};
 
-// mod opt_out;
-// pub use opt_out::{opt_in, opt_out};
+mod opt_out;
+pub use opt_out::{opt_in, opt_out};
 
 use anyhow::{Context as _, Result};
 use indoc::indoc;
@@ -40,7 +40,7 @@ use serenity::{
 };
 
 use crate::{
-	bot::{responses::insert_command_response, util::question},
+	bot::{responses::insert_command_response, util::respond},
 	global::EMBED_COLOR,
 	monitoring::Timer,
 	require_embed_perms,
@@ -80,11 +80,7 @@ pub async fn ping(ctx: &Context, command: Command) -> Result<()> {
 
 	let reply = ping_reply();
 
-	command
-		.create_interaction_response(ctx, |create| {
-			create.interaction_response_data(|m| m.content(reply))
-		})
-		.await?;
+	respond(ctx, &command, reply).await?;
 
 	Ok(())
 }
@@ -273,491 +269,499 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 			builder::CreateApplicationCommandOption as Option,
 			model::interactions::application_command::ApplicationCommandOptionType as OptionType,
 		};
-		[
-		CommandInfo {
-			name: "add",
-			short_desc:
-				"Add a keyword to highlight in the current server or a specific channel",
-			long_desc: indoc!("
-				Use `/add [keyword]` to add a keyword to highlight in the current server. \
-				You'll be notified (in DMs) about any messages containing your keywords \
-				(other than messages in muted channels or messages with ignored phrases).
+		let mut commands = [
+			CommandInfo {
+				name: "add",
+				short_desc:
+					"Add a keyword to highlight in the current server or a specific channel",
+				long_desc: indoc!("
+					Use `/add [keyword]` to add a keyword to highlight in the current server. \
+					You'll be notified (in DMs) about any messages containing your keywords \
+					(other than messages in muted channels or messages with ignored phrases).
 
-				In this usage, all of the text after `add` will be treated as one keyword.
+					In this usage, all of the text after `add` will be treated as one keyword.
 
-				Keywords are case-insensitive.
+					Keywords are case-insensitive.
 
-				You can also add a keyword in just a specific channel or channels with \
-				`/add \"[keyword]\" in [channels]`. \
-				You'll only be notified of keywords added this way when they appear in the \
-				specified channel(s) (not when they appear anywhere else). \
-				The keyword must be surrounded with quotes, and you can use `\\\"` to add a \
-				keyword with a quote in it. \
-				`[channels]` may be channel mentions, channel names, or channel IDs. \
-				You can specify multiple channels, separated by spaces, to add the keyword in \
-				all of them at once.
+					You can also add a keyword in just a specific channel or channels with \
+					`/add \"[keyword]\" in [channels]`. \
+					You'll only be notified of keywords added this way when they appear in the \
+					specified channel(s) (not when they appear anywhere else). \
+					The keyword must be surrounded with quotes, and you can use `\\\"` to add a \
+					keyword with a quote in it. \
+					`[channels]` may be channel mentions, channel names, or channel IDs. \
+					You can specify multiple channels, separated by spaces, to add the keyword in \
+					all of them at once.
 
-				You can remove keywords later with `/ remove [keyword]`; see \
-				`/ help remove` for more information.
+					You can remove keywords later with `/ remove [keyword]`; see \
+					`/ help remove` for more information.
 
-				You can list your current keywords with `/keywords`.",
-			),
-			examples: Some(indoc!("
-				Add the keyword \"rust\" in the current server:
-				`/add rust`
+					You can list your current keywords with `/keywords`.",
+				),
+				examples: Some(indoc!("
+					Add the keyword \"rust\" in the current server:
+					`/add rust`
 
-				Add the keyword \"optimize\" in only the #javascript channel:
-				`/add \"optimize\" in javascript`
+					Add the keyword \"optimize\" in only the #javascript channel:
+					`/add \"optimize\" in javascript`
 
-				Add the keyword \"hello world\" in the current server:
-				`/add hello world`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("keyword")
-						.description("The keyword to listen to")
-						.kind(OptionType::String)
-						.required(true);
-					opt
-				},
-				{
-					let mut opt = Option::default();
-					opt
-						.name("channel")
-						.description("A specific channel for this keyword")
-						.kind(OptionType::Channel);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "remove",
-			short_desc: "Remove a keyword to highlight in the current server",
-			long_desc: indoc!("
-				Use `/remove [keyword]` to remove a keyword that you previously added \
-				with `/add` in the current server.
+					Add the keyword \"hello world\" in the current server:
+					`/add hello world`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("keyword")
+							.description("The keyword to listen to")
+							.kind(OptionType::String)
+							.required(true);
+						opt
+					},
+					{
+						let mut opt = Option::default();
+						opt
+							.name("channel")
+							.description("A specific channel for this keyword")
+							.kind(OptionType::Channel);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "remove",
+				short_desc: "Remove a keyword to highlight in the current server",
+				long_desc: indoc!("
+					Use `/remove [keyword]` to remove a keyword that you previously added \
+					with `/add` in the current server.
 
-				In this usage, all of the text after `remove` will be treated as one keyword.
+					In this usage, all of the text after `remove` will be treated as one keyword.
 
-				Keywords are case-insensitive.
+					Keywords are case-insensitive.
 
-				You can also remove a keyword that you added to a specific channel or channels \
-				with `/remove \"[keyword]\" from [channels]`. \
-				The keyword must be surrounded with quotes, and you can use `\\\"` to remove a \
-				keyword with a quote in it. \
-				`[channels]` may be channel mentions, channel names, or channel IDs. \
-				You can specify multiple channels, separated by spaces, to remove the keyword \
-				from all of them at once.
+					You can also remove a keyword that you added to a specific channel or channels \
+					with `/remove \"[keyword]\" from [channels]`. \
+					The keyword must be surrounded with quotes, and you can use `\\\"` to remove a \
+					keyword with a quote in it. \
+					`[channels]` may be channel mentions, channel names, or channel IDs. \
+					You can specify multiple channels, separated by spaces, to remove the keyword \
+					from all of them at once.
 
-				You can list your current keywords with `/keywords`.",
-			),
-			examples: Some(indoc!("
-				Remove the keyword \"node\" from the current server:
-				`/remove node`
+					You can list your current keywords with `/keywords`.",
+				),
+				examples: Some(indoc!("
+					Remove the keyword \"node\" from the current server:
+					`/remove node`
 
-				Remove the keyword \"go\" from the #general channel:
-				`/remove \"go\" from general`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("keyword")
-						.description("The keyword to listen to")
-						.kind(OptionType::String)
-						.required(true);
-					opt
-				},
-				{
-					let mut opt = Option::default();
-					opt
-						.name("channel")
-						.description("The specific channel for this keyword")
-						.kind(OptionType::Channel);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "mute",
-			short_desc: "Mute a channel to prevent server keywords from being highlighted there",
-			long_desc: indoc!("
-				Use `/mute [channels]` to mute the specified channel(s) and \
-				prevent notifications about your server-wide keywords appearing there. \
-				`[channels]` may be channel mentions, channel names, or channel IDs. \
-				You can specify multiple channels, separated by spaces, to mute all of them \
-				at once.
+					Remove the keyword \"go\" from the #general channel:
+					`/remove \"go\" from general`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("keyword")
+							.description("The keyword to listen to")
+							.kind(OptionType::String)
+							.required(true);
+						opt
+					},
+					{
+						let mut opt = Option::default();
+						opt
+							.name("channel")
+							.description("The specific channel for this keyword")
+							.kind(OptionType::Channel);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "mute",
+				short_desc: "Mute a channel to prevent server keywords from being highlighted there",
+				long_desc: indoc!("
+					Use `/mute [channels]` to mute the specified channel(s) and \
+					prevent notifications about your server-wide keywords appearing there. \
+					`[channels]` may be channel mentions, channel names, or channel IDs. \
+					You can specify multiple channels, separated by spaces, to mute all of them \
+					at once.
 
-				You'll still be notified about any channel-specific keywords you add to muted \
-				channels. \
-				See `/help add` for more information about channel-specific keywords.
+					You'll still be notified about any channel-specific keywords you add to muted \
+					channels. \
+					See `/help add` for more information about channel-specific keywords.
 
-				You can unmute channels later with `/unmute [channels]`.
+					You can unmute channels later with `/unmute [channels]`.
 
-				You can list your currently muted channels with `/mutes`.",
-			),
-			examples: Some(indoc!("
-				Mute the #memes channel:
-				`/mute memes`
+					You can list your currently muted channels with `/mutes`.",
+				),
+				examples: Some(indoc!("
+					Mute the #memes channel:
+					`/mute memes`
 
-				Mute the #general channel, and the off-topic channel, and the channel with an ID of 73413749283:
-				`/mute #general off-topic 73413749283`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("channel")
-						.description("The channel to mute")
-						.kind(OptionType::Channel)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "unmute",
-			short_desc:
-				"Unmute a channel, enabling notifications about server keywords appearing there",
-			long_desc: indoc!("
-				Use `/unmute [channels]` to unmute channels you previously muted and \
-				re-enable notifications about your keywords appearing there. \
-				`[channels]` may be channel mentions, channel names, or channel IDs. \
-				You can specify multiple channels, separated by spaces, to unmute all of them at \
-				once.
+					Mute the #general channel, and the off-topic channel, and the channel with an ID of 73413749283:
+					`/mute #general off-topic 73413749283`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("channel")
+							.description("The channel to mute")
+							.kind(OptionType::Channel)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "unmute",
+				short_desc:
+					"Unmute a channel, enabling notifications about server keywords appearing there",
+				long_desc: indoc!("
+					Use `/unmute [channels]` to unmute channels you previously muted and \
+					re-enable notifications about your keywords appearing there. \
+					`[channels]` may be channel mentions, channel names, or channel IDs. \
+					You can specify multiple channels, separated by spaces, to unmute all of them at \
+					once.
 
-				You can list your currently muted channels with `/mutes`.",
-			),
-			examples: Some(indoc!("
-				Unmute the #rust channel:
-				`/unmute rust`
+					You can list your currently muted channels with `/mutes`.",
+				),
+				examples: Some(indoc!("
+					Unmute the #rust channel:
+					`/unmute rust`
 
-				Unmute the #functional channel, and the elixir channel, and the channel with an ID of 73413749283:
-				`/unmute #functional elixir 73413749283`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("channel")
-						.description("The channel to unmute")
-						.kind(OptionType::Channel)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "block",
-			short_desc: "Block a user to prevent your keywords in their messages from being highlighted",
-			long_desc: indoc!("
-				Use `/block [users]` to block the specified users(s) and \
-				prevent notifications about your keywords in their messages. \
-				`[users]` may be user mentions or user IDs. \
-				You can specify multiple users, separated by spaces, to block all of them \
-				at once.
+					Unmute the #functional channel, and the elixir channel, and the channel with an ID of 73413749283:
+					`/unmute #functional elixir 73413749283`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("channel")
+							.description("The channel to unmute")
+							.kind(OptionType::Channel)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "block",
+				short_desc: "Block a user to prevent your keywords in their messages from being highlighted",
+				long_desc: indoc!("
+					Use `/block [users]` to block the specified users(s) and \
+					prevent notifications about your keywords in their messages. \
+					`[users]` may be user mentions or user IDs. \
+					You can specify multiple users, separated by spaces, to block all of them \
+					at once.
 
-				You can unblock users later with `/unblock [users]`.
+					You can unblock users later with `/unblock [users]`.
 
-				You can list your currently blocked users with `/blocks`.",
-			),
-			examples: Some(indoc!("
-				Block AnnoyingUser:
-				`/block @AnnoyingUser`
+					You can list your currently blocked users with `/blocks`.",
+				),
+				examples: Some(indoc!("
+					Block AnnoyingUser:
+					`/block @AnnoyingUser`
 
-				Block RidiculousPerson and the user with ID 669274872716
-				`/mute @RidiculousPerson 669274872716`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("user")
-						.description("The user to block")
-						.kind(OptionType::User)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "unblock",
-			short_desc:
-				"Unblock a user, enabling notifications about your keywords in their messages",
-			long_desc: indoc!("
-				Use `/unblock [users]` to unblock users you previously blocked and \
-				re-enable notifications about your keywords appearing in their messages. \
-				`[users]` may be user mentions or user IDs. You can specify multiple users, \
-				separated by spaces, to unblock all of them at once.
+					Block RidiculousPerson and the user with ID 669274872716
+					`/mute @RidiculousPerson 669274872716`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("user")
+							.description("The user to block")
+							.kind(OptionType::User)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "unblock",
+				short_desc:
+					"Unblock a user, enabling notifications about your keywords in their messages",
+				long_desc: indoc!("
+					Use `/unblock [users]` to unblock users you previously blocked and \
+					re-enable notifications about your keywords appearing in their messages. \
+					`[users]` may be user mentions or user IDs. You can specify multiple users, \
+					separated by spaces, to unblock all of them at once.
 
-				You can list your currently blocked users with `/blocks`.",
-			),
-			examples: Some(indoc!("
-				Unblock the user RedemptionArc:
-				`/unblock @RedemptionArc`
+					You can list your currently blocked users with `/blocks`.",
+				),
+				examples: Some(indoc!("
+					Unblock the user RedemptionArc:
+					`/unblock @RedemptionArc`
 
-				Unmute the user AccidentallyTrollish and the user with an ID of 669274872716:
-				`/unblock @AccidentallyTrollish 669274872716`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("user")
-						.description("The user to unblock")
-						.kind(OptionType::User)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "ignore",
-			short_desc: "Add a phrase to ignore in the current server",
-			long_desc: indoc!("
-				Use `/ignore [phrase]` to add a phrase to ignore in the current server.
+					Unmute the user AccidentallyTrollish and the user with an ID of 669274872716:
+					`/unblock @AccidentallyTrollish 669274872716`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("user")
+							.description("The user to unblock")
+							.kind(OptionType::User)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "ignore",
+				short_desc: "Add a phrase to ignore in the current server",
+				long_desc: indoc!("
+					Use `/ignore [phrase]` to add a phrase to ignore in the current server.
 
-				You won't be notified of any messages that contain ignored phrases, even if they \
-				contain one of your keywords.
+					You won't be notified of any messages that contain ignored phrases, even if they \
+					contain one of your keywords.
 
-				Phrases are case-insensitive.
+					Phrases are case-insensitive.
 
-				You can remove ignored phrases later with `/unignore [phrase]`; see \
-				`/help unignore` for more information.
+					You can remove ignored phrases later with `/unignore [phrase]`; see \
+					`/help unignore` for more information.
 
-				You can list your current keywords with `/ignores`.",
-			),
-			examples: Some(indoc!("
-				Ignore messages containing \"meme\" in the current server:
-				`/ignore meme`
+					You can list your current keywords with `/ignores`.",
+				),
+				examples: Some(indoc!("
+					Ignore messages containing \"meme\" in the current server:
+					`/ignore meme`
 
-				Ignore messages containing \"hello world\" in the current server:
-				`/ignore hello world`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("phrase")
-						.description("The phrase to ignore")
-						.kind(OptionType::String)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "unignore",
-			short_desc: "Remove an ignored phrase in the current server",
-			long_desc: indoc!("
-				Use `/ignore [phrase]` to remove a phrase you previously ignored in the \
-				current server.
+					Ignore messages containing \"hello world\" in the current server:
+					`/ignore hello world`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("phrase")
+							.description("The phrase to ignore")
+							.kind(OptionType::String)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "unignore",
+				short_desc: "Remove an ignored phrase in the current server",
+				long_desc: indoc!("
+					Use `/ignore [phrase]` to remove a phrase you previously ignored in the \
+					current server.
 
-				Phrases are case-insensitive.
+					Phrases are case-insensitive.
 
-				You can list your current keywords with `/ignores`.",
-			),
-			examples: Some(indoc!("
-				Stop ignoring messages containing \"haskell\" in the current server:
-				`/unignore haskell`
+					You can list your current keywords with `/ignores`.",
+				),
+				examples: Some(indoc!("
+					Stop ignoring messages containing \"haskell\" in the current server:
+					`/unignore haskell`
 
-				Stop ignoring messages containing \"map-reduce\" in the current server:
-				`/ignore map-reduce`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("phrase")
-						.description("The phrase to unignore")
-						.kind(OptionType::String)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "keywords",
-			short_desc: "List your current highlighted keywords",
-			long_desc: indoc!("
-				Use `/keywords` to list your current highlighted keywords.
+					Stop ignoring messages containing \"map-reduce\" in the current server:
+					`/ignore map-reduce`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("phrase")
+							.description("The phrase to unignore")
+							.kind(OptionType::String)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "keywords",
+				short_desc: "List your current highlighted keywords",
+				long_desc: indoc!("
+					Use `/keywords` to list your current highlighted keywords.
 
-				Using `keywords` in a server will show you only the keywords you've highlighted \
-				in that server, including all channel-specific keywords there.
+					Using `keywords` in a server will show you only the keywords you've highlighted \
+					in that server, including all channel-specific keywords there.
 
-				Using `keywords` in DMs with the bot will list keywords you've highlighted \
-				across all shared servers, including potentially deleted servers or servers this \
-				bot is no longer a member of.
+					Using `keywords` in DMs with the bot will list keywords you've highlighted \
+					across all shared servers, including potentially deleted servers or servers this \
+					bot is no longer a member of.
 
-				If the bot can't find information about a server you have keywords in, \
-				its ID will be in parentheses, so you can remove them with `remove-server` \
-				if desired. \
-				See `/help remove-server` for more details.",
-			),
-			examples: Some(indoc!("
-				Display your current keywords:
-				`/keywords`",
-			)),
-			options: vec![],
-		},
-		CommandInfo {
-			name: "mutes",
-			short_desc: "List your currently muted channels",
-			long_desc: indoc!("
-				Use `/mutes` to list your currently muted channels.
+					If the bot can't find information about a server you have keywords in, \
+					its ID will be in parentheses, so you can remove them with `remove-server` \
+					if desired. \
+					See `/help remove-server` for more details.",
+				),
+				examples: Some(indoc!("
+					Display your current keywords:
+					`/keywords`",
+				)),
+				options: vec![],
+			},
+			CommandInfo {
+				name: "mutes",
+				short_desc: "List your currently muted channels",
+				long_desc: indoc!("
+					Use `/mutes` to list your currently muted channels.
 
-				Using `mutes` in a server will only show you the channels you've muted in that \
-				server.
+					Using `mutes` in a server will only show you the channels you've muted in that \
+					server.
 
-				Using `mutes` in DMs with the bot will list channels you've muted across \
-				all servers, including deleted channels or channels in servers this bot is \
-				no longer a member of. If the bot can't find information on a channel you \
-				previously muted, its ID will be in parentheses.",
-			),
-			examples: Some(indoc!("
-				Display your currently muted channels:
-				`/mutes`",
-			)),
-			options: vec![],
-		},
-		CommandInfo {
-			name: "blocks",
-			short_desc: "List your currently blocked users",
-			long_desc: indoc!("
-				Use `/blocks` to list your currently blocked users.",
-			),
-			examples: Some(indoc!("
-				Display your currently blocked users:
-				`/blocks`",
-			)),
-			options: vec![],
-		},
-		CommandInfo {
-			name: "ignores",
-			short_desc: "List your currently ignored phrases",
-			long_desc: indoc!("
-				Use `/ignores` to list your currently ignored phrases.
+					Using `mutes` in DMs with the bot will list channels you've muted across \
+					all servers, including deleted channels or channels in servers this bot is \
+					no longer a member of. If the bot can't find information on a channel you \
+					previously muted, its ID will be in parentheses.",
+				),
+				examples: Some(indoc!("
+					Display your currently muted channels:
+					`/mutes`",
+				)),
+				options: vec![],
+			},
+			CommandInfo {
+				name: "blocks",
+				short_desc: "List your currently blocked users",
+				long_desc: indoc!("
+					Use `/blocks` to list your currently blocked users.",
+				),
+				examples: Some(indoc!("
+					Display your currently blocked users:
+					`/blocks`",
+				)),
+				options: vec![],
+			},
+			CommandInfo {
+				name: "ignores",
+				short_desc: "List your currently ignored phrases",
+				long_desc: indoc!("
+					Use `/ignores` to list your currently ignored phrases.
 
-				Using `ignores` in a server will only show you the phrases you've ignored in that \
-				server.
+					Using `ignores` in a server will only show you the phrases you've ignored in that \
+					server.
 
-				Using `ignores` in DMs with the bot will list phrases you've ignored across \
-				all servers, including servers this bot is no longer a member of.
+					Using `ignores` in DMs with the bot will list phrases you've ignored across \
+					all servers, including servers this bot is no longer a member of.
 
-				If the bot can't find information on a server you ignored phrases in, its ID will \
-				be in parentheses, so you can use `remove-server` to remove the ignores there if \
-				desired.",
-			),
-			examples: Some(indoc!("
-				Display your currently ignored phrases:
-				`/ignores`",
-			)),
-			options: vec![],
-		},
-		CommandInfo {
-			name: "remove-server",
-			short_desc: "Remove all keywords and ignores on a given server",
-			long_desc: indoc!("
-				Use `/remove-server [server ID]` to remove all keywords **and** ignores on \
-				the server with the given ID.
+					If the bot can't find information on a server you ignored phrases in, its ID will \
+					be in parentheses, so you can use `remove-server` to remove the ignores there if \
+					desired.",
+				),
+				examples: Some(indoc!("
+					Display your currently ignored phrases:
+					`/ignores`",
+				)),
+				options: vec![],
+			},
+			CommandInfo {
+				name: "remove-server",
+				short_desc: "Remove all keywords and ignores on a given server",
+				long_desc: indoc!("
+					Use `/remove-server [server ID]` to remove all keywords **and** ignores on \
+					the server with the given ID.
 
-				This won't remove channel-specific keywords in the given server; you can use the \
-				normal `remove` command for that.
+					This won't remove channel-specific keywords in the given server; you can use the \
+					normal `remove` command for that.
 
-				This is normally not necessary, but if you no longer share a server with the bot \
-				where you added keywords, you can clean up your keywords list by using `keywords` \
-				in DMs to see all keywords, and this command to remove any server IDs the bot \
-				can't find. ",
-			),
-			examples: Some(indoc!("
-				Remove all server-wide keywords and ignores added to the server with an ID of \
-				126029834632:
-				`/remove-server 126029834632`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("server")
-						.description("The ID of the server to remove")
-						.kind(OptionType::String)
-						.required(true);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "opt-out",
-			short_desc: "Opt-out of having your messages highlighted",
-			long_desc: indoc!("
-                Use `/opt-out` to opt-out of having your messages \
-                highlighted.
+					This is normally not necessary, but if you no longer share a server with the bot \
+					where you added keywords, you can clean up your keywords list by using `keywords` \
+					in DMs to see all keywords, and this command to remove any server IDs the bot \
+					can't find. ",
+				),
+				examples: Some(indoc!("
+					Remove all server-wide keywords and ignores added to the server with an ID of \
+					126029834632:
+					`/remove-server 126029834632`",
+				)),
+				options: vec![
+					{
+						let mut opt = Option::default();
+						opt
+							.name("server")
+							.description("The ID of the server to remove")
+							.kind(OptionType::String)
+							.required(true);
+						opt
+					}
+				],
+			},
+			CommandInfo {
+				name: "opt-out",
+				short_desc: "Opt-out of having your messages highlighted",
+				long_desc: indoc!("
+	                Use `/opt-out` to opt-out of having your messages \
+	                highlighted.
 
-                If you opt out, nobody will be notified of your messages, even \
-                if your messages include their keywords.",
-			),
-			examples: None,
-			options: vec![],
-		},
-		CommandInfo {
-			name: "opt-in",
-			short_desc: "Undo an opt-out so your messages will be highlighted",
-			long_desc: indoc!("
-                Use `/opt-in` to opt-in to having your messages \
-                highlighted after having opted out.
+	                If you opt out, nobody will be notified of your messages, even \
+	                if your messages include their keywords.",
+				),
+				examples: None,
+				options: vec![],
+			},
+			CommandInfo {
+				name: "opt-in",
+				short_desc: "Undo an opt-out so your messages will be highlighted",
+				long_desc: indoc!("
+	                Use `/opt-in` to opt-in to having your messages \
+	                highlighted after having opted out.
 
-                This command has no effect if you haven't opted out using \
-                `/opt-out`.
+	                This command has no effect if you haven't opted out using \
+	                `/opt-out`.
 
-				See `/help opt-out` for more information.",
-			),
-			examples: None,
-			options: vec![],
-		},
-		CommandInfo {
-			name: "help",
-			short_desc: "Show this help message",
-			long_desc: indoc!("
-				Use `/help` to see a list of commands and short descriptions.
-				Use `/help [command]` to see additional information about \
-				the specified command.
-				Use `/about` to see information about this bot.",
-			),
-			examples: Some(indoc!("
-				Display the list of commands:
-				`/help`
+					See `/help opt-out` for more information.",
+				),
+				examples: None,
+				options: vec![],
+			},
+			CommandInfo {
+				name: "help",
+				short_desc: "Show this help message",
+				long_desc: indoc!("
+					Use `/help` to see a list of commands and short descriptions.
+					Use `/help [command]` to see additional information about \
+					the specified command.
+					Use `/about` to see information about this bot.",
+				),
+				examples: Some(indoc!("
+					Display the list of commands:
+					`/help`
 
-				Display the help for the `add` command:
-				`/help add`",
-			)),
-			options: vec![
-				{
-					let mut opt = Option::default();
-					opt
-						.name("command")
-						.description("Command to view help for")
-						.kind(OptionType::String);
-					opt
-				}
-			],
-		},
-		CommandInfo {
-			name: "ping",
-			short_desc: "Show the bot's ping",
-			long_desc: "Show the bot's ping, including current API, command, and database latency.",
-			examples: None,
-			options: vec![],
-		},
-		CommandInfo {
-			name: "about",
-			short_desc: "Show some information about this bot, including an invite link",
-			long_desc:
-				"Show some information about this bot, \
-				like its version, source code link, and an invite link.",
-			examples: None,
-			options: vec![],
-		},
-	]
+					Display the help for the `add` command:
+					`/help add`",
+				)),
+				options: vec![],
+			},
+			CommandInfo {
+				name: "ping",
+				short_desc: "Show the bot's ping",
+				long_desc: "Show the bot's ping, including current API, command, and database latency.",
+				examples: None,
+				options: vec![],
+			},
+			CommandInfo {
+				name: "about",
+				short_desc: "Show some information about this bot, including an invite link",
+				long_desc:
+					"Show some information about this bot, \
+					like its version, source code link, and an invite link.",
+				examples: None,
+				options: vec![],
+			},
+		];
+
+		let help_options = {
+			let mut opt = Option::default();
+			opt.name("command")
+				.description("Command to view help for")
+				.kind(OptionType::String);
+
+			for command in &commands {
+				opt.add_string_choice(&command.name, &command.name);
+			}
+
+			opt
+		};
+
+		commands[commands.len() - 3].options.push(help_options);
+
+		commands
 	});
