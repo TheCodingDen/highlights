@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Functions for sending, editing, and deleting notifications.
@@ -12,6 +12,7 @@ use serenity::{
 	model::{
 		channel::Message,
 		id::{ChannelId, GuildId, MessageId, UserId},
+		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
 	Error as SerenityError,
 };
@@ -20,7 +21,7 @@ use tinyvec::TinyVec;
 use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
 
 use crate::{
-	bot::util::{optional_result, user_can_read_channel},
+	bot::util::{followup_eph, optional_result, user_can_read_channel},
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
@@ -524,30 +525,35 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 /// the user state afterwards.
 pub async fn check_notify_user_state(
 	ctx: &Context,
-	message: &Message,
+	command: &Command,
 ) -> Result<()> {
-	let user_id = message.author.id;
-
-	let user_state = match UserState::user_state(user_id).await? {
+	let user_state = match UserState::user_state(command.user.id).await? {
 		Some(user_state) => user_state,
 		None => return Ok(()),
 	};
 
-	message
-		.reply(
-			ctx,
-			indoc!(
-				"
-					⚠️ I failed to DM you to notify you of your last \
-					highlighted keyword. Make sure you have DMs enabled in at \
-					least one server that we share."
-			),
-		)
-		.await?;
+	warn_for_failed_dm(ctx, command).await?;
 
 	user_state.delete().await?;
 
 	Ok(())
+}
+
+pub async fn warn_for_failed_dm(
+	ctx: &Context,
+	command: &Command,
+) -> Result<()> {
+	followup_eph(
+		ctx,
+		command,
+		indoc!(
+			"
+			⚠️ I failed to DM you to notify you of your last highlighted \
+			keyword. Make sure you have DMs enabled in at least one server \
+			that we share."
+		),
+	)
+	.await
 }
 
 #[cfg(test)]

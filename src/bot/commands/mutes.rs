@@ -3,27 +3,16 @@
 
 //! Commands for adding, removing, and listing channel mutes.
 
-use super::util::{
-	get_ids_from_args, get_readable_channels_from_args,
-	get_text_channels_in_guild,
-};
-
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
-	model::{
-		channel::{ChannelType, Message},
-		interactions::application_command::ApplicationCommandInteraction as Command,
-	},
+	model::interactions::application_command::ApplicationCommandInteraction as Command,
 };
 
 use std::{collections::HashMap, fmt::Write};
 
 use crate::{
-	bot::{
-		responses::insert_command_response,
-		util::{respond_eph, user_can_read_channel},
-	},
+	bot::util::{respond_eph, user_can_read_channel},
 	db::Mute,
 	monitoring::Timer,
 };

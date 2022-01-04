@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Highlights is a simple but flexible keyword highlighting bot for Discord.
@@ -7,7 +7,6 @@
 //! creating the client and registering event listeners.
 
 #![allow(clippy::tabs_in_doc_comments)]
-#![allow(unused_imports, dead_code)]
 
 pub mod db;
 

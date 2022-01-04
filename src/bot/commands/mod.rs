@@ -27,7 +27,6 @@ use serenity::{
 	builder::CreateApplicationCommandOption,
 	client::Context,
 	model::{
-		channel::Message,
 		interactions::{
 			application_command::{
 				ApplicationCommand, ApplicationCommandInteraction as Command,
@@ -40,11 +39,8 @@ use serenity::{
 };
 
 use crate::{
-	bot::{responses::insert_command_response, util::respond},
-	global::EMBED_COLOR,
-	monitoring::Timer,
-	require_embed_perms,
-	settings::settings,
+	bot::util::respond, global::EMBED_COLOR, monitoring::Timer,
+	require_embed_perms, settings::settings,
 };
 
 pub async fn create_commands(ctx: Context) {
@@ -280,34 +276,27 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 					You'll be notified (in DMs) about any messages containing your keywords \
 					(other than messages in muted channels or messages with ignored phrases).
 
-					In this usage, all of the text after `add` will be treated as one keyword.
-
 					Keywords are case-insensitive.
 
 					You can also add a keyword in just a specific channel or channels with \
-					`/add \"[keyword]\" in [channels]`. \
+					`/add [keyword] [channel]`. \
 					You'll only be notified of keywords added this way when they appear in the \
-					specified channel(s) (not when they appear anywhere else). \
-					The keyword must be surrounded with quotes, and you can use `\\\"` to add a \
-					keyword with a quote in it. \
-					`[channels]` may be channel mentions, channel names, or channel IDs. \
-					You can specify multiple channels, separated by spaces, to add the keyword in \
-					all of them at once.
-
-					You can remove keywords later with `/ remove [keyword]`; see \
-					`/ help remove` for more information.
+					specified channel(s) (not when they appear anywhere else).
+					
+					You can remove keywords later with `/remove [keyword]`; see \
+					`/help remove` for more information.
 
 					You can list your current keywords with `/keywords`.",
 				),
 				examples: Some(indoc!("
 					Add the keyword \"rust\" in the current server:
-					`/add rust`
+					/add `keyword:` rust
 
 					Add the keyword \"optimize\" in only the #javascript channel:
-					`/add \"optimize\" in javascript`
+					/add `keyword:` optimize `channel:` javascript
 
 					Add the keyword \"hello world\" in the current server:
-					`/add hello world`",
+					/add `keyword:` hello world",
 				)),
 				options: vec![
 					{
@@ -336,26 +325,21 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 					Use `/remove [keyword]` to remove a keyword that you previously added \
 					with `/add` in the current server.
 
-					In this usage, all of the text after `remove` will be treated as one keyword.
-
 					Keywords are case-insensitive.
 
 					You can also remove a keyword that you added to a specific channel or channels \
-					with `/remove \"[keyword]\" from [channels]`. \
+					with `/remove [keyword] [channel]`. \
 					The keyword must be surrounded with quotes, and you can use `\\\"` to remove a \
-					keyword with a quote in it. \
-					`[channels]` may be channel mentions, channel names, or channel IDs. \
-					You can specify multiple channels, separated by spaces, to remove the keyword \
-					from all of them at once.
+					keyword with a quote in it.
 
 					You can list your current keywords with `/keywords`.",
 				),
 				examples: Some(indoc!("
 					Remove the keyword \"node\" from the current server:
-					`/remove node`
+					/remove `keyword:` node
 
 					Remove the keyword \"go\" from the #general channel:
-					`/remove \"go\" from general`",
+					/remove `keyword: `go `channel:` #general",
 				)),
 				options: vec![
 					{
@@ -381,11 +365,8 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				name: "mute",
 				short_desc: "Mute a channel to prevent server keywords from being highlighted there",
 				long_desc: indoc!("
-					Use `/mute [channels]` to mute the specified channel(s) and \
-					prevent notifications about your server-wide keywords appearing there. \
-					`[channels]` may be channel mentions, channel names, or channel IDs. \
-					You can specify multiple channels, separated by spaces, to mute all of them \
-					at once.
+					Use `/mute [channel]` to mute the specified channel(s) and \
+					prevent notifications about your server-wide keywords appearing there.
 
 					You'll still be notified about any channel-specific keywords you add to muted \
 					channels. \
@@ -397,10 +378,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				),
 				examples: Some(indoc!("
 					Mute the #memes channel:
-					`/mute memes`
-
-					Mute the #general channel, and the off-topic channel, and the channel with an ID of 73413749283:
-					`/mute #general off-topic 73413749283`",
+					/mute `channel:` #memes",
 				)),
 				options: vec![
 					{
@@ -419,20 +397,14 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				short_desc:
 					"Unmute a channel, enabling notifications about server keywords appearing there",
 				long_desc: indoc!("
-					Use `/unmute [channels]` to unmute channels you previously muted and \
-					re-enable notifications about your keywords appearing there. \
-					`[channels]` may be channel mentions, channel names, or channel IDs. \
-					You can specify multiple channels, separated by spaces, to unmute all of them at \
-					once.
+					Use `/unmute [channel]` to unmute channels you previously muted and \
+					re-enable notifications about your keywords appearing there.
 
 					You can list your currently muted channels with `/mutes`.",
 				),
 				examples: Some(indoc!("
 					Unmute the #rust channel:
-					`/unmute rust`
-
-					Unmute the #functional channel, and the elixir channel, and the channel with an ID of 73413749283:
-					`/unmute #functional elixir 73413749283`",
+					/unmute `channel:` #rust",
 				)),
 				options: vec![
 					{
@@ -450,22 +422,16 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				name: "block",
 				short_desc: "Block a user to prevent your keywords in their messages from being highlighted",
 				long_desc: indoc!("
-					Use `/block [users]` to block the specified users(s) and \
-					prevent notifications about your keywords in their messages. \
-					`[users]` may be user mentions or user IDs. \
-					You can specify multiple users, separated by spaces, to block all of them \
-					at once.
+					Use `/block [user]` to block the specified users and \
+					prevent notifications about your keywords in their messages.
 
-					You can unblock users later with `/unblock [users]`.
+					You can unblock users later with `/unblock [user]`.
 
 					You can list your currently blocked users with `/blocks`.",
 				),
 				examples: Some(indoc!("
 					Block AnnoyingUser:
-					`/block @AnnoyingUser`
-
-					Block RidiculousPerson and the user with ID 669274872716
-					`/mute @RidiculousPerson 669274872716`",
+					/block `user:` @AnnoyingUser",
 				)),
 				options: vec![
 					{
@@ -484,19 +450,14 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				short_desc:
 					"Unblock a user, enabling notifications about your keywords in their messages",
 				long_desc: indoc!("
-					Use `/unblock [users]` to unblock users you previously blocked and \
-					re-enable notifications about your keywords appearing in their messages. \
-					`[users]` may be user mentions or user IDs. You can specify multiple users, \
-					separated by spaces, to unblock all of them at once.
+					Use `/unblock [user]` to unblock a user you previously blocked and \
+					re-enable notifications about your keywords appearing in their messages.
 
 					You can list your currently blocked users with `/blocks`.",
 				),
 				examples: Some(indoc!("
 					Unblock the user RedemptionArc:
-					`/unblock @RedemptionArc`
-
-					Unmute the user AccidentallyTrollish and the user with an ID of 669274872716:
-					`/unblock @AccidentallyTrollish 669274872716`",
+					/unblock `user:` @RedemptionArc",
 				)),
 				options: vec![
 					{
@@ -528,10 +489,10 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				),
 				examples: Some(indoc!("
 					Ignore messages containing \"meme\" in the current server:
-					`/ignore meme`
+					/ignore `phrase:` meme
 
 					Ignore messages containing \"hello world\" in the current server:
-					`/ignore hello world`",
+					/ignore `phrase:` hello world",
 				)),
 				options: vec![
 					{
@@ -549,7 +510,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				name: "unignore",
 				short_desc: "Remove an ignored phrase in the current server",
 				long_desc: indoc!("
-					Use `/ignore [phrase]` to remove a phrase you previously ignored in the \
+					Use `/unignore [phrase]` to remove a phrase you previously ignored in the \
 					current server.
 
 					Phrases are case-insensitive.
@@ -558,10 +519,10 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				),
 				examples: Some(indoc!("
 					Stop ignoring messages containing \"haskell\" in the current server:
-					`/unignore haskell`
+					/unignore `phrase:` haskell
 
 					Stop ignoring messages containing \"map-reduce\" in the current server:
-					`/ignore map-reduce`",
+					/ignore `phrase:` map-reduce",
 				)),
 				options: vec![
 					{
@@ -584,19 +545,12 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 					Using `keywords` in a server will show you only the keywords you've highlighted \
 					in that server, including all channel-specific keywords there.
 
-					Using `keywords` in DMs with the bot will list keywords you've highlighted \
-					across all shared servers, including potentially deleted servers or servers this \
-					bot is no longer a member of.
-
 					If the bot can't find information about a server you have keywords in, \
 					its ID will be in parentheses, so you can remove them with `remove-server` \
 					if desired. \
 					See `/help remove-server` for more details.",
 				),
-				examples: Some(indoc!("
-					Display your current keywords:
-					`/keywords`",
-				)),
+				examples: None,
 				options: vec![],
 			},
 			CommandInfo {
@@ -613,10 +567,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 					no longer a member of. If the bot can't find information on a channel you \
 					previously muted, its ID will be in parentheses.",
 				),
-				examples: Some(indoc!("
-					Display your currently muted channels:
-					`/mutes`",
-				)),
+				examples: None,
 				options: vec![],
 			},
 			CommandInfo {
@@ -625,10 +576,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				long_desc: indoc!("
 					Use `/blocks` to list your currently blocked users.",
 				),
-				examples: Some(indoc!("
-					Display your currently blocked users:
-					`/blocks`",
-				)),
+				examples: None,
 				options: vec![],
 			},
 			CommandInfo {
@@ -647,10 +595,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 					be in parentheses, so you can use `remove-server` to remove the ignores there if \
 					desired.",
 				),
-				examples: Some(indoc!("
-					Display your currently ignored phrases:
-					`/ignores`",
-				)),
+				examples: None,
 				options: vec![],
 			},
 			CommandInfo {
@@ -715,7 +660,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 			},
 			CommandInfo {
 				name: "help",
-				short_desc: "Show this help message",
+				short_desc: "Show this help message or help for a specific command",
 				long_desc: indoc!("
 					Use `/help` to see a list of commands and short descriptions.
 					Use `/help [command]` to see additional information about \
@@ -724,10 +669,10 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				),
 				examples: Some(indoc!("
 					Display the list of commands:
-					`/help`
+					/help
 
 					Display the help for the `add` command:
-					`/help add`",
+					/help `command:` add",
 				)),
 				options: vec![],
 			},

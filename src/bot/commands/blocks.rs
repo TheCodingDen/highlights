@@ -3,22 +3,13 @@
 
 //! Commands for adding, removing, and listing blocked users.
 
-use super::util::get_users_from_args;
-
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
-	model::{
-		channel::Message, id::UserId,
-		interactions::application_command::ApplicationCommandInteraction as Command,
-	},
+	model::interactions::application_command::ApplicationCommandInteraction as Command,
 };
 
-use crate::{
-	bot::{responses::insert_command_response, util::respond_eph},
-	db::Block,
-	monitoring::Timer,
-};
+use crate::{bot::util::respond_eph, db::Block, monitoring::Timer};
 
 /// Block a user.
 ///

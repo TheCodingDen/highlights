@@ -7,10 +7,7 @@ use anyhow::Result;
 
 use serenity::{
 	client::Context,
-	model::{
-		channel::Message,
-		interactions::application_command::ApplicationCommandInteraction as Command,
-	},
+	model::interactions::application_command::ApplicationCommandInteraction as Command,
 };
 
 use crate::{

@@ -1,24 +1,20 @@
 // Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
-mod responses;
-
 mod commands;
 
 #[macro_use]
 mod util;
 use futures_util::{stream, StreamExt, TryStreamExt};
 use tinyvec::TinyVec;
-use util::respond_eph;
 
 mod highlighting;
 
 use crate::{
-	db::{Ignore, Keyword, Notification, UserState},
-	global::{bot_mention, bot_nick_mention, init_cache, init_mentions},
+	db::{Ignore, Keyword, Notification},
+	global::{init_cache, init_mentions},
 	log_discord_error,
 	monitoring::Timer,
-	regex,
 	settings::settings,
 };
 
@@ -68,8 +64,6 @@ impl EventHandler for Handler {
 		message_id: MessageId,
 		guild_id: Option<GuildId>,
 	) {
-		responses::delete_command_response(&ctx, channel_id, message_id).await;
-
 		if guild_id.is_none() {
 			return;
 		}
@@ -197,6 +191,7 @@ impl EventHandler for Handler {
 			use tokio::task::spawn;
 
 			let ctx = ctx.clone();
+			let command = command.clone();
 
 			match &*name {
 				"add" => spawn(async move { add(&ctx, command).await }),
@@ -245,6 +240,16 @@ impl EventHandler for Handler {
 				{3:?}",
 				name,
 				channel_id,
+				user_id,
+				e
+			);
+		}
+
+		if let Err(e) =
+			highlighting::check_notify_user_state(&ctx, &command).await
+		{
+			log::error!(
+				"Error checking and notifying user <@{0}> ({0}) state: {1:?}",
 				user_id,
 				e
 			);
@@ -336,8 +341,6 @@ pub async fn init() {
 		.application_id(settings().bot.application_id)
 		.await
 		.expect("Failed to create client");
-
-	responses::init(&client).await;
 
 	init_cache(client.cache_and_http.clone());
 

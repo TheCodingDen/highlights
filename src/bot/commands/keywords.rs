@@ -6,12 +6,11 @@
 use anyhow::{Context as _, Result};
 use indoc::indoc;
 use once_cell::sync::Lazy;
-use regex::Regex;
 use serenity::{
 	client::Context,
 	http::error::ErrorResponse,
 	model::{
-		channel::Message, id::GuildId,
+		id::GuildId,
 		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
 	prelude::HttpError,
@@ -20,29 +19,17 @@ use serenity::{
 
 use std::{collections::HashMap, fmt::Write};
 
-use super::util::{
-	get_readable_channels_from_args, get_text_channels_in_guild,
-};
+use super::util::get_text_channels_in_guild;
 use crate::{
 	bot::{
-		responses::insert_command_response,
-		util::{
-			followup_eph, respond_eph, success, user_can_read_channel,
-			MD_SYMBOL_REGEX,
-		},
+		highlighting::warn_for_failed_dm,
+		util::{respond_eph, success, user_can_read_channel},
 	},
 	db::{Ignore, Keyword, KeywordKind},
 	monitoring::Timer,
 	regex,
 	settings::settings,
 };
-
-/// Pattern for channel-specific keywords.
-///
-/// Matches text such as `"foo" in bar baz`.
-static CHANNEL_KEYWORD_REGEX: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
-	Regex::new(r#"^"((?:\\"|[^"])*)" (?:in|from) ((?:\S+(?:$| ))+)$"#).unwrap()
-});
 
 /// Add a keyword.
 ///
@@ -161,18 +148,7 @@ pub async fn add(ctx: &Context, command: Command) -> Result<()> {
 				HttpError::UnsuccessfulRequest(ErrorResponse {
 					error, ..
 				}) if error.message == "Cannot send messages to this user" => {
-					followup_eph(
-						ctx,
-						&command,
-						indoc!(
-							"
-								⚠️ I failed to DM you to make sure I \
-								can notify you of your highlighted \
-								keywords. Make sure you have DMs enabled \
-								in at least one server that we share.",
-						),
-					)
-					.await?;
+					warn_for_failed_dm(ctx, &command).await?;
 				}
 
 				_ => return Err(SerenityError::Http(err).into()),

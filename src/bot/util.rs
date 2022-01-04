@@ -4,13 +4,11 @@
 //! Miscellaneous utility functions and macros.
 
 use anyhow::{Context as _, Result};
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serenity::{
 	client::Context,
 	http::{error::ErrorResponse, CacheHttp},
 	model::{
-		channel::{GuildChannel, Message},
+		channel::GuildChannel,
 		guild::{Guild, PartialGuild},
 		id::UserId,
 		interactions::{
@@ -22,8 +20,6 @@ use serenity::{
 	Error as SerenityError,
 };
 use std::fmt::Display;
-
-use super::responses::insert_command_response;
 
 /// Logs an error that happened handling a command or keyword in Discord.
 ///
@@ -82,13 +78,6 @@ macro_rules! regex {
 		RE.get_or_init(|| regex::Regex::new($re).unwrap())
 	}};
 }
-
-/// Regex for symbols used in Discord-flavor markdown.
-///
-/// Equivalent to the regex `[_*()\[\]~`]`. It includes `()` and `[]` because these are treated as
-/// part of links in embeds, where this is frequently used.
-pub static MD_SYMBOL_REGEX: Lazy<Regex, fn() -> Regex> =
-	Lazy::new(|| Regex::new(r"[_*()\[\]~`]").unwrap());
 
 /// Responds to a command with a ✅ emoji.
 #[inline]
