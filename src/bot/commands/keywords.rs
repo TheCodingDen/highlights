@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Commands for adding, removing, and listing keywords.
@@ -10,7 +10,10 @@ use regex::Regex;
 use serenity::{
 	client::Context,
 	http::error::ErrorResponse,
-	model::{channel::Message, id::GuildId},
+	model::{
+		channel::Message, id::GuildId,
+		interactions::application_command::ApplicationCommandInteraction as Command,
+	},
 	prelude::HttpError,
 	Error as SerenityError,
 };
@@ -23,7 +26,10 @@ use super::util::{
 use crate::{
 	bot::{
 		responses::insert_command_response,
-		util::{error, success, MD_SYMBOL_REGEX},
+		util::{
+			followup_eph, respond_eph, success, user_can_read_channel,
+			MD_SYMBOL_REGEX,
+		},
 	},
 	db::{Ignore, Keyword, KeywordKind},
 	monitoring::Timer,
@@ -41,246 +47,140 @@ static CHANNEL_KEYWORD_REGEX: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
 /// Add a keyword.
 ///
 /// Usage:
-/// - `@Highlights add <keyword>`
-/// - `@Highlights add "<keyword>" in <space-separated channel names, mentions, or IDs>`
-pub async fn add(ctx: &Context, message: &Message, args: &str) -> Result<()> {
+/// - `/add <keyword> [channel]`
+pub async fn add(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("add");
-	let guild_id = require_guild!(ctx, message);
+	let guild_id = require_guild!(ctx, &command);
+	let user_id = command.user.id;
 
-	require_nonempty_args!(args, ctx, message);
+	let keyword_count = Keyword::user_keyword_count(user_id).await?;
 
-	{
-		let keyword_count =
-			Keyword::user_keyword_count(message.author.id).await?;
+	if keyword_count >= settings().behavior.max_keywords {
+		static MSG: Lazy<String, fn() -> String> = Lazy::new(|| {
+			format!(
+				"You can't create more than {} keywords!",
+				settings().behavior.max_keywords
+			)
+		});
 
-		if keyword_count >= settings().behavior.max_keywords {
-			static MSG: Lazy<String, fn() -> String> = Lazy::new(|| {
-				format!(
-					"You can't create more than {} keywords!",
-					settings().behavior.max_keywords
-				)
-			});
-
-			return error(ctx, message, MSG.as_str()).await;
-		}
-
-		if keyword_count == 0 {
-			let dm_channel = message.author.create_dm_channel(ctx).await?;
-
-			match dm_channel
-				.say(
-					ctx,
-					indoc!(
-						"
-						Test message; if you can read this, \
-						I can send you notifications successfully!"
-					),
-				)
-				.await
-			{
-				Err(SerenityError::Http(err)) => match &*err {
-					HttpError::UnsuccessfulRequest(ErrorResponse {
-						error,
-						..
-					}) if error.message
-						== "Cannot send messages to this user" =>
-					{
-						message
-							.reply(
-								ctx,
-								indoc!(
-									"
-									⚠️ I failed to DM you to make sure I \
-									can notify you of your highlighted \
-									keywords. Make sure you have DMs enabled \
-									in at least one server that we share.",
-								),
-							)
-							.await?;
-					}
-
-					_ => return Err(SerenityError::Http(err).into()),
-				},
-				Err(err) => return Err(err.into()),
-				_ => {}
-			}
-		}
+		return respond_eph(ctx, &command, MSG.as_str()).await;
 	}
 
-	match CHANNEL_KEYWORD_REGEX.captures(args) {
-		Some(captures) => {
-			let keyword = captures
-				.get(1)
-				.context("Captures didn't contain keyword")?
-				.as_str();
-			let channel = captures
-				.get(2)
-				.context("Captures didn't contain channel")?
-				.as_str();
+	let keyword = command
+		.data
+		.options
+		.get(0)
+		.and_then(|o| o.value.as_ref())
+		.context("No keyword to add provided")?
+		.as_str()
+		.context("Keyword provided was not a string")?
+		.trim()
+		.to_lowercase();
 
-			add_channel_keyword(ctx, message, guild_id, keyword, channel).await
-		}
-		None => add_guild_keyword(ctx, message, guild_id, args).await,
-	}
-}
-
-/// Add a guild-wide keyword.
-async fn add_guild_keyword(
-	ctx: &Context,
-	message: &Message,
-	guild_id: GuildId,
-	args: &str,
-) -> Result<()> {
-	if args.len() < 3 {
-		return error(
+	if keyword.len() < 3 {
+		return respond_eph(
 			ctx,
-			message,
-			"You can't highlight keywords shorter than 3 characters!",
+			&command,
+			"❌ You can't highlight keywords shorter than 3 characters!",
 		)
 		.await;
 	}
 
-	if !is_valid_keyword(args) {
-		return error(ctx, message, "You can't add that keyword!").await;
+	if !is_valid_keyword(&keyword) {
+		return respond_eph(ctx, &command, "❌ You can't add that keyword!")
+			.await;
 	}
 
-	let keyword = Keyword {
-		keyword: args.to_lowercase(),
-		user_id: message.author.id,
-		kind: KeywordKind::Guild(guild_id),
+	let keyword = match command.data.resolved.channels.values().next() {
+		Some(channel) => {
+			let channel = ctx
+				.cache
+				.guild_channel(channel.id)
+				.await
+				.context("Channel for keyword to add not cached")?;
+			let self_id = ctx.cache.current_user_id().await;
+			match user_can_read_channel(ctx, &channel, self_id).await {
+				Ok(Some(true)) => Keyword {
+					keyword,
+					user_id,
+					kind: KeywordKind::Channel(channel.id),
+				},
+				Ok(Some(false)) => {
+					return respond_eph(
+						ctx,
+						&command,
+						format!("❌ I can't read <#{}>!", channel.id),
+					)
+					.await
+				}
+				Ok(None) => return Err(anyhow::anyhow!(
+					"Self permissions not found in channel {} in guild {}",
+					channel.id,
+					guild_id
+				)),
+				Err(e) => return Err(e.context(
+					"Failed to check for self permissions to read muted channel",
+				)),
+			}
+		}
+		None => Keyword {
+			keyword,
+			user_id,
+			kind: KeywordKind::Guild(guild_id),
+		},
 	};
 
 	if keyword.clone().exists().await? {
-		return error(ctx, message, "You already added that keyword!").await;
+		return respond_eph(
+			ctx,
+			&command,
+			"❌ You already added that keyword!",
+		)
+		.await;
 	}
 
 	keyword.insert().await?;
 
-	success(ctx, message).await
-}
+	success(ctx, &command).await?;
 
-/// Add a channel-specific keyword.
-async fn add_channel_keyword(
-	ctx: &Context,
-	message: &Message,
-	guild_id: GuildId,
-	keyword: &str,
-	channels: &str,
-) -> Result<()> {
-	if keyword.len() < 3 {
-		return error(
-			ctx,
-			message,
-			"You can't highlight keywords shorter than 3 characters!",
-		)
-		.await;
-	}
+	if keyword_count == 0 {
+		let dm_channel = command.user.create_dm_channel(ctx).await?;
 
-	if !is_valid_keyword(keyword) {
-		return error(ctx, message, "You can't add that keyword!").await;
-	}
+		match dm_channel
+			.say(
+				ctx,
+				indoc!(
+					"
+					Test message; if you can read this, \
+					I can send you notifications successfully!"
+				),
+			)
+			.await
+		{
+			Err(SerenityError::Http(err)) => match &*err {
+				HttpError::UnsuccessfulRequest(ErrorResponse {
+					error, ..
+				}) if error.message == "Cannot send messages to this user" => {
+					followup_eph(
+						ctx,
+						&command,
+						indoc!(
+							"
+								⚠️ I failed to DM you to make sure I \
+								can notify you of your highlighted \
+								keywords. Make sure you have DMs enabled \
+								in at least one server that we share.",
+						),
+					)
+					.await?;
+				}
 
-	let guild_channels = get_text_channels_in_guild(ctx, guild_id).await?;
-
-	let user_id = message.author.id;
-
-	let mut channel_args = get_readable_channels_from_args(
-		ctx,
-		user_id,
-		&guild_channels,
-		channels,
-	)
-	.await?;
-
-	channel_args
-		.not_found
-		.extend(channel_args.user_cant_read.drain(..).map(|(_, arg)| arg));
-
-	let cant_add = channel_args
-		.self_cant_read
-		.into_iter()
-		.map(|c| format!("<#{}>", c.id))
-		.collect::<Vec<_>>();
-
-	let mut added = vec![];
-	let mut already_added = vec![];
-
-	for channel in channel_args.found {
-		let keyword = Keyword {
-			keyword: keyword.to_lowercase(),
-			user_id,
-			kind: KeywordKind::Channel(channel.id),
-		};
-
-		if keyword.clone().exists().await? {
-			already_added.push(format!("<#{}>", channel.id));
-		} else {
-			added.push(format!("<#{}>", channel.id));
-			keyword.insert().await?;
+				_ => return Err(SerenityError::Http(err).into()),
+			},
+			Err(err) => return Err(err.into()),
+			_ => {}
 		}
 	}
-
-	let mut msg = String::with_capacity(45);
-
-	let keyword = MD_SYMBOL_REGEX.replace_all(keyword, r"\$0");
-
-	if !added.is_empty() {
-		write!(
-			&mut msg,
-			"Added {} in channels: {}",
-			keyword,
-			added.join(", ")
-		)
-		.unwrap();
-
-		message.react(ctx, '✅').await?;
-	}
-
-	if !already_added.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		write!(
-			&mut msg,
-			"Already added {} in channels: {}",
-			keyword,
-			already_added.join(", ")
-		)
-		.unwrap();
-
-		message.react(ctx, '❌').await?;
-	}
-
-	if !channel_args.not_found.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Couldn't find channels: ");
-		msg.push_str(&channel_args.not_found.join(", "));
-
-		message.react(ctx, '❓').await?;
-	}
-
-	if !cant_add.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Unable to add keywords in channels: ");
-		msg.push_str(&cant_add.join(", "));
-
-		if already_added.is_empty() {
-			message.react(ctx, '❌').await?;
-		}
-	}
-
-	let response = message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.content(msg).allowed_mentions(|m| m.empty_parse())
-		})
-		.await?;
-
-	insert_command_response(ctx, message.id, response.id).await;
 
 	Ok(())
 }
@@ -292,267 +192,150 @@ fn is_valid_keyword(keyword: &str) -> bool {
 /// Remove a keyword.
 ///
 /// Usage:
-/// - `@Highlights remove <keyword>`
-/// - `@Highlights remove "<keyword>" from <space-separated channel names, mentions, or IDs>`
-pub async fn remove(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+/// - `/remove <keyword> [channel]`
+pub async fn remove(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("remove");
-	let guild_id = require_guild!(ctx, message);
+	let guild_id = require_guild!(ctx, &command);
+	let user_id = command.user.id;
 
-	require_nonempty_args!(args, ctx, message);
+	let keyword = command
+		.data
+		.options
+		.get(0)
+		.and_then(|o| o.value.as_ref())
+		.context("No keyword to add provided")?
+		.as_str()
+		.context("Keyword provided was not a string")?
+		.trim()
+		.to_lowercase();
 
-	match CHANNEL_KEYWORD_REGEX.captures(args) {
-		Some(captures) => {
-			let keyword = captures
-				.get(1)
-				.context("Captures didn't contain keyword")?
-				.as_str();
-			let channel = captures
-				.get(2)
-				.context("Captures didn't contain channel")?
-				.as_str();
-
-			remove_channel_keyword(ctx, message, guild_id, keyword, channel)
-				.await
-		}
-		None => remove_guild_keyword(ctx, message, guild_id, args).await,
-	}
-}
-
-/// Remove a guild-wide keyword.
-async fn remove_guild_keyword(
-	ctx: &Context,
-	message: &Message,
-	guild_id: GuildId,
-	args: &str,
-) -> Result<()> {
-	let keyword = Keyword {
-		keyword: args.to_lowercase(),
-		user_id: message.author.id,
-		kind: KeywordKind::Guild(guild_id),
+	let keyword = match command.data.resolved.channels.values().next() {
+		Some(channel) => Keyword {
+			keyword,
+			user_id,
+			kind: KeywordKind::Channel(channel.id),
+		},
+		None => Keyword {
+			keyword,
+			user_id,
+			kind: KeywordKind::Guild(guild_id),
+		},
 	};
 
 	if !keyword.clone().exists().await? {
-		return error(ctx, message, "You haven't added that keyword!").await;
+		return respond_eph(
+			ctx,
+			&command,
+			"❌ You haven't added that keyword!",
+		)
+		.await;
 	}
 
 	keyword.delete().await?;
 
-	success(ctx, message).await
-}
-
-/// Remove a channel-specific keyword.
-async fn remove_channel_keyword(
-	ctx: &Context,
-	message: &Message,
-	guild_id: GuildId,
-	keyword: &str,
-	channels: &str,
-) -> Result<()> {
-	let guild_channels = get_text_channels_in_guild(ctx, guild_id).await?;
-
-	let user_id = message.author.id;
-
-	let channel_args = get_readable_channels_from_args(
-		ctx,
-		user_id,
-		&guild_channels,
-		channels,
-	)
-	.await?;
-
-	let keyword = keyword.to_lowercase();
-
-	let mut removed = vec![];
-	let mut not_added = vec![];
-	let mut not_found = channel_args.not_found;
-
-	for channel in channel_args.found {
-		let keyword = Keyword {
-			keyword: keyword.to_owned(),
-			user_id,
-			kind: KeywordKind::Channel(channel.id),
-		};
-
-		if !keyword.clone().exists().await? {
-			not_added.push(format!("<#{}>", channel.id));
-		} else {
-			removed.push(format!("<#{}>", channel.id));
-			keyword.delete().await?;
-		}
-	}
-
-	for (user_unreadable, arg) in channel_args.user_cant_read {
-		let keyword = Keyword {
-			keyword: keyword.clone(),
-			user_id,
-			kind: KeywordKind::Channel(user_unreadable.id),
-		};
-
-		if !keyword.clone().exists().await? {
-			not_found.push(arg);
-		} else {
-			removed.push(format!("<#{0}> ({0})", user_unreadable.id));
-			keyword.delete().await?;
-		}
-	}
-
-	for self_unreadable in channel_args.self_cant_read {
-		let keyword = Keyword {
-			keyword: keyword.clone(),
-			user_id,
-			kind: KeywordKind::Channel(self_unreadable.id),
-		};
-
-		if !keyword.clone().exists().await? {
-			not_added.push(format!("<#{0}>", self_unreadable.id));
-		} else {
-			removed.push(format!("<#{0}>", self_unreadable.id));
-			keyword.delete().await?;
-		}
-	}
-
-	let mut msg = String::with_capacity(45);
-
-	let keyword = MD_SYMBOL_REGEX.replace_all(&keyword, r"\$0");
-
-	if !removed.is_empty() {
-		write!(
-			&mut msg,
-			"Removed {} from channels: {}",
-			keyword,
-			removed.join(", ")
-		)
-		.unwrap();
-
-		message.react(ctx, '✅').await?;
-	}
-
-	if !not_added.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		write!(
-			&mut msg,
-			"{} wasn't added to channels: {}",
-			keyword,
-			not_added.join(", ")
-		)
-		.unwrap();
-
-		message.react(ctx, '❌').await?;
-	}
-
-	if !not_found.is_empty() {
-		if !msg.is_empty() {
-			msg.push('\n');
-		}
-		msg.push_str("Couldn't find channels: ");
-		msg.push_str(&not_found.join(", "));
-
-		message.react(ctx, '❓').await?;
-	}
-
-	let response = message
-		.channel_id
-		.send_message(ctx, |m| {
-			m.content(msg).allowed_mentions(|m| m.empty_parse())
-		})
-		.await?;
-
-	insert_command_response(ctx, message.id, response.id).await;
-
-	Ok(())
+	success(ctx, &command).await
 }
 
 /// Add an ignored phrase.
 ///
-/// Usage: `@Highlights ignore <phrase>`
-pub async fn ignore(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
-	let guild_id = require_guild!(ctx, message);
+/// Usage: `/ignore <phrase>`
+pub async fn ignore(ctx: &Context, command: Command) -> Result<()> {
+	let guild_id = require_guild!(ctx, &command);
 
-	require_nonempty_args!(args, ctx, message);
+	let phrase = command
+		.data
+		.options
+		.get(0)
+		.and_then(|o| o.value.as_ref())
+		.context("No phrase to ignore provided")?
+		.as_str()
+		.context("Phrase provided not string")?;
 
-	if args.len() < 3 {
-		return error(
+	if phrase.len() < 3 {
+		return respond_eph(
 			ctx,
-			message,
-			"You can't ignore phrases shorter than 3 characters!",
+			&command,
+			"❌ You can't ignore phrases shorter than 3 characters!",
 		)
 		.await;
 	}
 
 	let ignore = Ignore {
-		user_id: message.author.id,
+		user_id: command.user.id,
 		guild_id,
-		phrase: args.to_lowercase(),
+		phrase: phrase.to_lowercase(),
 	};
 
 	if ignore.clone().exists().await? {
-		return error(ctx, message, "You already ignored that phrase!").await;
+		return respond_eph(
+			ctx,
+			&command,
+			"❌ You already ignored that phrase!",
+		)
+		.await;
 	}
 
 	ignore.insert().await?;
 
-	success(ctx, message).await
+	success(ctx, &command).await
 }
 
 /// Remove an ignored phrase.
 ///
 /// Usage: `@Highlights unignore <phrase>`
-pub async fn unignore(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
-	let guild_id = require_guild!(ctx, message);
+pub async fn unignore(ctx: &Context, command: Command) -> Result<()> {
+	let guild_id = require_guild!(ctx, &command);
 
-	require_nonempty_args!(args, ctx, message);
+	let phrase = command
+		.data
+		.options
+		.get(0)
+		.and_then(|o| o.value.as_ref())
+		.context("No phrase to ignore provided")?
+		.as_str()
+		.context("Phrase provided not string")?;
 
 	let ignore = Ignore {
-		user_id: message.author.id,
+		user_id: command.user.id,
 		guild_id,
-		phrase: args.to_lowercase(),
+		phrase: phrase.to_lowercase(),
 	};
 
 	if !ignore.clone().exists().await? {
-		return error(ctx, message, "You haven't ignored that phrase!").await;
+		return respond_eph(
+			ctx,
+			&command,
+			"❌ You haven't ignored that phrase!",
+		)
+		.await;
 	}
 
 	ignore.delete().await?;
 
-	success(ctx, message).await
+	success(ctx, &command).await
 }
 
 /// List ignored phrases in the current guild, or in all guilds when used in DMs.
 ///
 /// Usage: `@Highlights ignores`
-pub async fn ignores(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+pub async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("ignores");
-	require_empty_args!(args, ctx, message);
-	let response = match message.guild_id {
+
+	match command.guild_id {
 		Some(guild_id) => {
-			let ignores =
-				Ignore::user_guild_ignores(message.author.id, guild_id)
-					.await?
-					.into_iter()
-					.map(|ignore| ignore.phrase)
-					.collect::<Vec<_>>();
+			let ignores = Ignore::user_guild_ignores(command.user.id, guild_id)
+				.await?
+				.into_iter()
+				.map(|ignore| ignore.phrase)
+				.collect::<Vec<_>>();
 
 			if ignores.is_empty() {
-				return error(ctx, message, "You haven't ignored any phrases!")
-					.await;
+				return respond_eph(
+					ctx,
+					&command,
+					"❌ You haven't ignored any phrases!",
+				)
+				.await;
 			}
 
 			let guild_name = ctx
@@ -563,24 +346,23 @@ pub async fn ignores(
 
 			let response = format!(
 				"{}'s ignored phrases in {}:\n  - {}",
-				message.author.name,
+				command.user.name,
 				guild_name,
 				ignores.join("\n  - ")
 			);
 
-			message
-				.channel_id
-				.send_message(ctx, |m| {
-					m.content(response).allowed_mentions(|m| m.empty_parse())
-				})
-				.await?
+			respond_eph(ctx, &command, response).await
 		}
 		None => {
-			let ignores = Ignore::user_ignores(message.author.id).await?;
+			let ignores = Ignore::user_ignores(command.user.id).await?;
 
 			if ignores.is_empty() {
-				return error(ctx, message, "You haven't ignored any phrases!")
-					.await;
+				return respond_eph(
+					ctx,
+					&command,
+					"❌ You haven't ignored any phrases!",
+				)
+				.await;
 			}
 
 			let mut ignores_by_guild = HashMap::new();
@@ -614,63 +396,61 @@ pub async fn ignores(
 				.unwrap();
 			}
 
-			message.channel_id.say(ctx, response).await?
+			respond_eph(ctx, &command, response).await
 		}
-	};
-
-	insert_command_response(ctx, message.id, response.id).await;
-
-	Ok(())
+	}
 }
 
 /// Remove keywords and ignores in a guild by ID.
 ///
-/// Usage: `@Highlights remove-server <guild ID>`
-pub async fn remove_server(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+/// Usage: `/remove-server <guild ID>`
+pub async fn remove_server(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("removeserver");
-	require_nonempty_args!(args, ctx, message);
 
-	let guild_id = match args.parse() {
+	let arg = command
+		.data
+		.options
+		.get(0)
+		.and_then(|o| o.value.as_ref())
+		.context("No guild ID to remove provided")?
+		.as_str()
+		.context("Guild ID to remove was not a string")?;
+
+	let guild_id = match arg.parse() {
 		Ok(id) => GuildId(id),
-		Err(_) => return error(ctx, message, "Invalid server ID!").await,
+		Err(_) => {
+			return respond_eph(ctx, &command, "❌ Invalid server ID!").await
+		}
 	};
 
 	let keywords_deleted =
-		Keyword::delete_in_guild(message.author.id, guild_id).await?;
+		Keyword::delete_in_guild(command.user.id, guild_id).await?;
 
 	let ignores_deleted =
-		Ignore::delete_in_guild(message.author.id, guild_id).await?;
+		Ignore::delete_in_guild(command.user.id, guild_id).await?;
 
 	if keywords_deleted + ignores_deleted == 0 {
-		error(
+		respond_eph(
 			ctx,
-			message,
-			"You didn't have any keywords or ignores with that server ID!",
+			&command,
+			"❌ You didn't have any keywords or ignores with that server ID!",
 		)
 		.await
 	} else {
-		success(ctx, message).await
+		success(ctx, &command).await
 	}
 }
 
 /// List keywords in the current guild, or in all guilds when used in DMs.
 ///
 /// Usage: `@Highlights keywords`
-pub async fn keywords(
-	ctx: &Context,
-	message: &Message,
-	args: &str,
-) -> Result<()> {
+pub async fn keywords(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("keywords");
-	require_empty_args!(args, ctx, message);
-	let response = match message.guild_id {
+
+	match command.guild_id {
 		Some(guild_id) => {
 			let guild_keywords =
-				Keyword::user_guild_keywords(message.author.id, guild_id)
+				Keyword::user_guild_keywords(command.user.id, guild_id)
 					.await?
 					.into_iter()
 					.map(|keyword| keyword.keyword)
@@ -682,7 +462,7 @@ pub async fn keywords(
 			let mut channel_keywords = HashMap::new();
 
 			for keyword in
-				Keyword::user_channel_keywords(message.author.id).await?
+				Keyword::user_channel_keywords(command.user.id).await?
 			{
 				let channel_id = match keyword.kind {
 					KeywordKind::Channel(id) => id,
@@ -702,10 +482,10 @@ pub async fn keywords(
 			}
 
 			if guild_keywords.is_empty() && channel_keywords.is_empty() {
-				return error(
+				return respond_eph(
 					ctx,
-					message,
-					"You haven't added any keywords yet!",
+					&command,
+					"❌ You haven't added any keywords yet!",
 				)
 				.await;
 			}
@@ -743,21 +523,16 @@ pub async fn keywords(
 				.unwrap();
 			}
 
-			message
-				.channel_id
-				.send_message(ctx, |m| {
-					m.content(response).allowed_mentions(|m| m.empty_parse())
-				})
-				.await?
+			respond_eph(ctx, &command, response).await
 		}
 		None => {
-			let keywords = Keyword::user_keywords(message.author.id).await?;
+			let keywords = Keyword::user_keywords(command.user.id).await?;
 
 			if keywords.is_empty() {
-				return error(
+				return respond_eph(
 					ctx,
-					message,
-					"You haven't added any keywords yet!",
+					&command,
+					"❌ You haven't added any keywords yet!",
 				)
 				.await;
 			}
@@ -848,11 +623,7 @@ pub async fn keywords(
 				}
 			}
 
-			message.channel_id.say(ctx, response).await?
+			respond_eph(ctx, &command, response).await
 		}
-	};
-
-	insert_command_response(ctx, message.id, response.id).await;
-
-	Ok(())
+	}
 }

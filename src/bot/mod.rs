@@ -199,24 +199,24 @@ impl EventHandler for Handler {
 			let ctx = ctx.clone();
 
 			match &*name {
-				// "add" => spawn(async move { add(&ctx, command).await }),
-				// "remove" => spawn(async move { remove(&ctx, command).await }),
+				"add" => spawn(async move { add(&ctx, command).await }),
+				"remove" => spawn(async move { remove(&ctx, command).await }),
 				"mute" => spawn(async move { mute(&ctx, command).await }),
 				"unmute" => spawn(async move { unmute(&ctx, command).await }),
-				// "ignore" => spawn(async move { ignore(&ctx, command).await }),
-				// "unignore" => {
-				// 	spawn(async move { unignore(&ctx, command).await })
-				// }
+				"ignore" => spawn(async move { ignore(&ctx, command).await }),
+				"unignore" => {
+					spawn(async move { unignore(&ctx, command).await })
+				}
 				"block" => spawn(async move { block(&ctx, command).await }),
 				"unblock" => spawn(async move { unblock(&ctx, command).await }),
-				// "remove-server" => {
-				// 	spawn(async move { remove_server(&ctx, command).await })
-				// }
-				// "keywords" => {
-				// 	spawn(async move { keywords(&ctx, command).await })
-				// }
+				"remove-server" => {
+					spawn(async move { remove_server(&ctx, command).await })
+				}
+				"keywords" => {
+					spawn(async move { keywords(&ctx, command).await })
+				}
 				"mutes" => spawn(async move { mutes(&ctx, command).await }),
-				// "ignores" => spawn(async move { ignores(&ctx, command).await }),
+				"ignores" => spawn(async move { ignores(&ctx, command).await }),
 				"blocks" => spawn(async move { blocks(&ctx, command).await }),
 				"opt-out" => spawn(async move { opt_out(&ctx, command).await }),
 				"opt-in" => spawn(async move { opt_in(&ctx, command).await }),
@@ -241,7 +241,9 @@ impl EventHandler for Handler {
 			// TODO: tell the user it failed
 
 			log::error!(
-				"Error in <#{0}> ({0}) by <@{1}> ({1}):\n{2:?}",
+				"Error executing command {0} in <#{1}> ({1}) by <@{2}> ({2}):\n\
+				{3:?}",
+				name,
 				channel_id,
 				user_id,
 				e

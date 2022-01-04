@@ -134,6 +134,21 @@ pub async fn respond_eph<S: Display>(
 	Ok(())
 }
 
+pub async fn followup_eph<S: Display>(
+	ctx: &Context,
+	command: &Command,
+	response: S,
+) -> Result<()> {
+	command
+		.create_followup_message(ctx, |r| {
+			r.flags(ResponseFlags::EPHEMERAL).content(response)
+		})
+		.await
+		.context("Failed to send command followup")?;
+
+	Ok(())
+}
+
 /// Determines if a user with the given ID can read messages in the provided `GuildChannel`.
 pub async fn user_can_read_channel(
 	ctx: &impl CacheHttp,

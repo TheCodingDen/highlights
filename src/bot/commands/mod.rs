@@ -6,10 +6,10 @@
 #[macro_use]
 mod util;
 
-// mod keywords;
-// pub use keywords::{
-// 	add, ignore, ignores, keywords, remove, remove_server, unignore,
-// };
+mod keywords;
+pub use keywords::{
+	add, ignore, ignores, keywords, remove, remove_server, unignore,
+};
 
 mod mutes;
 pub use mutes::{mute, mutes, unmute};
