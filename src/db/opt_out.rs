@@ -70,4 +70,40 @@ impl OptOut {
 			Ok(())
 		})
 	}
+
+	/// Deletes this user's data from the DB as they opt out.
+	pub async fn delete_user_data(self) -> Result<()> {
+		await_db!("opt-out user data deletion": |conn| {
+			let conn = conn.transaction()?;
+			conn.execute(
+				"DELETE FROM guild_keywords
+				WHERE user_id = ?",
+				params![self.user_id.into_i64()],
+			)?;
+			conn.execute(
+				"DELETE FROM channel_keywords
+				WHERE user_id = ?",
+				params![self.user_id.into_i64()],
+			)?;
+			conn.execute(
+				"DELETE FROM blocks
+				WHERE user_id = ?",
+				params![self.user_id.into_i64()],
+			)?;
+			conn.execute(
+				"DELETE FROM mutes
+				WHERE user_id = ?",
+				params![self.user_id.into_i64()],
+			)?;
+			conn.execute(
+				"DELETE FROM guild_ignores
+				WHERE user_id = ?",
+				params![self.user_id.into_i64()],
+			)?;
+
+			conn.commit()?;
+
+			Ok(())
+		})
+	}
 }

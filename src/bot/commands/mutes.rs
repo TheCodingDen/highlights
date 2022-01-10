@@ -22,6 +22,7 @@ use crate::{
 /// Usage: `/mute <channel>`
 pub async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("mute");
+	check_opt_out!(ctx, command);
 	let guild_id = require_guild!(ctx, &command);
 
 	let channel_id = command
@@ -93,6 +94,7 @@ pub async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 /// Usage: `/unmute <channel>`
 pub async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("unmute");
+	check_opt_out!(ctx, command);
 
 	let channel_id = command
 		.data
@@ -127,6 +129,7 @@ pub async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 /// Usage: `/mutes`
 pub async fn mutes(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("mutes");
+	check_opt_out!(ctx, command);
 	match command.guild_id {
 		Some(guild_id) => {
 			let channels = ctx

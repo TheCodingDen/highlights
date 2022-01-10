@@ -107,7 +107,12 @@ impl Keyword {
 						AND NOT EXISTS (
 							SELECT opt_outs.user_id
 								FROM opt_outs
-								where opt_outs.user_id = ?
+								WHERE opt_outs.user_id = ?
+						)
+						AND NOT EXISTS (
+							SELECT opt_outs.user_id
+								FROM opt_outs
+								WHERE opt_outs.user_id = guild_keywords.user_id
 						)
 						AND NOT EXISTS (
 							SELECT mutes.user_id
@@ -146,6 +151,11 @@ impl Keyword {
 							SELECT opt_outs.user_id
 								FROM opt_outs
 								where opt_outs.user_id = ?
+						)
+						AND NOT EXISTS (
+							SELECT opt_outs.user_id
+								FROM opt_outs
+								WHERE opt_outs.user_id = channel_keywords.user_id
 						)
 						AND NOT EXISTS (
 							SELECT blocks.user_id

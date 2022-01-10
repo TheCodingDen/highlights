@@ -35,6 +35,28 @@ macro_rules! require_guild {
 	}};
 }
 
+/// Requires the author of a given command to not be opted out.
+///
+/// Uses [`respond_eph`](crate::bot::util::respond_eph) to display an error if
+/// the user is opted out.
+#[macro_export]
+macro_rules! check_opt_out {
+	($ctx:expr, $command:expr) => {{
+		let opt_out = $crate::db::OptOut {
+			user_id: $command.user.id,
+		};
+
+		if opt_out.exists().await? {
+			return $crate::bot::util::respond_eph(
+				&$ctx,
+				&$command,
+				"❌ You can't use this command after opting out!",
+			)
+			.await;
+		}
+	}};
+}
+
 /// Requires the current bot member to have permission to send embeds.
 ///
 /// Uses [`error`](crate::util::error) if the current member does not have permission to send

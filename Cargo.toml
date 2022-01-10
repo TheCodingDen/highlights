@@ -44,6 +44,7 @@ url = { version = "2.2", features = ["serde"], optional = true }
 anyhow = "1.0"
 futures-util = "0.3"
 tinyvec = { version = "1.5", features = ["alloc"] }
+rand = "0.7"
 
 [dependencies.serenity]
 version = "0.10"

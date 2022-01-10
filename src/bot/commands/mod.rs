@@ -632,23 +632,25 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 			},
 			CommandInfo {
 				name: "opt-out",
-				short_desc: "Opt-out of having your messages highlighted",
+				short_desc: "Opt out of highlighting",
 				long_desc: indoc!("
-	                Use `/opt-out` to opt-out of having your messages \
-	                highlighted.
+	                Use `/opt-out` to opt out of highlighting functionality.
 
-	                If you opt out, nobody will be notified of your messages, even \
-	                if your messages include their keywords.",
+	                When you opt out, your keywords and other preferences will \
+	                be deleted, and others will no longer be notified of any \
+	                of your messages.
+
+	                You may opt back in later with `/opt-in`, but any \
+	                information deleted when opting out cannot be restored.",
 				),
 				examples: None,
 				options: vec![],
 			},
 			CommandInfo {
 				name: "opt-in",
-				short_desc: "Undo an opt-out so your messages will be highlighted",
+				short_desc: "Opt in to highlighting after having opted out",
 				long_desc: indoc!("
-	                Use `/opt-in` to opt-in to having your messages \
-	                highlighted after having opted out.
+	                Use `/opt-in` to opt in after having opted out.
 
 	                This command has no effect if you haven't opted out using \
 	                `/opt-out`.

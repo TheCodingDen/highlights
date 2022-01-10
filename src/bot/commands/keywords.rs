@@ -37,6 +37,7 @@ use crate::{
 /// - `/add <keyword> [channel]`
 pub async fn add(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("add");
+	check_opt_out!(ctx, command);
 	let guild_id = require_guild!(ctx, &command);
 	let user_id = command.user.id;
 
@@ -171,6 +172,7 @@ fn is_valid_keyword(keyword: &str) -> bool {
 /// - `/remove <keyword> [channel]`
 pub async fn remove(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("remove");
+	check_opt_out!(ctx, command);
 	let guild_id = require_guild!(ctx, &command);
 	let user_id = command.user.id;
 
@@ -216,6 +218,8 @@ pub async fn remove(ctx: &Context, command: Command) -> Result<()> {
 ///
 /// Usage: `/ignore <phrase>`
 pub async fn ignore(ctx: &Context, command: Command) -> Result<()> {
+	let _timer = Timer::command("ingore");
+	check_opt_out!(ctx, command);
 	let guild_id = require_guild!(ctx, &command);
 
 	let phrase = command
@@ -260,6 +264,8 @@ pub async fn ignore(ctx: &Context, command: Command) -> Result<()> {
 ///
 /// Usage: `@Highlights unignore <phrase>`
 pub async fn unignore(ctx: &Context, command: Command) -> Result<()> {
+	let _timer = Timer::command("unignore");
+	check_opt_out!(ctx, command);
 	let guild_id = require_guild!(ctx, &command);
 
 	let phrase = command
@@ -296,6 +302,7 @@ pub async fn unignore(ctx: &Context, command: Command) -> Result<()> {
 /// Usage: `@Highlights ignores`
 pub async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("ignores");
+	check_opt_out!(ctx, command);
 
 	match command.guild_id {
 		Some(guild_id) => {
@@ -382,6 +389,7 @@ pub async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 /// Usage: `/remove-server <guild ID>`
 pub async fn remove_server(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("removeserver");
+	check_opt_out!(ctx, command);
 
 	let arg = command
 		.data
@@ -422,6 +430,7 @@ pub async fn remove_server(ctx: &Context, command: Command) -> Result<()> {
 /// Usage: `@Highlights keywords`
 pub async fn keywords(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("keywords");
+	check_opt_out!(ctx, command);
 
 	match command.guild_id {
 		Some(guild_id) => {
