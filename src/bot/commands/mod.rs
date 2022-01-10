@@ -616,7 +616,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				examples: Some(indoc!("
 					Remove all server-wide keywords and ignores added to the server with an ID of \
 					126029834632:
-					`/remove-server 126029834632`",
+					/remove-server `server:` 126029834632",
 				)),
 				options: vec![
 					{

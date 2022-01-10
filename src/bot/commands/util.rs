@@ -12,12 +12,12 @@ use serenity::{
 	},
 };
 
-use std::{collections::HashMap, iter::FromIterator};
+use std::collections::HashMap;
 
-/// Requires the given message to have come from a guild channel.
+/// Requires the given command to have come from a guild channel.
 ///
-/// Uses [`error`](crate::util::error) if the message did not come from a guild channel. Evaluates
-/// to the guild's ID otherwise.
+/// Uses [`respond_eph`](crate::bot::util::respond_eph) if the command did not \
+/// come from a guild channel. Evaluates to the guild's ID otherwise.
 #[macro_export]
 macro_rules! require_guild {
 	($ctx:expr, $command:expr) => {{
@@ -59,8 +59,8 @@ macro_rules! check_opt_out {
 
 /// Requires the current bot member to have permission to send embeds.
 ///
-/// Uses [`error`](crate::util::error) if the current member does not have permission to send
-/// embeds. Does nothing if used on a message in a DM channel.
+/// Uses [`respond_eph`](crate::bot::util::respond_eph) if the current member does not have permission to send
+/// embeds. Does nothing if used on a command in a DM channel.
 #[macro_export]
 macro_rules! require_embed_perms {
 	($ctx:expr, $command:expr) => {
@@ -111,43 +111,4 @@ pub async fn get_text_channels_in_guild(
 		.collect();
 
 	Ok(channels)
-}
-
-/// Channels from a list of arguments.
-#[derive(Debug, Default)]
-struct ChannelsFromArgs<'args, 'c> {
-	/// Arguments that couldn't be resolved to channels.
-	not_found: Vec<&'args str>,
-	/// Channels and the arguments used to find them.
-	found: Vec<(&'c GuildChannel, &'args str)>,
-}
-
-impl<'args, 'c> FromIterator<Result<(&'c GuildChannel, &'args str), &'args str>>
-	for ChannelsFromArgs<'args, 'c>
-{
-	fn from_iter<
-		T: IntoIterator<Item = Result<(&'c GuildChannel, &'args str), &'args str>>,
-	>(
-		iter: T,
-	) -> Self {
-		let mut result = Self::default();
-		iter.into_iter().for_each(|res| match res {
-			Ok(c) => result.found.push(c),
-			Err(arg) => result.not_found.push(arg),
-		});
-		result
-	}
-}
-
-/// Readable channels from a list of arguments.
-#[derive(Debug, Default)]
-pub struct ReadableChannelsFromArgs<'args, 'c> {
-	/// Arguments that couldn't be resolved to channels.
-	pub not_found: Vec<&'args str>,
-	/// Channels readable by both the user and the bot.
-	pub found: Vec<&'c GuildChannel>,
-	/// Channels not readable by the user, and the argument provided to find them.
-	pub user_cant_read: Vec<(&'c GuildChannel, &'args str)>,
-	/// Channels readable by the user, but not by the bot.
-	pub self_cant_read: Vec<&'c GuildChannel>,
 }
