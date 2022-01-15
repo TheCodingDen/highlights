@@ -25,7 +25,9 @@ use crate::{
 	bot::util::{followup_eph, user_can_read_channel},
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
-	log_discord_error, regex,
+	log_discord_error,
+	monitoring::Timer,
+	regex,
 	settings::settings,
 };
 use indoc::indoc;
@@ -110,6 +112,7 @@ pub async fn notify_keywords(
 	user_id: UserId,
 	guild_id: GuildId,
 ) {
+	let _timer = Timer::notification("create");
 	ctx.data
 		.write()
 		.await
@@ -314,6 +317,7 @@ async fn send_notification_message(
 	message_to_send: CreateMessage<'static>,
 	keywords: TinyVec<[String; 2]>,
 ) -> Result<()> {
+	let _timer = Timer::notification("send");
 	let dm_channel = user_id
 		.create_dm_channel(&ctx)
 		.await

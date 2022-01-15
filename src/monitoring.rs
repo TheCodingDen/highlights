@@ -104,9 +104,10 @@ mod enabled {
 			}
 		}
 
-		/// Creates a timer for a keyword notificationexecution.
+		/// Creates a timer for a keyword notification execution.
 		///
-		/// `name` should be the type of notification, `"create"`, `"edit"`, or `"delete"`.
+		/// `name` should be the type of notification:
+		/// `"find`, `"create"`, `"send"`, `"edit"`, or `"delete"`.
 		pub fn notification(name: &'static str) -> Self {
 			Self {
 				kind: TimerType::Notification,

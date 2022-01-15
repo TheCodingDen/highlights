@@ -290,7 +290,7 @@ impl EventHandler for Handler {
 /// to determine if there is a keyword that should be highlighted, then calls
 /// (`notify_keyword`)[highlighting::notify_keyword].
 async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
-	let _timer = Timer::notification("create");
+	let _timer = Timer::notification("find");
 	let guild_id = match message.guild_id {
 		Some(id) => id,
 		None => return Ok(()),
