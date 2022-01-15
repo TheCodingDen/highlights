@@ -4,13 +4,14 @@
 //! Commands for adding, removing, and listing keywords.
 
 use anyhow::{Context as _, Result};
+use futures_util::{stream::FuturesUnordered, TryStreamExt};
 use indoc::indoc;
 use once_cell::sync::Lazy;
 use serenity::{
 	client::Context,
 	http::error::ErrorResponse,
 	model::{
-		id::GuildId,
+		id::{ChannelId, GuildId},
 		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
 	prelude::HttpError,
@@ -407,17 +408,45 @@ pub async fn remove_server(ctx: &Context, command: Command) -> Result<()> {
 		}
 	};
 
-	let keywords_deleted =
+	let channels: Option<Vec<ChannelId>> = ctx
+		.cache
+		.guild_field(guild_id, |g| {
+			g.channels
+				.iter()
+				.filter(|(_, channel)| channel.is_text_based())
+				.map(|(&id, _)| id)
+				.collect()
+		})
+		.await;
+
+	let guild_keywords_deleted =
 		Keyword::delete_in_guild(command.user.id, guild_id).await?;
 
 	let ignores_deleted =
 		Ignore::delete_in_guild(command.user.id, guild_id).await?;
 
-	if keywords_deleted + ignores_deleted == 0 {
+	let channel_keywords_deleted = match channels {
+		Some(channels) => {
+			let futures: FuturesUnordered<_> = channels
+				.into_iter()
+				.map(|channel| {
+					Keyword::delete_in_channel(command.user.id, channel)
+				})
+				.collect();
+
+			futures
+				.try_fold(0, |acc, n| async move { Ok(acc + n) })
+				.await?
+		}
+		None => 0,
+	};
+
+	if guild_keywords_deleted + ignores_deleted + channel_keywords_deleted == 0
+	{
 		respond_eph(
 			ctx,
 			&command,
-			"❌ You didn't have any keywords or ignores with that server ID!",
+			"❌ You didn't have any keywords or ignores in that server!",
 		)
 		.await
 	} else {
