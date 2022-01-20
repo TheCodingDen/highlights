@@ -14,6 +14,7 @@ use serenity::{
 		id::{ChannelId, GuildId, MessageId, UserId},
 		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
+	prelude::TypeMapKey,
 	Error as SerenityError,
 };
 use tinyvec::TinyVec;
@@ -21,7 +22,7 @@ use tinyvec::TinyVec;
 use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
 
 use crate::{
-	bot::util::{followup_eph, optional_result, user_can_read_channel},
+	bot::util::{followup_eph, user_can_read_channel},
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	log_discord_error, regex,
@@ -29,6 +30,12 @@ use crate::{
 };
 use indoc::indoc;
 use tokio::{select, time::sleep};
+
+pub struct CachedMessages;
+
+impl TypeMapKey for CachedMessages {
+	type Value = HashMap<MessageId, String>;
+}
 
 /// Checks if the provided keyword should be highlighted anywhere in the given message.
 ///
@@ -97,12 +104,19 @@ pub async fn should_notify_keyword(
 /// Any other errors are logged as normal.
 pub async fn notify_keywords(
 	ctx: Context,
-	message: Message,
+	mut message: Message,
 	keywords: TinyVec<[Keyword; 2]>,
 	ignores: Vec<Ignore>,
 	user_id: UserId,
 	guild_id: GuildId,
 ) {
+	ctx.data
+		.write()
+		.await
+		.get_mut::<CachedMessages>()
+		.expect("No message cache")
+		.insert(message.id, message.content.clone());
+
 	let channel_id = message.channel_id;
 
 	let reply_or_reaction;
@@ -113,7 +127,11 @@ pub async fn notify_keywords(
 		.author_id(user_id)
 		.timeout(settings().behavior.patience);
 
-	let reaction = message.channel_id.await_reaction(&ctx).author_id(user_id);
+	let reaction = message
+		.channel_id
+		.await_reaction(&ctx)
+		.author_id(user_id)
+		.timeout(settings().behavior.patience);
 
 	select! {
 		reaction = reaction => reply_or_reaction = reaction.map(|_| ()),
@@ -122,38 +140,35 @@ pub async fn notify_keywords(
 
 	if reply_or_reaction.is_none() {
 		let result: Result<()> = async {
-			let message = match optional_result(
-				ctx.http
-					.get_message(message.channel_id.0, message.id.0)
-					.await,
-			)
-			.context("Failed to fetch original messsage")?
+			let content = match ctx
+				.data
+				.write()
+				.await
+				.get_mut::<CachedMessages>()
+				.expect("No message cache")
+				.remove(&message.id)
 			{
 				Some(m) => m,
 				None => return Ok(()),
 			};
 
-			let keywords = {
-				let ctx = &ctx;
-				let message = &message;
-				let lowercase_content = &message.content.to_lowercase();
-				let ignores = &ignores;
-				stream::iter(keywords)
-					.map(Ok::<_, anyhow::Error>) // convert to a TryStream
-					.try_filter_map(|keyword| async move {
-						Ok(should_notify_keyword(
-							ctx,
-							message,
-							lowercase_content,
-							&keyword,
-							ignores,
-						)
-						.await?
-						.then(|| keyword.keyword))
-					})
-					.try_collect::<TinyVec<[String; 2]>>()
+			message.content = content;
+
+			let keywords = stream::iter(keywords)
+				.map(Ok::<_, anyhow::Error>) // convert to a TryStream
+				.try_filter_map(|keyword| async {
+					Ok(should_notify_keyword(
+						&ctx,
+						&message,
+						&message.content.to_lowercase(),
+						&keyword,
+						&ignores,
+					)
 					.await?
-			};
+					.then(|| keyword.keyword))
+				})
+				.try_collect::<TinyVec<[String; 2]>>()
+				.await?;
 
 			if keywords.is_empty() {
 				return Ok(());

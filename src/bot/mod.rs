@@ -33,6 +33,8 @@ use tokio::task;
 
 use std::collections::HashMap;
 
+use self::highlighting::CachedMessages;
+
 /// Type to serve as an event handler.
 struct Handler;
 
@@ -67,6 +69,13 @@ impl EventHandler for Handler {
 		if guild_id.is_none() {
 			return;
 		}
+
+		ctx.data
+			.write()
+			.await
+			.get_mut::<CachedMessages>()
+			.expect("No message cache")
+			.remove(&message_id);
 
 		let notifications =
 			match Notification::notifications_of_message(message_id).await {
@@ -122,6 +131,22 @@ impl EventHandler for Handler {
 			Some(g) => g,
 			None => return,
 		};
+
+		let content = match event.content.as_ref() {
+			Some(s) => s.clone(),
+			None => return,
+		};
+
+		if let Some(old_content) = ctx
+			.data
+			.write()
+			.await
+			.get_mut::<CachedMessages>()
+			.expect("No message cache")
+			.get_mut(&event.id)
+		{
+			*old_content = content;
+		}
 
 		let notifications =
 			match Notification::notifications_of_message(event.id).await {
@@ -343,6 +368,12 @@ pub async fn init() {
 		.expect("Failed to create client");
 
 	init_cache(client.cache_and_http.clone());
+
+	client
+		.data
+		.write()
+		.await
+		.insert::<CachedMessages>(HashMap::new());
 
 	client.start().await.expect("Failed to run client");
 }
