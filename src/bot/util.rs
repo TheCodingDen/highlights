@@ -25,9 +25,9 @@ use std::fmt::Display;
 ///
 /// # Usage
 /// ```
-/// #let channel_id = 4;
-/// #let author_id = 5;
-/// #let some_result = Err::<(), &'static str>("Uh oh!");
+/// # let channel_id = 4;
+/// # let author_id = 5;
+/// # let some_result = Err::<(), &'static str>("Uh oh!");
 /// if let Err(e) = some_result {
 /// 	log_discord_error!(in channel_id, by author_id, e);
 /// }
