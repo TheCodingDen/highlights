@@ -31,6 +31,8 @@ HIGHLIGHTS_BOT.TOKEN="your bot token goes here"
 HIGHLIGHTS_DATABASE.PATH="highlights_data"
 ```
 
+If you're contributing to highlights, I recommend moving the `pre-commit` file to `.git/hooks` so your code is checked for issues before committing (avoiding the need for commits to fix `rustfmt` or `clippy` errors).
+
 ## Backups
 
 Unless backups are disabled in the config, highlights automatically backs up its database every time it starts, and every 24hrs after that. These backups are saved to the `./backups` folder in the configured database path. These backups are a full snapshot of the database, so to restore one you can just move it back to the database path and rename it to `data.db`. Highlights doesn't delete any backups from the last 24hrs, but it does clean up older backups automatically:

@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# remove changes that won't be in the commit as applied
+git stash push -q --include-untracked --keep-index
+
+cargo fmt -- --check
+FMT_RESULT=$?
+
+cargo clippy -- --deny warnings
+CLIPPY_RESULT=$?
+
+git stash pop -q
+
+if [[ "$FMT_RESULT" -ne 0 ]]; then
+	exit 1
+fi
+
+if [[ "$CLIPPY_RESULT" -ne 0 ]]; then
+	exit 1
+fi
+
+exit 0
