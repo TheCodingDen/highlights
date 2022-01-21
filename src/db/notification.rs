@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for sent notification messages.
@@ -13,15 +13,15 @@ use super::IdI64Ext;
 
 /// Represents a sent notification message.
 #[derive(Debug, Clone)]
-pub struct Notification {
+pub(crate) struct Notification {
 	/// The ID of the message that caused the notification to be sent.
-	pub original_message: MessageId,
+	pub(crate) original_message: MessageId,
 	/// The ID of the sent notification message.
-	pub notification_message: MessageId,
+	pub(crate) notification_message: MessageId,
 	/// The keyword in the original message that caused the notification to be sent.
-	pub keyword: String,
+	pub(crate) keyword: String,
 	/// The ID of the user that the notification was sent to.
-	pub user_id: UserId,
+	pub(crate) user_id: UserId,
 }
 
 impl Notification {
@@ -55,7 +55,7 @@ impl Notification {
 	}
 
 	/// Fetches the notifications that were sent because of the given message from the DB.
-	pub async fn notifications_of_message(
+	pub(crate) async fn notifications_of_message(
 		message_id: MessageId,
 	) -> Result<Vec<Self>> {
 		await_db!("notifications from message": |conn| {
@@ -75,7 +75,7 @@ impl Notification {
 	}
 
 	/// Inserts this notification into the DB.
-	pub async fn insert(self) -> Result<()> {
+	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert notification": |conn| {
 			conn.execute(
 				"INSERT INTO sent_notifications (
@@ -98,7 +98,7 @@ impl Notification {
 	}
 
 	/// Removes notifications in the given message from the DB.
-	pub async fn delete_notification_message(
+	pub(crate) async fn delete_notification_message(
 		message_id: MessageId,
 	) -> Result<()> {
 		await_db!("delete notification": |conn| {
@@ -113,7 +113,7 @@ impl Notification {
 	}
 
 	/// Removes all notifications sent because of the given message from the DB.
-	pub async fn delete_notifications_of_message(
+	pub(crate) async fn delete_notifications_of_message(
 		message_id: MessageId,
 	) -> Result<()> {
 		await_db!("delete notifications": |conn| {

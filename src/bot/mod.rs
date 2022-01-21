@@ -12,7 +12,6 @@ mod highlighting;
 
 use crate::{
 	db::{Ignore, Keyword, Notification},
-	global::{init_cache, init_mentions},
 	log_discord_error,
 	monitoring::Timer,
 	settings::settings,
@@ -179,7 +178,6 @@ impl EventHandler for Handler {
 
 		highlighting::update_sent_notifications(
 			&ctx,
-			event.channel_id,
 			guild_id,
 			message,
 			notifications,
@@ -191,9 +189,7 @@ impl EventHandler for Handler {
 	///
 	/// This calls [`init_mentions`](crate::global::init_mentions), sets the bot's status, and
 	/// logs a ready message.
-	async fn ready(&self, ctx: Context, ready: Ready) {
-		init_mentions(ready.user.id);
-
+	async fn ready(&self, ctx: Context, _: Ready) {
 		ctx.set_activity(Activity::listening("/help")).await;
 
 		commands::create_commands(ctx).await;
@@ -353,7 +349,7 @@ async fn handle_keywords(ctx: &Context, message: &Message) -> Result<()> {
 	Ok(())
 }
 
-pub async fn init() {
+pub(crate) async fn init() -> Result<()> {
 	let mut client = Client::builder(&settings().bot.token)
 		.event_handler(Handler)
 		.intents(
@@ -365,9 +361,7 @@ pub async fn init() {
 		)
 		.application_id(settings().bot.application_id)
 		.await
-		.expect("Failed to create client");
-
-	init_cache(client.cache_and_http.clone());
+		.context("Failed to create client")?;
 
 	client
 		.data
@@ -375,5 +369,7 @@ pub async fn init() {
 		.await
 		.insert::<CachedMessages>(HashMap::new());
 
-	client.start().await.expect("Failed to run client");
+	client.start().await.context("Failed to run client")?;
+
+	Ok(())
 }

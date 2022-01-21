@@ -20,7 +20,7 @@ use crate::{
 /// Mute a channel.
 ///
 /// Usage: `/mute <channel>`
-pub async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
+pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("mute");
 	check_opt_out!(ctx, command);
 	let guild_id = require_guild!(ctx, &command);
@@ -92,7 +92,7 @@ pub async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 /// Unmute a channel.
 ///
 /// Usage: `/unmute <channel>`
-pub async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
+pub(crate) async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("unmute");
 	check_opt_out!(ctx, command);
 
@@ -127,7 +127,7 @@ pub async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 /// List muted channels in the current guild.
 ///
 /// Usage: `/mutes`
-pub async fn mutes(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn mutes(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("mutes");
 	check_opt_out!(ctx, command);
 	match command.guild_id {

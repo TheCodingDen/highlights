@@ -8,22 +8,24 @@
 
 #![allow(clippy::tabs_in_doc_comments)]
 
-pub mod db;
+use anyhow::Result;
 
-pub mod settings;
+pub(crate) mod db;
 
-pub mod global;
+pub(crate) mod settings;
 
-pub mod monitoring;
+pub(crate) mod global;
 
-pub mod reporting;
+pub(crate) mod monitoring;
+
+pub(crate) mod reporting;
 
 #[cfg(feature = "bot")]
 mod bot;
 
 /// Entrypoint function to initialize other modules and start the Discord client.
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
 	settings::init();
 
 	reporting::init();
@@ -34,8 +36,10 @@ async fn main() {
 	monitoring::init();
 
 	#[cfg(feature = "bot")]
-	bot::init().await;
+	bot::init().await?;
 
 	#[cfg(not(feature = "bot"))]
 	futures_util::future::pending::<()>().await;
+
+	Ok(())
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for blocked users.
@@ -13,11 +13,11 @@ use super::IdI64Ext;
 
 /// Represents a blocked user.
 #[derive(Debug, Clone)]
-pub struct Block {
+pub(crate) struct Block {
 	/// The user who blocked them.
-	pub user_id: UserId,
+	pub(crate) user_id: UserId,
 	/// The user who was blocked.
-	pub blocked_id: UserId,
+	pub(crate) blocked_id: UserId,
 }
 
 impl Block {
@@ -46,7 +46,7 @@ impl Block {
 	}
 
 	/// Fetches the list of blocks a user has added from the DB.
-	pub async fn user_blocks(user_id: UserId) -> Result<Vec<Self>> {
+	pub(crate) async fn user_blocks(user_id: UserId) -> Result<Vec<Self>> {
 		await_db!("user blocks": |conn| {
 			let mut stmt = conn.prepare(
 				"SELECT user_id, blocked_id
@@ -61,7 +61,7 @@ impl Block {
 	}
 
 	/// Adds this blocked user to the DB.
-	pub async fn insert(self) -> Result<()> {
+	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert block": |conn| {
 			conn.execute(
 				"INSERT INTO blocks (user_id, blocked_id)
@@ -77,7 +77,7 @@ impl Block {
 	}
 
 	/// Checks if this block exists in the DB.
-	pub async fn exists(self) -> Result<bool> {
+	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("block exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM blocks
@@ -92,7 +92,7 @@ impl Block {
 	}
 
 	/// Deletes this blocked user from the DB (making them not blocked anymore).
-	pub async fn delete(self) -> Result<()> {
+	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete block": |conn| {
 			conn.execute(
 				"DELETE FROM blocks

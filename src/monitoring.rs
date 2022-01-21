@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Performance monitoring with Prometheus.
@@ -75,7 +75,7 @@ mod enabled {
 	///
 	/// } // _timer is dropped at the end of the function, recording the time elapsed since it was constructed
 	/// ```
-	pub struct Timer {
+	pub(crate) struct Timer {
 		kind: TimerType,
 		name: &'static str,
 		start: Instant,
@@ -85,7 +85,7 @@ mod enabled {
 		/// Creates a timer for a command execution.
 		///
 		/// `name` should be the name of the command being executed.
-		pub fn command(name: &'static str) -> Self {
+		pub(crate) fn command(name: &'static str) -> Self {
 			Self {
 				kind: TimerType::Command,
 				name,
@@ -96,7 +96,7 @@ mod enabled {
 		/// Creates a timer for a database query execution.
 		///
 		/// `name` should be a brief description of the query, like `"delete keyword"`.
-		pub fn query(name: &'static str) -> Self {
+		pub(crate) fn query(name: &'static str) -> Self {
 			Self {
 				kind: TimerType::Query,
 				name,
@@ -108,7 +108,7 @@ mod enabled {
 		///
 		/// `name` should be the type of notification:
 		/// `"find`, `"create"`, `"send"`, `"edit"`, or `"delete"`.
-		pub fn notification(name: &'static str) -> Self {
+		pub(crate) fn notification(name: &'static str) -> Self {
 			Self {
 				kind: TimerType::Notification,
 				name,
@@ -155,7 +155,7 @@ mod enabled {
 	///
 	/// In the event that no command times have been recorded (such as if performance monitoring is
 	/// disabled) this function returns `None`.
-	pub fn avg_command_time() -> Option<f64> {
+	pub(crate) fn avg_command_time() -> Option<f64> {
 		avg_metrics(COMMAND_TIME_GAUGE.collect())
 	}
 
@@ -169,7 +169,7 @@ mod enabled {
 	///
 	/// In the event that no query times have been recorded (such as if performance monitoring is
 	/// disabled) this function returns `None`.
-	pub fn avg_query_time() -> Option<f64> {
+	pub(crate) fn avg_query_time() -> Option<f64> {
 		avg_metrics(QUERY_TIME_GAUGE.collect())
 	}
 
@@ -183,7 +183,7 @@ mod enabled {
 	///
 	/// In the event that no notification times have been recorded (such as if performance monitoring is
 	/// disabled) this function returns `None`.
-	pub fn avg_notify_time() -> Option<f64> {
+	pub(crate) fn avg_notify_time() -> Option<f64> {
 		avg_metrics(NOTIFY_TIME_GAUGE.collect())
 	}
 
@@ -206,7 +206,7 @@ mod enabled {
 	}
 
 	/// Initializes performance monitoring, starting a basic HTTP server for prometheus to poll.
-	pub fn init() {
+	pub(crate) fn init() {
 		if let Some(addr) = &settings().logging.prometheus {
 			ENABLED.set(true).unwrap();
 			tokio::spawn(prometheus_server(addr.socket_addr));
@@ -253,27 +253,27 @@ mod enabled {
 
 #[cfg(not(feature = "monitoring"))]
 mod disabled {
-	pub struct Timer;
+	pub(crate) struct Timer;
 
 	impl Timer {
-		pub fn command(_: &'static str) -> Self {
+		pub(crate) fn command(_: &'static str) -> Self {
 			Timer
 		}
 
-		pub fn query(_: &'static str) -> Self {
+		pub(crate) fn query(_: &'static str) -> Self {
 			Timer
 		}
 
-		pub fn notification(_: &'static str) -> Self {
+		pub(crate) fn notification(_: &'static str) -> Self {
 			Timer
 		}
 	}
 }
 
 #[cfg(feature = "monitoring")]
-pub use enabled::{
+pub(crate) use enabled::{
 	avg_command_time, avg_notify_time, avg_query_time, init, Timer,
 };
 
 #[cfg(not(feature = "monitoring"))]
-pub use disabled::Timer;
+pub(crate) use disabled::Timer;

@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Automatic backup system.
@@ -207,7 +207,7 @@ async fn clean_backups(backup_dir: &Path) {
 ///
 /// Creates `<data directory>/backup` if it doesn't exist already, creates a backup, cleans up old
 /// backups, and repeats once every 24hrs.
-pub fn start_backup_cycle(backup_dir: PathBuf) {
+pub(crate) fn start_backup_cycle(backup_dir: PathBuf) {
 	let _ = ensure_backup_dir_exists(&backup_dir);
 
 	task::spawn(async move {

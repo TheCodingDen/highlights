@@ -7,18 +7,18 @@
 mod util;
 
 mod keywords;
-pub use keywords::{
+pub(crate) use keywords::{
 	add, ignore, ignores, keywords, remove, remove_server, unignore,
 };
 
 mod mutes;
-pub use mutes::{mute, mutes, unmute};
+pub(crate) use mutes::{mute, mutes, unmute};
 
 mod blocks;
-pub use blocks::{block, blocks, unblock};
+pub(crate) use blocks::{block, blocks, unblock};
 
 mod opt_out;
-pub use opt_out::{opt_in, opt_out};
+pub(crate) use opt_out::{opt_in, opt_out};
 
 use anyhow::{Context as _, Result};
 use indoc::indoc;
@@ -43,7 +43,7 @@ use crate::{
 	require_embed_perms, settings::settings,
 };
 
-pub async fn create_commands(ctx: Context) {
+pub(crate) async fn create_commands(ctx: Context) {
 	log::info!("Registering slash commands");
 	for command in COMMAND_INFO.iter() {
 		if let Some(guild) = settings().bot.test_guild {
@@ -72,7 +72,7 @@ pub async fn create_commands(ctx: Context) {
 ///
 /// Returns the API latency in sending a message, and the metrics of command and database time
 /// recorded in [`monitoring`](crate::monitoring).
-pub async fn ping(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn ping(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("ping");
 
 	let reply = ping_reply();
@@ -84,8 +84,15 @@ pub async fn ping(ctx: &Context, command: Command) -> Result<()> {
 
 #[cfg(feature = "monitoring")]
 fn ping_reply() -> String {
-	use crate::monitoring::{avg_command_time, avg_query_time};
+	use crate::monitoring::{
+		avg_command_time, avg_notify_time, avg_query_time,
+	};
 	use indoc::formatdoc;
+
+	let notification_latency = avg_notify_time()
+		.map(format_seconds)
+		.unwrap_or_else(|| "<None>".to_owned());
+
 	let cmd_latency = avg_command_time()
 		.map(format_seconds)
 		.unwrap_or_else(|| "<None>".to_owned());
@@ -98,9 +105,11 @@ fn ping_reply() -> String {
 		"
 		🏓 Pong!
 
+		Average Notification Latency: {}
 		Average Recent Command Latency: {}
 		Average Recent Database Latency: {}
 		",
+		notification_latency,
 		cmd_latency,
 		db_latency,
 	)
@@ -129,7 +138,7 @@ fn ping_reply() -> String {
 /// Displays information about the bot.
 ///
 /// Displays the cargo package name and version, cargo source, author, and an invite URL.
-pub async fn about(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn about(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("about");
 	require_embed_perms!(ctx, command);
 
@@ -184,7 +193,7 @@ pub async fn about(ctx: &Context, command: Command) -> Result<()> {
 ///
 /// When given no arguments, displays the list of commands. When given an argument, displays
 /// detailed information about the command of that name.
-pub async fn help(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn help(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("help");
 	require_embed_perms!(ctx, command);
 

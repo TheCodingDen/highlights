@@ -29,7 +29,7 @@ use crate::{
 ///
 /// Usage:
 /// - `/opt-out`
-pub async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("opt-out");
 
 	let opt_out = OptOut {
@@ -145,7 +145,7 @@ pub async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 ///
 /// Usage:
 /// - `/opt-in`
-pub async fn opt_in(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn opt_in(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("opt-in");
 
 	let opt_out = OptOut {

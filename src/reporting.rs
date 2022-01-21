@@ -164,7 +164,7 @@ fn term_logger() -> Vec<Box<dyn SharedLogger>> {
 
 	let mut config_builder = ConfigBuilder::new();
 
-	config_builder.set_target_level(LevelFilter::Error);
+	config_builder.set_target_level(settings().logging.level);
 
 	for (path, level) in &settings().logging.filters {
 		config_builder.add_filter_ignore(path.to_string());

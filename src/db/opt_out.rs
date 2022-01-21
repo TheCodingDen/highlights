@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for user opt-outs.
@@ -15,9 +15,9 @@ use super::IdI64Ext;
 ///
 /// Users that opt-out will not have their messages highlighted.
 #[derive(Debug, Clone)]
-pub struct OptOut {
+pub(crate) struct OptOut {
 	/// The user that opted out.
-	pub user_id: UserId,
+	pub(crate) user_id: UserId,
 }
 
 impl OptOut {
@@ -34,7 +34,7 @@ impl OptOut {
 	}
 
 	/// Checks if this opt-out already exists in the DB.
-	pub async fn exists(self) -> Result<bool> {
+	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("opt-out exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM opt_outs
@@ -46,7 +46,7 @@ impl OptOut {
 	}
 
 	/// Adds this opt-out to the DB.
-	pub async fn insert(self) -> Result<()> {
+	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert opt-out": |conn| {
 			conn.execute(
 				"INSERT INTO opt_outs (user_id)
@@ -59,7 +59,7 @@ impl OptOut {
 	}
 
 	/// Deletes this opt-out from the DB.
-	pub async fn delete(self) -> Result<()> {
+	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete opt-out": |conn| {
 			conn.execute(
 				"DELETE FROM opt_outs
@@ -72,7 +72,7 @@ impl OptOut {
 	}
 
 	/// Deletes this user's data from the DB as they opt out.
-	pub async fn delete_user_data(self) -> Result<()> {
+	pub(crate) async fn delete_user_data(self) -> Result<()> {
 		await_db!("opt-out user data deletion": |conn| {
 			let conn = conn.transaction()?;
 			conn.execute(

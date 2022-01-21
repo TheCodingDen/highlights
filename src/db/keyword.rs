@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for keywords.
@@ -12,7 +12,7 @@ use crate::{await_db, db::connection};
 use super::IdI64Ext;
 
 #[derive(Debug, Clone, Copy)]
-pub enum KeywordKind {
+pub(crate) enum KeywordKind {
 	Channel(ChannelId),
 	Guild(GuildId),
 }
@@ -24,10 +24,10 @@ impl Default for KeywordKind {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Keyword {
-	pub keyword: String,
-	pub user_id: UserId,
-	pub kind: KeywordKind,
+pub(crate) struct Keyword {
+	pub(crate) keyword: String,
+	pub(crate) user_id: UserId,
+	pub(crate) kind: KeywordKind,
 }
 
 impl Keyword {
@@ -89,7 +89,7 @@ impl Keyword {
 	///
 	/// Fetches all channel-specific keywords in the specified channel, as long as the creator of
 	/// the keyword didn't block the author.
-	pub async fn get_relevant_keywords(
+	pub(crate) async fn get_relevant_keywords(
 		guild_id: GuildId,
 		channel_id: ChannelId,
 		author_id: UserId,
@@ -179,7 +179,7 @@ impl Keyword {
 	}
 
 	/// Fetches all guild-wide keywords created by the specified user in the specified guild.
-	pub async fn user_guild_keywords(
+	pub(crate) async fn user_guild_keywords(
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<Vec<Keyword>> {
@@ -201,7 +201,7 @@ impl Keyword {
 	}
 
 	/// Fetches all channel-specific keywords created by the specified user in the specified channel.
-	pub async fn user_channel_keywords(
+	pub(crate) async fn user_channel_keywords(
 		user_id: UserId,
 	) -> Result<Vec<Keyword>> {
 		await_db!("user channel keywords": |conn| {
@@ -221,7 +221,7 @@ impl Keyword {
 	}
 
 	/// Fetches all guild-wide and channel-specific keywords created by the specified user.
-	pub async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
+	pub(crate) async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
 		await_db!("user keywords": |conn| {
 			let mut stmt = conn.prepare(
 				"SELECT keyword, user_id, guild_id
@@ -254,7 +254,7 @@ impl Keyword {
 	}
 
 	/// Checks if this keyword has already been created by this user.
-	pub async fn exists(self) -> Result<bool> {
+	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("keyword exists": |conn| {
 			match self.kind {
 				KeywordKind::Guild(guild_id) => {
@@ -286,7 +286,7 @@ impl Keyword {
 	}
 
 	/// Returns the number of keywords this user has created across all guilds and channels.
-	pub async fn user_keyword_count(user_id: UserId) -> Result<u32> {
+	pub(crate) async fn user_keyword_count(user_id: UserId) -> Result<u32> {
 		await_db!("count user keywords": |conn| {
 			let guild_keywords = conn.query_row(
 				"SELECT COUNT(*)
@@ -309,7 +309,7 @@ impl Keyword {
 	}
 
 	/// Adds this keyword to the DB.
-	pub async fn insert(self) -> Result<()> {
+	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert keyword": |conn| {
 			match self.kind {
 				KeywordKind::Guild(guild_id) => {
@@ -341,7 +341,7 @@ impl Keyword {
 	}
 
 	/// Deletes this keyword from the DB.
-	pub async fn delete(self) -> Result<()> {
+	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete keyword": |conn| {
 			match self.kind {
 				KeywordKind::Guild(guild_id) => {
@@ -373,7 +373,7 @@ impl Keyword {
 	}
 
 	/// Deletes all guild-wide keywords created by the specified user in the specified guild.
-	pub async fn delete_in_guild(
+	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<usize> {
@@ -387,7 +387,7 @@ impl Keyword {
 	}
 
 	/// Deletes all channel-specific keywords created by the specified user in the specified channel.
-	pub async fn delete_in_channel(
+	pub(crate) async fn delete_in_channel(
 		user_id: UserId,
 		channel_id: ChannelId,
 	) -> Result<usize> {

@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for ignored phrases.
@@ -13,13 +13,13 @@ use super::IdI64Ext;
 
 /// Represents an ignored phrase.
 #[derive(Debug, Clone)]
-pub struct Ignore {
+pub(crate) struct Ignore {
 	/// The phrase that should be ignored.
-	pub phrase: String,
+	pub(crate) phrase: String,
 	/// The user that ignored this phrase.
-	pub user_id: UserId,
+	pub(crate) user_id: UserId,
 	/// The guild in which the user ignored the phrase.
-	pub guild_id: GuildId,
+	pub(crate) guild_id: GuildId,
 }
 
 impl Ignore {
@@ -51,7 +51,7 @@ impl Ignore {
 	}
 
 	/// Fetches the list of ignored phrases of the specified user in the specified guild from the DB.
-	pub async fn user_guild_ignores(
+	pub(crate) async fn user_guild_ignores(
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<Vec<Ignore>> {
@@ -72,7 +72,7 @@ impl Ignore {
 	}
 
 	/// Fetches the list of ignored phrases of the specified user across all guilds from the DB.
-	pub async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
+	pub(crate) async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
 		await_db!("user ignores": |conn| {
 			let mut stmt = conn.prepare(
 				"SELECT phrase, user_id, guild_id
@@ -88,7 +88,7 @@ impl Ignore {
 	}
 
 	/// Checks if this ignored phrase already exists in the DB.
-	pub async fn exists(self) -> Result<bool> {
+	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("ignore exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM guild_ignores
@@ -104,7 +104,7 @@ impl Ignore {
 	}
 
 	/// Adds this ignored phrase to the DB.
-	pub async fn insert(self) -> Result<()> {
+	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert ignore": |conn| {
 			conn.execute(
 				"INSERT INTO guild_ignores (phrase, user_id, guild_id)
@@ -121,7 +121,7 @@ impl Ignore {
 	}
 
 	/// Deletes this ignored phrase from the DB.
-	pub async fn delete(self) -> Result<()> {
+	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete ignore": |conn| {
 			conn.execute(
 				"DELETE FROM guild_ignores
@@ -138,7 +138,7 @@ impl Ignore {
 	}
 
 	/// Deletes all ignored phrases of the specified user in the specified guild from the DB.
-	pub async fn delete_in_guild(
+	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<usize> {

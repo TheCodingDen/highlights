@@ -81,7 +81,7 @@ macro_rules! regex {
 
 /// Responds to a command with a ✅ emoji.
 #[inline]
-pub async fn success(ctx: &Context, command: &Command) -> Result<()> {
+pub(crate) async fn success(ctx: &Context, command: &Command) -> Result<()> {
 	respond_eph(ctx, command, "✅\u{200b}") // zero-width space to force small emoji
 		.await
 		.context("Failed to add success reaction")?;
@@ -90,7 +90,7 @@ pub async fn success(ctx: &Context, command: &Command) -> Result<()> {
 }
 
 /// Responds to a command with the given message.
-pub async fn respond<S: Display>(
+pub(crate) async fn respond<S: Display>(
 	ctx: &Context,
 	command: &Command,
 	response: S,
@@ -106,7 +106,7 @@ pub async fn respond<S: Display>(
 }
 
 /// Responds to a command with the given message ephemerally.
-pub async fn respond_eph<S: Display>(
+pub(crate) async fn respond_eph<S: Display>(
 	ctx: &Context,
 	command: &Command,
 	response: S,
@@ -123,7 +123,7 @@ pub async fn respond_eph<S: Display>(
 	Ok(())
 }
 
-pub async fn followup_eph<S: Display>(
+pub(crate) async fn followup_eph<S: Display>(
 	ctx: &Context,
 	command: &Command,
 	response: S,
@@ -139,7 +139,7 @@ pub async fn followup_eph<S: Display>(
 }
 
 /// Determines if a user with the given ID can read messages in the provided `GuildChannel`.
-pub async fn user_can_read_channel(
+pub(crate) async fn user_can_read_channel(
 	ctx: &impl CacheHttp,
 	channel: &GuildChannel,
 	user_id: UserId,
@@ -179,7 +179,7 @@ pub async fn user_can_read_channel(
 ///
 /// If the given `Result` is an `Err` containing an error with a 404 HTTP error, `Ok(None)` is
 /// returned. Otherwise, the `Result` is returned, `Ok(x)` being replaced with `Ok(Some(x))`.
-pub fn optional_result<T>(
+pub(crate) fn optional_result<T>(
 	res: Result<T, SerenityError>,
 ) -> Result<Option<T>, SerenityError> {
 	match res {

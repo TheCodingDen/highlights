@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for mutes.
@@ -13,11 +13,11 @@ use super::IdI64Ext;
 
 /// Represents a muted channel.
 #[derive(Debug, Clone)]
-pub struct Mute {
+pub(crate) struct Mute {
 	/// The ID of the user who muted the channel.
-	pub user_id: UserId,
+	pub(crate) user_id: UserId,
 	/// The ID of the channel that was muted.
-	pub channel_id: ChannelId,
+	pub(crate) channel_id: ChannelId,
 }
 
 impl Mute {
@@ -46,7 +46,7 @@ impl Mute {
 	}
 
 	/// Fetches a list of mutes for the user with the given ID from the DB.
-	pub async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>> {
+	pub(crate) async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>> {
 		await_db!("user mutes": |conn| {
 
 			let mut stmt = conn.prepare(
@@ -65,7 +65,7 @@ impl Mute {
 	/// Checks if this mute exists in the DB.
 	///
 	/// Returns true if a mute with `self.user_id` and `self.channel_id` exists in the DB.
-	pub async fn exists(self) -> Result<bool> {
+	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("mute exists": |conn| {
 			conn.query_row(
 				"SELECT COUNT(*) FROM mutes
@@ -77,7 +77,7 @@ impl Mute {
 	}
 
 	/// Inserts this mute into the DB.
-	pub async fn insert(self) -> Result<()> {
+	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert mute": |conn| {
 			conn.execute(
 				"INSERT INTO mutes (user_id, channel_id)
@@ -90,7 +90,7 @@ impl Mute {
 	}
 
 	/// Deletes this mute from the DB.
-	pub async fn delete(self) -> Result<()> {
+	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete mute": |conn| {
 			conn.execute(
 				"DELETE FROM mutes

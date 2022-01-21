@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Interface for interacting with the sqlite database of keywords and other persistent user
@@ -15,13 +15,13 @@ mod notification;
 mod opt_out;
 mod user_state;
 
-pub use block::Block;
-pub use ignore::Ignore;
-pub use keyword::{Keyword, KeywordKind};
-pub use mute::Mute;
-pub use notification::Notification;
-pub use opt_out::OptOut;
-pub use user_state::{UserState, UserStateKind};
+pub(crate) use block::Block;
+pub(crate) use ignore::Ignore;
+pub(crate) use keyword::{Keyword, KeywordKind};
+pub(crate) use mute::Mute;
+pub(crate) use notification::Notification;
+pub(crate) use opt_out::OptOut;
+pub(crate) use user_state::{UserState, UserStateKind};
 
 use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
@@ -37,7 +37,7 @@ use crate::settings::settings;
 static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
 
 /// Gets a connection from the global connection pool.
-pub fn connection() -> PooledConnection<SqliteConnectionManager> {
+pub(crate) fn connection() -> PooledConnection<SqliteConnectionManager> {
 	POOL.get()
 		.expect("Database pool was not initialized")
 		.get()
@@ -47,7 +47,7 @@ pub fn connection() -> PooledConnection<SqliteConnectionManager> {
 /// Initializes the database.
 ///
 /// Creates the data folder and database file if necessary, and starts backups if enabled.
-pub fn init() {
+pub(crate) fn init() {
 	let data_dir = &settings().database.path;
 
 	if let Err(error) = fs::create_dir(data_dir) {

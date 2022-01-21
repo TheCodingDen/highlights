@@ -1,4 +1,4 @@
-// Copyright 2021 joshyrobot, ThatsNoMoon
+// Copyright 2022 joshyrobot, ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling of bot configuration for hosters.
@@ -56,9 +56,8 @@ mod user_address {
 		net::{SocketAddr, ToSocketAddrs},
 	};
 	#[derive(Debug)]
-	pub struct UserAddress {
-		pub socket_addr: SocketAddr,
-		pub raw: String,
+	pub(crate) struct UserAddress {
+		pub(crate) socket_addr: SocketAddr,
 	}
 
 	impl<'de> Deserialize<'de> for UserAddress {
@@ -91,22 +90,19 @@ mod user_address {
 					E::custom("provided host did not resolve to an address")
 				})?;
 
-			Ok(UserAddress {
-				socket_addr,
-				raw: v.to_owned(),
-			})
+			Ok(UserAddress { socket_addr })
 		}
 	}
 }
 
 #[cfg(feature = "monitoring")]
-pub use user_address::UserAddress;
+pub(crate) use user_address::UserAddress;
 
 /// Settings for the highlighting behavior of the bot.
 #[derive(Debug, Deserialize)]
-pub struct BehaviorSettings {
+pub(crate) struct BehaviorSettings {
 	/// Maximum number of keywords allowed for one user.
-	pub max_keywords: u32,
+	pub(crate) max_keywords: u32,
 
 	/// Duration to wait for activity before sending a notification.
 	#[serde(
@@ -114,62 +110,62 @@ pub struct BehaviorSettings {
 		deserialize_with = "deserialize_duration"
 	)]
 	#[cfg(feature = "bot")]
-	pub patience: Duration,
+	pub(crate) patience: Duration,
 }
 
 /// Settings for the account of the bot.
 #[cfg(feature = "bot")]
 #[derive(Debug, Deserialize)]
-pub struct BotSettings {
+pub(crate) struct BotSettings {
 	/// Bot token to log into Discord with.
-	pub token: String,
+	pub(crate) token: String,
 	/// ID of the bot's application.
-	pub application_id: u64,
+	pub(crate) application_id: u64,
 	/// Whether this bot is private or not.
 	///
 	/// Controls whether the `about` command outputs an invite link.
-	pub private: bool,
-	pub test_guild: Option<GuildId>,
+	pub(crate) private: bool,
+	pub(crate) test_guild: Option<GuildId>,
 }
 
 /// Settings for various logging facilities.
 #[derive(Debug, Deserialize)]
-pub struct LoggingSettings {
+pub(crate) struct LoggingSettings {
 	/// Webhook URL to send error/panic messages to.
 	#[cfg(feature = "reporting")]
-	pub webhook: Option<Url>,
+	pub(crate) webhook: Option<Url>,
 	/// Address to host an HTTP server for prometheus to scrape.
 	#[cfg(feature = "monitoring")]
-	pub prometheus: Option<UserAddress>,
+	pub(crate) prometheus: Option<UserAddress>,
 
 	/// Global level that log messages should be filtered to.
-	pub level: LevelFilter,
+	pub(crate) level: LevelFilter,
 	/// Per-module log level filters.
-	pub filters: HashMap<String, LevelFilter>,
+	pub(crate) filters: HashMap<String, LevelFilter>,
 }
 
 /// Settings for the database.
 #[derive(Debug, Deserialize)]
-pub struct DatabaseSettings {
+pub(crate) struct DatabaseSettings {
 	/// Path to the directory that should hold the database.
-	pub path: PathBuf,
+	pub(crate) path: PathBuf,
 	/// Whether or not to run automatic daily backups.
-	pub backup: bool,
+	pub(crate) backup: bool,
 }
 
 /// Collection of settings.
 #[derive(Debug, Deserialize)]
-pub struct Settings {
-	pub behavior: BehaviorSettings,
+pub(crate) struct Settings {
+	pub(crate) behavior: BehaviorSettings,
 	#[cfg(feature = "bot")]
-	pub bot: BotSettings,
-	pub logging: LoggingSettings,
-	pub database: DatabaseSettings,
+	pub(crate) bot: BotSettings,
+	pub(crate) logging: LoggingSettings,
+	pub(crate) database: DatabaseSettings,
 }
 
 impl Settings {
 	/// Builds settings from environment variables and the configuration file.
-	pub fn new() -> Result<Self, ConfigError> {
+	pub(crate) fn new() -> Result<Self, ConfigError> {
 		let mut s = Config::new();
 
 		s.set_default("behavior.max_keywords", 100)?;
@@ -199,12 +195,12 @@ impl Settings {
 static SETTINGS: OnceCell<Settings> = OnceCell::new();
 
 /// Gets the settings configured by the hoster.
-pub fn settings() -> &'static Settings {
+pub(crate) fn settings() -> &'static Settings {
 	SETTINGS.get().expect("Settings were not initialized")
 }
 
 /// Initialize the bot's [`Settings`](Settings).
-pub fn init() {
+pub(crate) fn init() {
 	match Settings::new() {
 		Ok(settings) => {
 			let _ = SETTINGS.set(settings);

@@ -33,7 +33,7 @@ use crate::{
 use indoc::indoc;
 use tokio::{select, time::sleep};
 
-pub struct CachedMessages;
+pub(crate) struct CachedMessages;
 
 impl TypeMapKey for CachedMessages {
 	type Value = HashMap<MessageId, String>;
@@ -46,7 +46,7 @@ impl TypeMapKey for CachedMessages {
 /// is similarly searched for in the message content. If it is found, the permissions of the user
 /// are checked to ensure they can read the message. If they can read the message, `Ok(true)`
 /// is returned.
-pub async fn should_notify_keyword(
+pub(crate) async fn should_notify_keyword(
 	ctx: &Context,
 	message: &Message,
 	content: &str,
@@ -104,7 +104,7 @@ pub async fn should_notify_keyword(
 /// [`UserState`](UserState) is created.
 ///
 /// Any other errors are logged as normal.
-pub async fn notify_keywords(
+pub(crate) async fn notify_keywords(
 	ctx: Context,
 	mut message: Message,
 	keywords: TinyVec<[Keyword; 2]>,
@@ -177,10 +177,9 @@ pub async fn notify_keywords(
 				return Ok(());
 			}
 
-			let message_to_send = build_notification_message(
-				&ctx, &message, &keywords, channel_id, guild_id,
-			)
-			.await?;
+			let message_to_send =
+				build_notification_message(&ctx, &message, &keywords, guild_id)
+					.await?;
 
 			send_notification_message(
 				&ctx,
@@ -203,12 +202,10 @@ async fn build_notification_message(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
-	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<CreateMessage<'static>> {
 	let embed =
-		build_notification_embed(ctx, message, keywords, channel_id, guild_id)
-			.await?;
+		build_notification_embed(ctx, message, keywords, guild_id).await?;
 
 	let mut msg = CreateMessage::default();
 
@@ -224,12 +221,10 @@ async fn build_notification_edit(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
-	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<EditMessage> {
 	let embed =
-		build_notification_embed(ctx, message, keywords, channel_id, guild_id)
-			.await?;
+		build_notification_embed(ctx, message, keywords, guild_id).await?;
 
 	let mut msg = EditMessage::default();
 
@@ -245,17 +240,16 @@ async fn build_notification_embed(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
-	channel_id: ChannelId,
 	guild_id: GuildId,
 ) -> Result<CreateEmbed> {
 	let message_link = format!(
 		"[(Link)](https://discord.com/channels/{}/{}/{})",
-		guild_id, channel_id, message.id
+		guild_id, message.channel_id, message.id
 	);
 
 	let channel_name = ctx
 		.cache
-		.guild_channel_field(channel_id, |c| c.name.clone())
+		.guild_channel_field(message.channel_id, |c| c.name.clone())
 		.await
 		.context("Couldn't get channel for keyword")?;
 	let (guild_name, guild_icon) = ctx
@@ -383,7 +377,7 @@ async fn send_notification_message(
 	result
 }
 
-pub async fn delete_sent_notifications(
+pub(crate) async fn delete_sent_notifications(
 	ctx: &Context,
 	channel_id: ChannelId,
 	original_message: MessageId,
@@ -413,9 +407,8 @@ pub async fn delete_sent_notifications(
 	}
 }
 
-pub async fn update_sent_notifications(
+pub(crate) async fn update_sent_notifications(
 	ctx: &Context,
-	channel_id: ChannelId,
 	guild_id: GuildId,
 	message: Message,
 	notifications: Vec<Notification>,
@@ -449,10 +442,9 @@ pub async fn update_sent_notifications(
 		}
 
 		let result: Result<()> = async {
-			let message_to_send = build_notification_edit(
-				ctx, &message, &keywords, channel_id, guild_id,
-			)
-			.await?;
+			let message_to_send =
+				build_notification_edit(ctx, &message, &keywords, guild_id)
+					.await?;
 
 			let dm_channel = user_id.create_dm_channel(ctx).await.context(
 				"Failed to create DM channel to update notifications",
@@ -470,18 +462,19 @@ pub async fn update_sent_notifications(
 		.await;
 
 		if let Err(e) = result {
-			log_discord_error!(in channel_id, edited message.id, e);
+			log_discord_error!(in message.channel_id, edited message.id, e);
 		}
 	}
 
-	delete_sent_notifications(ctx, channel_id, message.id, &to_delete).await;
+	delete_sent_notifications(ctx, message.channel_id, message.id, &to_delete)
+		.await;
 
 	for (_, notification_message) in to_delete {
 		if let Err(e) =
 			Notification::delete_notification_message(notification_message)
 				.await
 		{
-			log_discord_error!(in channel_id, edited message.id, e);
+			log_discord_error!(in message.channel_id, edited message.id, e);
 		}
 	}
 }
@@ -542,7 +535,7 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 ///
 /// If the last notification failed, send a message warning the user they should enable DMs. Clears
 /// the user state afterwards.
-pub async fn check_notify_user_state(
+pub(crate) async fn check_notify_user_state(
 	ctx: &Context,
 	command: &Command,
 ) -> Result<()> {
@@ -558,7 +551,7 @@ pub async fn check_notify_user_state(
 	Ok(())
 }
 
-pub async fn warn_for_failed_dm(
+pub(crate) async fn warn_for_failed_dm(
 	ctx: &Context,
 	command: &Command,
 ) -> Result<()> {

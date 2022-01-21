@@ -1,4 +1,4 @@
-// Copyright 2021 ThatsNoMoon
+// Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling for user states; whether or not the last notification DM was successful.
@@ -13,14 +13,14 @@ use super::IdI64Ext;
 
 /// Description of a user's state.
 #[derive(Debug, Clone)]
-pub struct UserState {
-	pub user_id: UserId,
-	pub state: UserStateKind,
+pub(crate) struct UserState {
+	pub(crate) user_id: UserId,
+	pub(crate) state: UserStateKind,
 }
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub enum UserStateKind {
+pub(crate) enum UserStateKind {
 	/// Indicates that the last DM sent to notify this user failed.
 	CannotDm = 0,
 }
@@ -62,7 +62,7 @@ impl UserState {
 	/// Fetches the state of the user with the given ID from the DB.
 	///
 	/// Returns `None` if the user has no recorded state.
-	pub async fn user_state(user_id: UserId) -> Result<Option<Self>> {
+	pub(crate) async fn user_state(user_id: UserId) -> Result<Option<Self>> {
 		await_db!("user state": |conn| {
 
 			let mut stmt = conn.prepare(
@@ -79,7 +79,7 @@ impl UserState {
 	}
 
 	/// Sets the state of the user in the DB.
-	pub async fn set(self) -> Result<()> {
+	pub(crate) async fn set(self) -> Result<()> {
 		await_db!("set user state": |conn| {
 			conn.execute(
 				"INSERT INTO user_states (user_id, state)
@@ -94,7 +94,7 @@ impl UserState {
 	}
 
 	/// Deletes this user state from the DB.
-	pub async fn delete(self) -> Result<()> {
+	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete user state": |conn| {
 			conn.execute(
 				"DELETE FROM user_states
@@ -107,7 +107,7 @@ impl UserState {
 	}
 
 	/// Clears any state of the user with the given ID.
-	pub async fn clear(user_id: UserId) -> Result<()> {
+	pub(crate) async fn clear(user_id: UserId) -> Result<()> {
 		await_db!("delete user state": |conn| {
 			conn.execute(
 				"DELETE FROM user_states

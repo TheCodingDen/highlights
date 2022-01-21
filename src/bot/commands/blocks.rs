@@ -14,7 +14,7 @@ use crate::{bot::util::respond_eph, db::Block, monitoring::Timer};
 /// Block a user.
 ///
 /// Usage: `/block <user>`
-pub async fn block(ctx: &Context, mut command: Command) -> Result<()> {
+pub(crate) async fn block(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("block");
 	check_opt_out!(ctx, command);
 
@@ -53,7 +53,7 @@ pub async fn block(ctx: &Context, mut command: Command) -> Result<()> {
 /// Unblock a user.
 ///
 /// Usage: `/unblock <user>`
-pub async fn unblock(ctx: &Context, mut command: Command) -> Result<()> {
+pub(crate) async fn unblock(ctx: &Context, mut command: Command) -> Result<()> {
 	let _timer = Timer::command("unblock");
 	check_opt_out!(ctx, command);
 
@@ -92,7 +92,7 @@ pub async fn unblock(ctx: &Context, mut command: Command) -> Result<()> {
 /// Lists blocked users.
 ///
 /// Usage: `/blocks`
-pub async fn blocks(ctx: &Context, command: Command) -> Result<()> {
+pub(crate) async fn blocks(ctx: &Context, command: Command) -> Result<()> {
 	let _timer = Timer::command("blocks");
 	check_opt_out!(ctx, command);
 
