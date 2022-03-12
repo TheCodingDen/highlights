@@ -2,7 +2,7 @@
 
 Highlights is a simple but flexible highlighting bot for Discord. Add a keyword to get notified in direct messages when your keyword appears in that server.
 
-You can add highlights to your server directly with [this link](https://discord.com/api/oauth2/authorize?client_id=740802975576096829&scope=bot+applications.commands). If you run into any problems, please make an issue here or let me know on [The Coding Den](https://discord.gg/code), `@ThatsNoMoon#0175`.
+You can add highlights to your server directly with [this link](https://discord.com/api/oauth2/authorize?client_id=740802975576096829&scope=bot+applications.commands). If you run into any problems, please make an issue here or let me know on [the Highlights dev server](https://discord.gg/9phBJ9tzQ2), `@ThatsNoMoon#0175`.
 
 ## Features
 - Add keywords to be notified about, per-server or per-channel
