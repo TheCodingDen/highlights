@@ -24,7 +24,7 @@ use anyhow::{Context as _, Result};
 use indoc::indoc;
 use once_cell::sync::Lazy;
 use serenity::{
-	builder::CreateApplicationCommandOption,
+	builder::{CreateApplicationCommand, CreateApplicationCommandOption},
 	client::Context,
 	model::{
 		interactions::{
@@ -45,27 +45,23 @@ use crate::{
 
 pub(crate) async fn create_commands(ctx: Context) {
 	log::info!("Registering slash commands");
-	for command in COMMAND_INFO.iter() {
-		if let Some(guild) = settings().bot.test_guild {
-			guild
-				.create_application_command(&ctx, |create| {
-					create
-						.name(command.name)
-						.description(command.short_desc)
-						.set_options(command.options.clone())
-				})
-				.await
-				.expect("Failed to create guild application command");
-		}
-		ApplicationCommand::create_global_application_command(&ctx, |create| {
-			create
-				.name(command.name)
-				.description(command.short_desc)
-				.set_options(command.options.clone())
-		})
-		.await
-		.expect("Failed to create application command");
+	let commands = COMMAND_INFO
+		.iter()
+		.map(CommandInfo::create)
+		.collect::<Vec<_>>();
+	if let Some(guild) = settings().bot.test_guild {
+		guild
+			.set_application_commands(&ctx, |create| {
+				create.set_application_commands(commands.clone())
+			})
+			.await
+			.expect("Failed to create guild application commands");
 	}
+	ApplicationCommand::set_global_application_commands(&ctx, |create| {
+		create.set_application_commands(commands)
+	})
+	.await
+	.expect("Failed to set global application commands");
 }
 
 /// Display the ping of the bot.
@@ -267,6 +263,17 @@ struct CommandInfo {
 	long_desc: &'static str,
 	examples: Option<&'static str>,
 	options: Vec<CreateApplicationCommandOption>,
+}
+
+impl CommandInfo {
+	fn create(&self) -> CreateApplicationCommand {
+		let mut builder = CreateApplicationCommand::default();
+		builder
+			.name(self.name)
+			.description(self.short_desc)
+			.set_options(self.options.clone());
+		builder
+	}
 }
 
 static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
