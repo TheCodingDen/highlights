@@ -3,15 +3,22 @@
 
 //! Handling of bot configuration for hosters.
 
-use config::{Config, ConfigError, Environment, File};
-use log::LevelFilter;
+use config::{Config, ConfigError, Environment, File, FileFormat};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
+#[cfg(feature = "bot")]
 use serenity::model::id::GuildId;
+use tracing::metadata::LevelFilter;
 #[cfg(feature = "reporting")]
 use url::Url;
 
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{
+	collections::HashMap,
+	env::{self, VarError},
+	fs::read_to_string,
+	io::ErrorKind,
+	path::PathBuf,
+};
 
 #[cfg(feature = "bot")]
 use std::time::Duration;
@@ -55,7 +62,7 @@ mod user_address {
 		fmt,
 		net::{SocketAddr, ToSocketAddrs},
 	};
-	#[derive(Debug)]
+	#[derive(Debug, Clone, Copy)]
 	pub(crate) struct UserAddress {
 		pub(crate) socket_addr: SocketAddr,
 	}
@@ -95,10 +102,101 @@ mod user_address {
 	}
 }
 
+mod level {
+	use serde::{de, Deserialize, Deserializer};
+	use tracing::metadata::LevelFilter;
+
+	use std::{collections::HashMap, fmt};
+
+	struct LevelFilterWrapper(LevelFilter);
+
+	/// Visitor to deserialize a `LevelFilter` from a string.
+	struct LevelFilterVisitor;
+	impl<'de> de::Visitor<'de> for LevelFilterVisitor {
+		type Value = LevelFilterWrapper;
+		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			write!(
+				formatter,
+				"a logging level (trace, debug, info, warn, error, off)"
+			)
+		}
+
+		fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+		where
+			E: de::Error,
+		{
+			match v {
+				"off" | "OFF" => Ok(LevelFilter::OFF),
+				"trace" | "TRACE" => Ok(LevelFilter::TRACE),
+				"debug" | "DEBUG" => Ok(LevelFilter::DEBUG),
+				"info" | "INFO" => Ok(LevelFilter::INFO),
+				"warn" | "WARN" => Ok(LevelFilter::WARN),
+				"error" | "ERROR" => Ok(LevelFilter::ERROR),
+				_ => Err(E::invalid_value(de::Unexpected::Str(v), &self)),
+			}
+			.map(LevelFilterWrapper)
+		}
+	}
+
+	impl<'de> Deserialize<'de> for LevelFilterWrapper {
+		fn deserialize<D>(d: D) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			d.deserialize_str(LevelFilterVisitor)
+		}
+	}
+
+	pub(super) fn deserialize_level_filter<'de, D>(
+		d: D,
+	) -> Result<LevelFilter, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		LevelFilterWrapper::deserialize(d).map(|LevelFilterWrapper(f)| f)
+	}
+
+	/// Visitor to deserialize a `LevelFilter` from a string.
+	struct LevelFiltersVisitor;
+	impl<'de> de::Visitor<'de> for LevelFiltersVisitor {
+		type Value = HashMap<String, LevelFilter>;
+		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			write!(formatter, "a table of modules to logging levels")
+		}
+
+		fn visit_map<A>(self, mut filters: A) -> Result<Self::Value, A::Error>
+		where
+			A: de::MapAccess<'de>,
+		{
+			let mut map = HashMap::new();
+
+			while let Some((module, LevelFilterWrapper(filter))) =
+				filters.next_entry::<String, LevelFilterWrapper>()?
+			{
+				map.insert(module, filter);
+			}
+
+			Ok(map)
+		}
+	}
+
+	pub(super) fn deserialize_level_filters<'de, D>(
+		d: D,
+	) -> Result<HashMap<String, LevelFilter>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		d.deserialize_map(LevelFiltersVisitor)
+	}
+}
+
+use level::{deserialize_level_filter, deserialize_level_filters};
+
 #[cfg(feature = "monitoring")]
 pub(crate) use user_address::UserAddress;
 
 /// Settings for the highlighting behavior of the bot.
+#[cfg(feature = "bot")]
 #[derive(Debug, Deserialize)]
 pub(crate) struct BehaviorSettings {
 	/// Maximum number of keywords allowed for one user.
@@ -134,14 +232,19 @@ pub(crate) struct LoggingSettings {
 	/// Webhook URL to send error/panic messages to.
 	#[cfg(feature = "reporting")]
 	pub(crate) webhook: Option<Url>,
-	/// Address to host an HTTP server for prometheus to scrape.
+	/// Address to find Jaeger agent to send traces to.
 	#[cfg(feature = "monitoring")]
-	pub(crate) prometheus: Option<UserAddress>,
+	pub(crate) jaeger: Option<UserAddress>,
 
 	/// Global level that log messages should be filtered to.
+	#[serde(deserialize_with = "deserialize_level_filter")]
 	pub(crate) level: LevelFilter,
 	/// Per-module log level filters.
+	#[serde(deserialize_with = "deserialize_level_filters")]
 	pub(crate) filters: HashMap<String, LevelFilter>,
+
+	/// Whether or not to use ANSI color codes.
+	pub(crate) color: bool,
 }
 
 /// Settings for the database.
@@ -156,6 +259,7 @@ pub(crate) struct DatabaseSettings {
 /// Collection of settings.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Settings {
+	#[cfg(feature = "bot")]
 	pub(crate) behavior: BehaviorSettings,
 	#[cfg(feature = "bot")]
 	pub(crate) bot: BotSettings,
@@ -168,6 +272,7 @@ impl Settings {
 	pub(crate) fn new() -> Result<Self, ConfigError> {
 		let mut s = Config::new();
 
+		#[cfg(feature = "bot")]
 		s.set_default("behavior.max_keywords", 100)?;
 		#[cfg(feature = "bot")]
 		s.set_default("behavior.patience_seconds", 60 * 2)?;
@@ -177,13 +282,22 @@ impl Settings {
 
 		s.set_default("logging.level", "WARN")?;
 		s.set_default("logging.filters.highlights", "INFO")?;
+		s.set_default("logging.color", "true")?;
 
 		s.set_default("database.path", "./data")?;
 		s.set_default("database.backup", true)?;
 
-		let filename = env::var("HIGHLIGHTS_CONFIG")
-			.unwrap_or_else(|_| "./config.toml".to_owned());
-		s.merge(File::with_name(&filename).required(false)).unwrap();
+		let filename = env::var("HIGHLIGHTS_CONFIG").or_else(|e| match e {
+			VarError::NotPresent => Ok("./config.toml".to_owned()),
+			e => Err(ConfigError::Foreign(Box::new(e))),
+		})?;
+		match read_to_string(&filename) {
+			Ok(conf) => {
+				s.merge(File::from_str(&conf, FileFormat::Toml))?;
+			}
+			Err(e) if e.kind() == ErrorKind::NotFound => (),
+			Err(e) => return Err(ConfigError::Foreign(Box::new(e))),
+		}
 
 		s.merge(Environment::with_prefix("HIGHLIGHTS"))?;
 

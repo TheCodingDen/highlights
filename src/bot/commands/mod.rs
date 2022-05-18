@@ -20,6 +20,8 @@ pub(crate) use blocks::{block, blocks, unblock};
 mod opt_out;
 pub(crate) use opt_out::{opt_in, opt_out};
 
+use std::fmt::Write;
+
 use anyhow::{Context as _, Result};
 use indoc::indoc;
 use once_cell::sync::Lazy;
@@ -39,17 +41,21 @@ use serenity::{
 };
 
 use crate::{
-	bot::util::respond, global::EMBED_COLOR, monitoring::Timer,
-	require_embed_perms, settings::settings,
+	bot::util::respond, global::EMBED_COLOR, require_embed_perms,
+	settings::settings,
 };
 
+use super::Shards;
+
 pub(crate) async fn create_commands(ctx: Context) {
-	log::info!("Registering slash commands");
+	tracing::info!("Registering slash commands");
 	let commands = COMMAND_INFO
 		.iter()
 		.map(CommandInfo::create)
 		.collect::<Vec<_>>();
 	if let Some(guild) = settings().bot.test_guild {
+		tracing::debug!("Registering commands in test guild");
+
 		guild
 			.set_application_commands(&ctx, |create| {
 				create.set_application_commands(commands.clone())
@@ -64,79 +70,65 @@ pub(crate) async fn create_commands(ctx: Context) {
 	.expect("Failed to set global application commands");
 }
 
-/// Display the ping of the bot.
-///
-/// Returns the API latency in sending a message, and the metrics of command and database time
-/// recorded in [`monitoring`](crate::monitoring).
-pub(crate) async fn ping(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("ping");
+/// Display the API latency of the bot.
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn ping(ctx: Context, command: Command) -> Result<()> {
+	let latency = ctx
+		.data
+		.read()
+		.await
+		.get::<Shards>()
+		.expect("Shard manager not stored in client data")
+		.lock()
+		.await
+		.runners
+		.lock()
+		.await
+		.values()
+		.next()
+		.expect("No shards managed")
+		.latency;
 
-	let reply = ping_reply();
+	let mut reply = "🏓 Pong!".to_owned();
 
-	respond(ctx, &command, reply).await?;
+	if let Some(latency) = latency {
+		reply += "\nGateway latency: ";
+
+		let micros = latency.as_micros();
+		if micros > 10_000_000 {
+			write!(&mut reply, "{:.2} s", micros as f64 / 1_000_000.0).unwrap();
+		} else if micros > 10 {
+			write!(&mut reply, "{:.2} ms", micros as f64 / 1000.0).unwrap();
+		} else {
+			write!(&mut reply, "{} μs", micros).unwrap();
+		}
+	}
+
+	respond(&ctx, &command, &reply).await?;
 
 	Ok(())
-}
-
-#[cfg(feature = "monitoring")]
-fn ping_reply() -> String {
-	use crate::monitoring::{
-		avg_command_time, avg_notify_time, avg_query_time,
-	};
-	use indoc::formatdoc;
-
-	let notification_latency = avg_notify_time()
-		.map(format_seconds)
-		.unwrap_or_else(|| "<None>".to_owned());
-
-	let cmd_latency = avg_command_time()
-		.map(format_seconds)
-		.unwrap_or_else(|| "<None>".to_owned());
-
-	let db_latency = avg_query_time()
-		.map(format_seconds)
-		.unwrap_or_else(|| "<None>".to_owned());
-
-	formatdoc!(
-		"
-		🏓 Pong!
-
-		Average Notification Latency: {}
-		Average Recent Command Latency: {}
-		Average Recent Database Latency: {}
-		",
-		notification_latency,
-		cmd_latency,
-		db_latency,
-	)
-}
-
-/// Nicely formats a number of seconds as a string.
-///
-/// Returns `x s` when >= 10 seconds, `x ms` when >= 0.1 ms, and `x μs` when < 0.1 ms.
-#[cfg(feature = "monitoring")]
-fn format_seconds(seconds: f64) -> String {
-	if seconds >= 10.0 {
-		format!("{:.2} s", seconds)
-	} else if seconds >= 0.0001 {
-		format!("{:.2} ms", seconds * 1000.0)
-	} else {
-		// I would love for this to ever happen
-		format!("{:.2} μs", seconds * 1_000_000.0)
-	}
-}
-
-#[cfg(not(feature = "monitoring"))]
-fn ping_reply() -> String {
-	"🏓 Pong!".to_owned()
 }
 
 /// Displays information about the bot.
 ///
 /// Displays the cargo package name and version, cargo source, author, and an invite URL.
-pub(crate) async fn about(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("about");
-	require_embed_perms!(ctx, command);
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
+	require_embed_perms!(&ctx, &command);
 
 	let invite_url = if settings().bot.private {
 		None
@@ -189,9 +181,16 @@ pub(crate) async fn about(ctx: &Context, command: Command) -> Result<()> {
 ///
 /// When given no arguments, displays the list of commands. When given an argument, displays
 /// detailed information about the command of that name.
-pub(crate) async fn help(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("help");
-	require_embed_perms!(ctx, command);
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
+	require_embed_perms!(&ctx, &command);
 
 	let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
 

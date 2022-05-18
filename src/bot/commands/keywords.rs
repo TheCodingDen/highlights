@@ -6,6 +6,7 @@
 use anyhow::{Context as _, Result};
 use futures_util::{stream::FuturesUnordered, TryStreamExt};
 use indoc::indoc;
+use lazy_regex::regex;
 use once_cell::sync::Lazy;
 use serenity::{
 	client::Context,
@@ -27,8 +28,6 @@ use crate::{
 		util::{respond_eph, success, user_can_read_channel},
 	},
 	db::{Ignore, Keyword, KeywordKind},
-	monitoring::Timer,
-	regex,
 	settings::settings,
 };
 
@@ -36,10 +35,17 @@ use crate::{
 ///
 /// Usage:
 /// - `/add <keyword> [channel]`
-pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("add");
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn add(ctx: Context, command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
-	let guild_id = require_guild!(ctx, &command);
+	let guild_id = require_guild!(&ctx, &command);
 	let user_id = command.user.id;
 
 	let keyword_count = Keyword::user_keyword_count(user_id).await?;
@@ -52,7 +58,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 			)
 		});
 
-		return respond_eph(ctx, &command, MSG.as_str()).await;
+		return respond_eph(&ctx, &command, MSG.as_str()).await;
 	}
 
 	let keyword = command
@@ -68,7 +74,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 
 	if keyword.len() < 3 {
 		return respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You can't highlight keywords shorter than 3 characters!",
 		)
@@ -76,7 +82,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 	}
 
 	if !is_valid_keyword(&keyword) {
-		return respond_eph(ctx, &command, "❌ You can't add that keyword!")
+		return respond_eph(&ctx, &command, "❌ You can't add that keyword!")
 			.await;
 	}
 
@@ -88,7 +94,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 				.await
 				.context("Channel for keyword to add not cached")?;
 			let self_id = ctx.cache.current_user_id().await;
-			match user_can_read_channel(ctx, &channel, self_id).await {
+			match user_can_read_channel(&ctx, &channel, self_id).await {
 				Ok(Some(true)) => Keyword {
 					keyword,
 					user_id,
@@ -96,7 +102,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 				},
 				Ok(Some(false)) => {
 					return respond_eph(
-						ctx,
+						&ctx,
 						&command,
 						format!("❌ I can't read <#{}>!", channel.id),
 					)
@@ -121,7 +127,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 
 	if keyword.clone().exists().await? {
 		return respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You already added that keyword!",
 		)
@@ -130,14 +136,14 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 
 	keyword.insert().await?;
 
-	success(ctx, &command).await?;
+	success(&ctx, &command).await?;
 
 	if keyword_count == 0 {
-		let dm_channel = command.user.create_dm_channel(ctx).await?;
+		let dm_channel = command.user.create_dm_channel(&ctx).await?;
 
 		match dm_channel
 			.say(
-				ctx,
+				&ctx,
 				indoc!(
 					"
 					Test message; if you can read this, \
@@ -150,7 +156,7 @@ pub(crate) async fn add(ctx: &Context, command: Command) -> Result<()> {
 				HttpError::UnsuccessfulRequest(ErrorResponse {
 					error, ..
 				}) if error.message == "Cannot send messages to this user" => {
-					warn_for_failed_dm(ctx, &command).await?;
+					warn_for_failed_dm(&ctx, &command).await?;
 				}
 
 				_ => return Err(SerenityError::Http(err).into()),
@@ -171,10 +177,17 @@ fn is_valid_keyword(keyword: &str) -> bool {
 ///
 /// Usage:
 /// - `/remove <keyword> [channel]`
-pub(crate) async fn remove(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("remove");
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn remove(ctx: Context, command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
-	let guild_id = require_guild!(ctx, &command);
+	let guild_id = require_guild!(&ctx, &command);
 	let user_id = command.user.id;
 
 	let keyword = command
@@ -203,7 +216,7 @@ pub(crate) async fn remove(ctx: &Context, command: Command) -> Result<()> {
 
 	if !keyword.clone().exists().await? {
 		return respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You haven't added that keyword!",
 		)
@@ -212,16 +225,23 @@ pub(crate) async fn remove(ctx: &Context, command: Command) -> Result<()> {
 
 	keyword.delete().await?;
 
-	success(ctx, &command).await
+	success(&ctx, &command).await
 }
 
 /// Add an ignored phrase.
 ///
 /// Usage: `/ignore <phrase>`
-pub(crate) async fn ignore(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("ingore");
-	check_opt_out!(ctx, command);
-	let guild_id = require_guild!(ctx, &command);
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn ignore(ctx: Context, command: Command) -> Result<()> {
+	check_opt_out!(&ctx, command);
+	let guild_id = require_guild!(&ctx, &command);
 
 	let phrase = command
 		.data
@@ -234,7 +254,7 @@ pub(crate) async fn ignore(ctx: &Context, command: Command) -> Result<()> {
 
 	if phrase.len() < 3 {
 		return respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You can't ignore phrases shorter than 3 characters!",
 		)
@@ -249,7 +269,7 @@ pub(crate) async fn ignore(ctx: &Context, command: Command) -> Result<()> {
 
 	if ignore.clone().exists().await? {
 		return respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You already ignored that phrase!",
 		)
@@ -258,16 +278,23 @@ pub(crate) async fn ignore(ctx: &Context, command: Command) -> Result<()> {
 
 	ignore.insert().await?;
 
-	success(ctx, &command).await
+	success(&ctx, &command).await
 }
 
 /// Remove an ignored phrase.
 ///
-/// Usage: `@Highlights unignore <phrase>`
-pub(crate) async fn unignore(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("unignore");
-	check_opt_out!(ctx, command);
-	let guild_id = require_guild!(ctx, &command);
+/// Usage: `/unignore <phrase>`
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn unignore(ctx: Context, command: Command) -> Result<()> {
+	check_opt_out!(&ctx, command);
+	let guild_id = require_guild!(&ctx, &command);
 
 	let phrase = command
 		.data
@@ -286,7 +313,7 @@ pub(crate) async fn unignore(ctx: &Context, command: Command) -> Result<()> {
 
 	if !ignore.clone().exists().await? {
 		return respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You haven't ignored that phrase!",
 		)
@@ -295,15 +322,22 @@ pub(crate) async fn unignore(ctx: &Context, command: Command) -> Result<()> {
 
 	ignore.delete().await?;
 
-	success(ctx, &command).await
+	success(&ctx, &command).await
 }
 
 /// List ignored phrases in the current guild, or in all guilds when used in DMs.
 ///
-/// Usage: `@Highlights ignores`
-pub(crate) async fn ignores(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("ignores");
-	check_opt_out!(ctx, command);
+/// Usage: `/ignores`
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn ignores(ctx: Context, command: Command) -> Result<()> {
+	check_opt_out!(&ctx, command);
 
 	match command.guild_id {
 		Some(guild_id) => {
@@ -315,7 +349,7 @@ pub(crate) async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 
 			if ignores.is_empty() {
 				return respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					"❌ You haven't ignored any phrases!",
 				)
@@ -335,14 +369,14 @@ pub(crate) async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 				ignores.join("\n  - ")
 			);
 
-			respond_eph(ctx, &command, response).await
+			respond_eph(&ctx, &command, response).await
 		}
 		None => {
 			let ignores = Ignore::user_ignores(command.user.id).await?;
 
 			if ignores.is_empty() {
 				return respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					"❌ You haven't ignored any phrases!",
 				)
@@ -380,7 +414,7 @@ pub(crate) async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 				.unwrap();
 			}
 
-			respond_eph(ctx, &command, response).await
+			respond_eph(&ctx, &command, response).await
 		}
 	}
 }
@@ -388,12 +422,19 @@ pub(crate) async fn ignores(ctx: &Context, command: Command) -> Result<()> {
 /// Remove keywords and ignores in a guild by ID.
 ///
 /// Usage: `/remove-server <guild ID>`
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
 pub(crate) async fn remove_server(
-	ctx: &Context,
+	ctx: Context,
 	command: Command,
 ) -> Result<()> {
-	let _timer = Timer::command("removeserver");
-	check_opt_out!(ctx, command);
+	check_opt_out!(&ctx, command);
 
 	let arg = command
 		.data
@@ -407,7 +448,7 @@ pub(crate) async fn remove_server(
 	let guild_id = match arg.parse() {
 		Ok(id) => GuildId(id),
 		Err(_) => {
-			return respond_eph(ctx, &command, "❌ Invalid server ID!").await
+			return respond_eph(&ctx, &command, "❌ Invalid server ID!").await
 		}
 	};
 
@@ -447,22 +488,29 @@ pub(crate) async fn remove_server(
 	if guild_keywords_deleted + ignores_deleted + channel_keywords_deleted == 0
 	{
 		respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			"❌ You didn't have any keywords or ignores in that server!",
 		)
 		.await
 	} else {
-		success(ctx, &command).await
+		success(&ctx, &command).await
 	}
 }
 
 /// List keywords in the current guild, or in all guilds when used in DMs.
 ///
-/// Usage: `@Highlights keywords`
-pub(crate) async fn keywords(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("keywords");
-	check_opt_out!(ctx, command);
+/// Usage: `/keywords`
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn keywords(ctx: Context, command: Command) -> Result<()> {
+	check_opt_out!(&ctx, command);
 
 	match command.guild_id {
 		Some(guild_id) => {
@@ -474,7 +522,7 @@ pub(crate) async fn keywords(ctx: &Context, command: Command) -> Result<()> {
 					.collect::<Vec<_>>();
 
 			let guild_channels =
-				get_text_channels_in_guild(ctx, guild_id).await?;
+				get_text_channels_in_guild(&ctx, guild_id).await?;
 
 			let mut channel_keywords = HashMap::new();
 
@@ -500,7 +548,7 @@ pub(crate) async fn keywords(ctx: &Context, command: Command) -> Result<()> {
 
 			if guild_keywords.is_empty() && channel_keywords.is_empty() {
 				return respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					"❌ You haven't added any keywords yet!",
 				)
@@ -540,14 +588,14 @@ pub(crate) async fn keywords(ctx: &Context, command: Command) -> Result<()> {
 				.unwrap();
 			}
 
-			respond_eph(ctx, &command, response).await
+			respond_eph(&ctx, &command, response).await
 		}
 		None => {
 			let keywords = Keyword::user_keywords(command.user.id).await?;
 
 			if keywords.is_empty() {
 				return respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					"❌ You haven't added any keywords yet!",
 				)
@@ -640,7 +688,7 @@ pub(crate) async fn keywords(ctx: &Context, command: Command) -> Result<()> {
 				}
 			}
 
-			respond_eph(ctx, &command, response).await
+			respond_eph(&ctx, &command, response).await
 		}
 	}
 }

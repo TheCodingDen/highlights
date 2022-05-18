@@ -18,10 +18,12 @@ patience_seconds = 120
 [logging]
 # Discord webhook to send errors and panics to
 #webhook = "..."
-# IP and port to prometheus monitoring server
-#prometheus = "..."
+# IP and port to jaeger agent
+#jaeger = "..."
 # Default log level for entire application
 level = "WARN"
+# Whether or not to use ANSI color codes (may not work on Windows)
+color = true
 [logging.filters]
 # The `highlights` crate will log at INFO instead
 highlights = "INFO"

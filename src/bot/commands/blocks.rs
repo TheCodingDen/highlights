@@ -9,13 +9,20 @@ use serenity::{
 	model::interactions::application_command::ApplicationCommandInteraction as Command,
 };
 
-use crate::{bot::util::respond_eph, db::Block, monitoring::Timer};
+use crate::{bot::util::respond_eph, db::Block};
 
 /// Block a user.
 ///
 /// Usage: `/block <user>`
-pub(crate) async fn block(ctx: &Context, mut command: Command) -> Result<()> {
-	let _timer = Timer::command("block");
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn block(ctx: Context, mut command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
 
 	let user = command
@@ -28,7 +35,7 @@ pub(crate) async fn block(ctx: &Context, mut command: Command) -> Result<()> {
 		.context("User to block not provided")?;
 
 	if user.id == command.user.id {
-		return respond_eph(ctx, &command, "❌ You can't block yourself!")
+		return respond_eph(&ctx, &command, "❌ You can't block yourself!")
 			.await;
 	}
 
@@ -39,22 +46,29 @@ pub(crate) async fn block(ctx: &Context, mut command: Command) -> Result<()> {
 
 	if block.clone().exists().await? {
 		respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			format!("❌ You already blocked <@{}>!", user.id),
 		)
 		.await
 	} else {
 		block.insert().await?;
-		respond_eph(ctx, &command, format!("✅ Blocked <@{}>", user.id)).await
+		respond_eph(&ctx, &command, format!("✅ Blocked <@{}>", user.id)).await
 	}
 }
 
 /// Unblock a user.
 ///
 /// Usage: `/unblock <user>`
-pub(crate) async fn unblock(ctx: &Context, mut command: Command) -> Result<()> {
-	let _timer = Timer::command("unblock");
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn unblock(ctx: Context, mut command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
 
 	let user = command
@@ -67,7 +81,7 @@ pub(crate) async fn unblock(ctx: &Context, mut command: Command) -> Result<()> {
 		.context("User to unblock not provided")?;
 
 	if user.id == command.user.id {
-		return respond_eph(ctx, &command, "❌ You can't unblock yourself!")
+		return respond_eph(&ctx, &command, "❌ You can't unblock yourself!")
 			.await;
 	}
 
@@ -78,22 +92,30 @@ pub(crate) async fn unblock(ctx: &Context, mut command: Command) -> Result<()> {
 
 	if !block.clone().exists().await? {
 		respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			format!("❌ You haven't blocked <@{}>!", user.id),
 		)
 		.await
 	} else {
 		block.delete().await?;
-		respond_eph(ctx, &command, format!("✅ Unblocked <@{}>", user.id)).await
+		respond_eph(&ctx, &command, format!("✅ Unblocked <@{}>", user.id))
+			.await
 	}
 }
 
 /// Lists blocked users.
 ///
 /// Usage: `/blocks`
-pub(crate) async fn blocks(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("blocks");
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn blocks(ctx: Context, command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
 
 	let blocks = Block::user_blocks(command.user.id)
@@ -103,7 +125,7 @@ pub(crate) async fn blocks(ctx: &Context, command: Command) -> Result<()> {
 		.collect::<Vec<_>>();
 
 	if blocks.is_empty() {
-		respond_eph(ctx, &command, "You haven't blocked any users!").await
+		respond_eph(&ctx, &command, "You haven't blocked any users!").await
 	} else {
 		let msg = format!(
 			"{}'s blocked users:\n  - {}",
@@ -111,6 +133,6 @@ pub(crate) async fn blocks(ctx: &Context, command: Command) -> Result<()> {
 			blocks.join("\n  - ")
 		);
 
-		respond_eph(ctx, &command, msg).await
+		respond_eph(&ctx, &command, msg).await
 	}
 }

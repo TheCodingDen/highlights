@@ -22,6 +22,7 @@ const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H_%M_%S%.f%z";
 /// Creates the dir at the specified path for backups.
 ///
 /// Returns `Ok(())` on success or when the directory already existed.
+#[tracing::instrument]
 async fn ensure_backup_dir_exists(path: &Path) -> Result<(), IoError> {
 	let result = fs::create_dir(path).await;
 	if let Err(error) = &result {
@@ -33,6 +34,7 @@ async fn ensure_backup_dir_exists(path: &Path) -> Result<(), IoError> {
 }
 
 /// Creates a backup in the specified directory.
+#[tracing::instrument]
 async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 	task::spawn_blocking(move || {
 		let conn = connection();
@@ -59,6 +61,7 @@ async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
 }
 
 /// Cleans up old backups from the specified directory.
+#[tracing::instrument]
 async fn clean_backups(backup_dir: &Path) {
 	#[derive(Default)]
 	struct Backups {
@@ -119,7 +122,7 @@ async fn clean_backups(backup_dir: &Path) {
 					// includes some wiggle room so backups made 23.99999 hours
 					// apart aren't deleted
 					if gap < Duration::days(1) - Duration::minutes(1) {
-						log::debug!(
+						tracing::debug!(
 							"Deleting old restart backup from {}",
 							time.date()
 						);
@@ -130,7 +133,7 @@ async fn clean_backups(backup_dir: &Path) {
 					}
 				} else if weekly_found < 4 {
 					if gap < Duration::weeks(1) - Duration::minutes(10) {
-						log::debug!(
+						tracing::debug!(
 							"Deleting old daily backup from {}",
 							time.date()
 						);
@@ -141,7 +144,7 @@ async fn clean_backups(backup_dir: &Path) {
 					}
 				} else if monthly_found < 12 {
 					if gap < Duration::days(30) - Duration::minutes(30) {
-						log::debug!(
+						tracing::debug!(
 							"Deleting old weekly backup from {}",
 							time.date()
 						);
@@ -151,7 +154,7 @@ async fn clean_backups(backup_dir: &Path) {
 						monthly_found += 1;
 					}
 				} else if gap < Duration::days(364) {
-					log::debug!(
+					tracing::debug!(
 						"Deleting old monthly backup from {}",
 						time.date()
 					);
@@ -170,7 +173,7 @@ async fn clean_backups(backup_dir: &Path) {
 	let mut dir = match fs::read_dir(&backup_dir).await {
 		Ok(dir) => dir,
 		Err(e) => {
-			log::error!(
+			tracing::error!(
 				"Error reading backup directory for cleaning: {0}\n{0:?}",
 				e
 			);
@@ -182,12 +185,12 @@ async fn clean_backups(backup_dir: &Path) {
 		match dir.next_entry().await {
 			Ok(Some(dir)) => {
 				if let Err(path) = backups.add(dir.path()) {
-					log::warn!("Invalid backup name: {:?}", path);
+					tracing::warn!("Invalid backup name: {:?}", path);
 				}
 			}
 			Ok(None) => break,
 			Err(e) => {
-				log::error!(
+				tracing::error!(
 					"Error reading backup directory for cleaning: {0}\n{0:?}",
 					e
 				);
@@ -198,7 +201,7 @@ async fn clean_backups(backup_dir: &Path) {
 
 	for result in backups.clean().await {
 		if let Err(e) = result {
-			log::error!("Error cleaning backup: {0}\n{0:?}", e);
+			tracing::error!("Error cleaning backup: {0}\n{0:?}", e);
 		}
 	}
 }
@@ -216,18 +219,18 @@ pub(crate) fn start_backup_cycle(backup_dir: PathBuf) {
 		loop {
 			daily.tick().await;
 
-			log::info!("Backing up database...");
+			tracing::info!("Backing up database...");
 			if let Err(error) = ensure_backup_dir_exists(&backup_dir).await {
-				log::error!(
+				tracing::error!(
 					"Failed to create backup directory: {0}\n{0:?}",
 					error
 				);
 				continue;
 			}
 
-			log::info!("Cleaning up old backups...");
+			tracing::info!("Cleaning up old backups...");
 			if let Err(error) = create_backup(backup_dir.clone()).await {
-				log::error!("Error backing up database: {0}\n{0:?}", error);
+				tracing::error!("Error backing up database: {0}\n{0:?}", error);
 			}
 
 			clean_backups(&backup_dir).await;

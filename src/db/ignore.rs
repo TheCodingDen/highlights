@@ -51,6 +51,7 @@ impl Ignore {
 	}
 
 	/// Fetches the list of ignored phrases of the specified user in the specified guild from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn user_guild_ignores(
 		user_id: UserId,
 		guild_id: GuildId,
@@ -72,6 +73,7 @@ impl Ignore {
 	}
 
 	/// Fetches the list of ignored phrases of the specified user across all guilds from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
 		await_db!("user ignores": |conn| {
 			let mut stmt = conn.prepare(
@@ -88,6 +90,12 @@ impl Ignore {
 	}
 
 	/// Checks if this ignored phrase already exists in the DB.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.guild_id = %self.guild_id,
+	))]
 	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("ignore exists": |conn| {
 			conn.query_row(
@@ -104,6 +112,12 @@ impl Ignore {
 	}
 
 	/// Adds this ignored phrase to the DB.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.guild_id = %self.guild_id,
+	))]
 	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert ignore": |conn| {
 			conn.execute(
@@ -121,6 +135,12 @@ impl Ignore {
 	}
 
 	/// Deletes this ignored phrase from the DB.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.guild_id = %self.guild_id,
+	))]
 	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete ignore": |conn| {
 			conn.execute(
@@ -138,6 +158,7 @@ impl Ignore {
 	}
 
 	/// Deletes all ignored phrases of the specified user in the specified guild from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,

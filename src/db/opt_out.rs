@@ -34,6 +34,7 @@ impl OptOut {
 	}
 
 	/// Checks if this opt-out already exists in the DB.
+	#[tracing::instrument]
 	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("opt-out exists": |conn| {
 			conn.query_row(
@@ -46,6 +47,7 @@ impl OptOut {
 	}
 
 	/// Adds this opt-out to the DB.
+	#[tracing::instrument]
 	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert opt-out": |conn| {
 			conn.execute(
@@ -59,6 +61,7 @@ impl OptOut {
 	}
 
 	/// Deletes this opt-out from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete opt-out": |conn| {
 			conn.execute(
@@ -72,6 +75,7 @@ impl OptOut {
 	}
 
 	/// Deletes this user's data from the DB as they opt out.
+	#[tracing::instrument]
 	pub(crate) async fn delete_user_data(self) -> Result<()> {
 		await_db!("opt-out user data deletion": |conn| {
 			let conn = conn.transaction()?;

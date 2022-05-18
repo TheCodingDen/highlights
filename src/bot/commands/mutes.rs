@@ -14,16 +14,14 @@ use std::{collections::HashMap, fmt::Write};
 use crate::{
 	bot::util::{respond_eph, user_can_read_channel},
 	db::Mute,
-	monitoring::Timer,
 };
 
 /// Mute a channel.
 ///
 /// Usage: `/mute <channel>`
-pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
-	let _timer = Timer::command("mute");
+pub(crate) async fn mute(ctx: Context, mut command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
-	let guild_id = require_guild!(ctx, &command);
+	let guild_id = require_guild!(&ctx, &command);
 
 	let channel_id = command
 		.data
@@ -41,7 +39,7 @@ pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 		.context("Failed to get guild channel to mute")?;
 
 	match user_can_read_channel(
-		ctx,
+		&ctx,
 		&channel,
 		ctx.cache.current_user_id().await,
 	)
@@ -55,7 +53,7 @@ pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 
 			if mute.clone().exists().await? {
 				respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					format!("❌ You've already muted <#{}>!", channel_id),
 				)
@@ -63,7 +61,7 @@ pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 			} else {
 				mute.insert().await?;
 				respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					format!("✅ Muted <#{}>", channel_id),
 				)
@@ -72,7 +70,7 @@ pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 		}
 		Ok(Some(false)) => {
 			respond_eph(
-				ctx,
+				&ctx,
 				&command,
 				format!("❌ I can't read <#{}>!", channel_id),
 			)
@@ -92,8 +90,7 @@ pub(crate) async fn mute(ctx: &Context, mut command: Command) -> Result<()> {
 /// Unmute a channel.
 ///
 /// Usage: `/unmute <channel>`
-pub(crate) async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
-	let _timer = Timer::command("unmute");
+pub(crate) async fn unmute(ctx: Context, mut command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
 
 	let channel_id = command
@@ -112,14 +109,14 @@ pub(crate) async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 
 	if !mute.clone().exists().await? {
 		respond_eph(
-			ctx,
+			&ctx,
 			&command,
 			format!("❌ You haven't muted <#{}>!", channel_id),
 		)
 		.await
 	} else {
 		mute.delete().await?;
-		respond_eph(ctx, &command, format!("✅ Unmuted <#{}>", channel_id))
+		respond_eph(&ctx, &command, format!("✅ Unmuted <#{}>", channel_id))
 			.await
 	}
 }
@@ -127,8 +124,7 @@ pub(crate) async fn unmute(ctx: &Context, mut command: Command) -> Result<()> {
 /// List muted channels in the current guild.
 ///
 /// Usage: `/mutes`
-pub(crate) async fn mutes(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("mutes");
+pub(crate) async fn mutes(ctx: Context, command: Command) -> Result<()> {
 	check_opt_out!(ctx, command);
 	match command.guild_id {
 		Some(guild_id) => {
@@ -147,7 +143,7 @@ pub(crate) async fn mutes(ctx: &Context, command: Command) -> Result<()> {
 
 			if mutes.is_empty() {
 				return respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					"❌ You haven't muted any channels!",
 				)
@@ -166,14 +162,14 @@ pub(crate) async fn mutes(ctx: &Context, command: Command) -> Result<()> {
 				mutes.join("\n  - ")
 			);
 
-			respond_eph(ctx, &command, response).await
+			respond_eph(&ctx, &command, response).await
 		}
 		None => {
 			let mutes = Mute::user_mutes(command.user.id).await?;
 
 			if mutes.is_empty() {
 				return respond_eph(
-					ctx,
+					&ctx,
 					&command,
 					"❌ You haven't muted any channels!",
 				)
@@ -231,7 +227,7 @@ pub(crate) async fn mutes(ctx: &Context, command: Command) -> Result<()> {
 				.unwrap();
 			}
 
-			respond_eph(ctx, &command, response).await
+			respond_eph(&ctx, &command, response).await
 		}
 	}
 }

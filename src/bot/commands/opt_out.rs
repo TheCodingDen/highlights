@@ -22,22 +22,27 @@ use serenity::{
 use crate::{
 	bot::util::{respond_eph, success},
 	db::OptOut,
-	monitoring::Timer,
 };
 
 /// Opt-out of being highlighted.
 ///
 /// Usage:
 /// - `/opt-out`
-pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("opt-out");
-
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn opt_out(ctx: Context, command: Command) -> Result<()> {
 	let opt_out = OptOut {
 		user_id: command.user.id,
 	};
 
 	if opt_out.exists().await? {
-		return respond_eph(ctx, &command, "❌ You already opted out!").await;
+		return respond_eph(&ctx, &command, "❌ You already opted out!").await;
 	}
 
 	const OPT_OUT_WARNING: &str = indoc!(
@@ -61,7 +66,7 @@ pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 	let cancel_id = format!("cancel{}", nonce);
 
 	command
-		.create_interaction_response(ctx, |r| {
+		.create_interaction_response(&ctx, |r| {
 			r.interaction_response_data(|m| {
 				m.flags(ResponseFlags::EPHEMERAL)
 					.content(OPT_OUT_WARNING)
@@ -102,7 +107,7 @@ pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 	match button_press {
 		None => {
 			command
-				.edit_original_interaction_response(ctx, |r| {
+				.edit_original_interaction_response(&ctx, |r| {
 					r.content("Timed out.").components(|c| c)
 				})
 				.await?;
@@ -115,7 +120,7 @@ pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 				opt_out.clone().delete_user_data().await?;
 				opt_out.insert().await?;
 				command
-					.edit_original_interaction_response(ctx, |r| {
+					.edit_original_interaction_response(&ctx, |r| {
 						r.content("✅ You have been opted out")
 							.components(|c| c)
 					})
@@ -123,7 +128,7 @@ pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 			}
 			id if id == cancel_id => {
 				command
-					.edit_original_interaction_response(ctx, |r| {
+					.edit_original_interaction_response(&ctx, |r| {
 						r.content("✅ You have not been opted out")
 							.components(|c| c)
 					})
@@ -145,18 +150,24 @@ pub(crate) async fn opt_out(ctx: &Context, command: Command) -> Result<()> {
 ///
 /// Usage:
 /// - `/opt-in`
-pub(crate) async fn opt_in(ctx: &Context, command: Command) -> Result<()> {
-	let _timer = Timer::command("opt-in");
-
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
+pub(crate) async fn opt_in(ctx: Context, command: Command) -> Result<()> {
 	let opt_out = OptOut {
 		user_id: command.user.id,
 	};
 
 	if !opt_out.clone().exists().await? {
-		return respond_eph(ctx, &command, "❌ You haven't opted out!").await;
+		return respond_eph(&ctx, &command, "❌ You haven't opted out!").await;
 	}
 
 	opt_out.delete().await?;
 
-	success(ctx, &command).await
+	success(&ctx, &command).await
 }

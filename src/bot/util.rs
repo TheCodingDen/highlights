@@ -21,64 +21,6 @@ use serenity::{
 };
 use std::fmt::Display;
 
-/// Logs an error that happened handling a command or keyword in Discord.
-///
-/// # Usage
-/// ```
-/// # let channel_id = 4;
-/// # let author_id = 5;
-/// # let some_result = Err::<(), &'static str>("Uh oh!");
-/// if let Err(e) = some_result {
-/// 	log_discord_error!(in channel_id, by author_id, e);
-/// }
-/// ```
-#[macro_export]
-macro_rules! log_discord_error {
-	(in $channel_id:expr, by $user_id:expr, $error:expr) => {
-		log::error!(
-			"Error in <#{0}> ({0}) by <@{1}> ({1}):\n{2:?}",
-			$channel_id,
-			$user_id,
-			$error
-		);
-	};
-	(in $channel_id:expr, deleted $message_id:expr, $error:expr) => {
-		log::error!(
-			"Error in <#{0}> ({0}), handling deleted message {1}:\n{2:?}",
-			$channel_id,
-			$message_id,
-			$error
-		);
-	};
-	(in $channel_id:expr, edited $message_id:expr, $error:expr) => {
-		log::error!(
-			"Error in <#{0}> ({0}), handling edited message {1}:\n{2:?}",
-			$channel_id,
-			$message_id,
-			$error
-		);
-	};
-}
-
-/// Creates a [`Regex`](::regex::Regex) from a regex literal.
-///
-/// The created regex is static and will only be constructed once through the life of the program.
-///
-/// # Example
-/// ```
-/// let re = regex!(r"[a-z]+");
-///
-/// assert!(re.is_match("hello"));
-/// ```
-#[macro_export]
-macro_rules! regex {
-	($re:literal $(,)?) => {{
-		static RE: once_cell::sync::OnceCell<regex::Regex> =
-			once_cell::sync::OnceCell::new();
-		RE.get_or_init(|| regex::Regex::new($re).unwrap())
-	}};
-}
-
 /// Responds to a command with a ✅ emoji.
 #[inline]
 pub(crate) async fn success(ctx: &Context, command: &Command) -> Result<()> {
@@ -106,6 +48,14 @@ pub(crate) async fn respond<S: Display>(
 }
 
 /// Responds to a command with the given message ephemerally.
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
 pub(crate) async fn respond_eph<S: Display>(
 	ctx: &Context,
 	command: &Command,
@@ -123,6 +73,14 @@ pub(crate) async fn respond_eph<S: Display>(
 	Ok(())
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
 pub(crate) async fn followup_eph<S: Display>(
 	ctx: &Context,
 	command: &Command,
@@ -139,6 +97,13 @@ pub(crate) async fn followup_eph<S: Display>(
 }
 
 /// Determines if a user with the given ID can read messages in the provided `GuildChannel`.
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %user_id,
+		channel_id = %channel.id,
+	)
+)]
 pub(crate) async fn user_can_read_channel(
 	ctx: &impl CacheHttp,
 	channel: &GuildChannel,

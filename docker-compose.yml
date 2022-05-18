@@ -1,0 +1,83 @@
+services:
+  highlights:
+    image: thatsnomoon/highlights:2.0.0
+    networks:
+      - net
+    secrets:
+      - highlights-config
+    environment:
+      HIGHLIGHTS_CONFIG: "/run/secrets/highlights-config"
+      HIGHLIGHTS_LOGGING.JAEGER: "jaeger-agent:6831"
+    volumes:
+      - "highlights-data:/opt/highlights/data"
+    depends_on:
+      jaeger-agent:
+        condition: service_started
+
+  jaeger-agent:
+    image: jaegertracing/jaeger-agent:1.34
+    networks:
+      - net
+    command: "--reporter.grpc.host-port=jaeger-collector:14250"
+    healthcheck:
+      test: ["CMD", "curl", "localhost:14271"]
+      interval: 30s
+      timeout: 10s
+    depends_on:
+      jaeger-collector:
+        condition: service_started
+
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector:1.34
+    networks:
+      - net
+    environment:
+      SPAN_STORAGE_TYPE: "cassandra"
+      CASSANDRA_SERVERS: "cassandra"
+    healthcheck:
+      test: ["CMD", "curl", "localhost:14269"]
+      interval: 30s
+      timeout: 10s
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  jaeger-query:
+    image: jaegertracing/jaeger-query:1.34
+    networks:
+      - net
+    ports:
+      - "16686:16686"
+    environment:
+      SPAN_STORAGE_TYPE: "cassandra"
+      CASSANDRA_SERVERS: "cassandra"
+    healthcheck:
+      test: ["CMD", "curl", "localhost:16687"]
+      interval: 30s
+      timeout: 10s
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  cassandra:
+    image: cassandra:4.0
+    networks:
+      - net
+    volumes:
+      - "cassandra-data:/opt/cassandra/data"
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "use jaeger_v1_test;"]
+      interval: 30s
+      timeout: 10s
+
+
+secrets:
+  highlights-config:
+    file: "./config.toml"
+
+networks:
+  net: {}
+
+volumes:
+  highlights-data:
+  cassandra-data:

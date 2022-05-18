@@ -25,12 +25,10 @@ use crate::{
 	bot::util::{followup_eph, user_can_read_channel},
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
 	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
-	log_discord_error,
-	monitoring::Timer,
-	regex,
 	settings::settings,
 };
 use indoc::indoc;
+use lazy_regex::regex;
 use tokio::{select, time::sleep};
 
 pub(crate) struct CachedMessages;
@@ -46,6 +44,15 @@ impl TypeMapKey for CachedMessages {
 /// is similarly searched for in the message content. If it is found, the permissions of the user
 /// are checked to ensure they can read the message. If they can read the message, `Ok(true)`
 /// is returned.
+#[tracing::instrument(
+	skip_all,
+	fields(
+		author_id = %message.author.id,
+		recipient_id = %keyword.user_id,
+		message_id = %message.id,
+		channel_id = %message.channel_id,
+	)
+)]
 pub(crate) async fn should_notify_keyword(
 	ctx: &Context,
 	message: &Message,
@@ -104,6 +111,16 @@ pub(crate) async fn should_notify_keyword(
 /// [`UserState`](UserState) is created.
 ///
 /// Any other errors are logged as normal.
+#[tracing::instrument(
+	skip_all,
+	fields(
+		author_id = %message.author.id,
+		recipient_id = %user_id,
+		message_id = %message.id,
+		channel_id = %message.channel_id,
+		guild_id = %guild_id,
+	)
+)]
 pub(crate) async fn notify_keywords(
 	ctx: Context,
 	mut message: Message,
@@ -112,15 +129,12 @@ pub(crate) async fn notify_keywords(
 	user_id: UserId,
 	guild_id: GuildId,
 ) {
-	let _timer = Timer::notification("create");
 	ctx.data
 		.write()
 		.await
 		.get_mut::<CachedMessages>()
 		.expect("No message cache")
 		.insert(message.id, message.content.clone());
-
-	let channel_id = message.channel_id;
 
 	let reply_or_reaction;
 
@@ -142,6 +156,7 @@ pub(crate) async fn notify_keywords(
 	}
 
 	if reply_or_reaction.is_none() {
+		tracing::debug!("Recipient did not interact within patience duration");
 		let result: Result<()> = async {
 			let content = match ctx
 				.data
@@ -152,8 +167,15 @@ pub(crate) async fn notify_keywords(
 				.remove(&message.id)
 			{
 				Some(m) => m,
-				None => return Ok(()),
+				None => {
+					tracing::debug!(
+						"Original message not found in cache - deleted"
+					);
+					return Ok(());
+				}
 			};
+
+			tracing::debug!("Original message found in cache");
 
 			message.content = content;
 
@@ -174,6 +196,7 @@ pub(crate) async fn notify_keywords(
 				.await?;
 
 			if keywords.is_empty() {
+				tracing::debug!("No keywords to notify after being patient");
 				return Ok(());
 			}
 
@@ -193,7 +216,7 @@ pub(crate) async fn notify_keywords(
 		.await;
 
 		if let Err(error) = result {
-			log_discord_error!(in channel_id, by user_id, error);
+			tracing::error!("{:?}", error);
 		}
 	}
 }
@@ -236,6 +259,14 @@ async fn build_notification_edit(
 	Ok(msg)
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(
+		author_id = %message.author.id,
+		message_id = %message.id,
+		channel_id = %message.channel_id,
+	)
+)]
 async fn build_notification_embed(
 	ctx: &Context,
 	message: &Message,
@@ -304,6 +335,13 @@ async fn build_notification_embed(
 	Ok(embed)
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(
+		recipient_id = %user_id,
+		message_id = %message_id,
+	)
+)]
 async fn send_notification_message(
 	ctx: &Context,
 	user_id: UserId,
@@ -311,7 +349,6 @@ async fn send_notification_message(
 	message_to_send: CreateMessage<'static>,
 	keywords: TinyVec<[String; 2]>,
 ) -> Result<()> {
-	let _timer = Timer::notification("send");
 	let dm_channel = user_id
 		.create_dm_channel(&ctx)
 		.await
@@ -377,6 +414,7 @@ async fn send_notification_message(
 	result
 }
 
+#[tracing::instrument(skip(ctx))]
 pub(crate) async fn delete_sent_notifications(
 	ctx: &Context,
 	channel_id: ChannelId,
@@ -402,11 +440,20 @@ pub(crate) async fn delete_sent_notifications(
 		.await;
 
 		if let Err(e) = result {
-			log_discord_error!(in channel_id, deleted original_message, e);
+			tracing::error!("{:?}", e);
 		}
 	}
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(
+		author_id = %message.author.id,
+		message_id = %message.id,
+		channel_id = %message.channel_id,
+		guild_id = %guild_id,
+	)
+)]
 pub(crate) async fn update_sent_notifications(
 	ctx: &Context,
 	guild_id: GuildId,
@@ -446,9 +493,10 @@ pub(crate) async fn update_sent_notifications(
 				build_notification_edit(ctx, &message, &keywords, guild_id)
 					.await?;
 
-			let dm_channel = user_id.create_dm_channel(ctx).await.context(
-				"Failed to create DM channel to update notifications",
-			)?;
+			let dm_channel = user_id
+				.create_dm_channel(ctx)
+				.await
+				.context("Failed to create DM channel")?;
 
 			dm_channel
 				.edit_message(ctx, message_id, |m| {
@@ -462,7 +510,7 @@ pub(crate) async fn update_sent_notifications(
 		.await;
 
 		if let Err(e) = result {
-			log_discord_error!(in message.channel_id, edited message.id, e);
+			tracing::error!("Failed to update notification: {:?}", e);
 		}
 	}
 
@@ -474,12 +522,13 @@ pub(crate) async fn update_sent_notifications(
 			Notification::delete_notification_message(notification_message)
 				.await
 		{
-			log_discord_error!(in message.channel_id, edited message.id, e);
+			tracing::error!("Failed to delete notification message: {:?}", e);
 		}
 	}
 }
 
 /// Finds a match of the keyword in the message content.
+#[tracing::instrument(skip_all)]
 fn keyword_matches(keyword: &str, content: &str) -> bool {
 	fn overlaps_with_mention(range: Range<usize>, content: &str) -> bool {
 		regex!(r"<(@!?|&|#|a?:[a-zA-Z0-9_]*:)[0-9]+>")
@@ -491,8 +540,13 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 			})
 	}
 
-	if regex!(r"\s").is_match(keyword) {
-		// if the keyword has a space, only matches of whole phrases should be considered
+	let (whitespace, bounded, non_alpha_num) = match keyword.is_ascii() {
+		true => (regex!(r"\s"U), regex!(r"^.\b.*\b.$"U), regex!(r"\W+"U)),
+		false => (regex!(r"\s"), regex!(r"^.\b.*\b.$"), regex!(r"\W+")),
+	};
+
+	if whitespace.is_match(keyword) {
+		// if the keyword has whitespace, only matches of whole phrases should be considered
 		content
 			.match_indices(keyword)
 			.filter(|(i, phrase)| {
@@ -501,7 +555,7 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 					let end = usize::min(i + phrase.len() + 1, content.len());
 					content
 						.get(start..end)
-						.map(|around| regex!(r"^.\b.*\b.$").is_match(around))
+						.map(|around| bounded.is_match(around))
 						.unwrap_or(true)
 				} else {
 					true
@@ -509,7 +563,7 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 			})
 			.map(|(index, _)| index..index + keyword.len())
 			.any(|range| !overlaps_with_mention(range, content))
-	} else if regex!(r"\W").is_match(keyword) {
+	} else if non_alpha_num.is_match(keyword) {
 		// if the keyword contains non-alphanumeric characters, it could appear anywhere
 		content
 			.match_indices(keyword)
@@ -517,7 +571,7 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 			.any(|range| !overlaps_with_mention(range, content))
 	} else {
 		// otherwise, it is only alphanumeric and could appear between non-alphanumeric text
-		regex!(r"\W+")
+		non_alpha_num
 			.split(content)
 			.filter(|&frag| keyword == frag)
 			.map(|substring| {
@@ -535,6 +589,14 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 ///
 /// If the last notification failed, send a message warning the user they should enable DMs. Clears
 /// the user state afterwards.
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
 pub(crate) async fn check_notify_user_state(
 	ctx: &Context,
 	command: &Command,
@@ -551,6 +613,14 @@ pub(crate) async fn check_notify_user_state(
 	Ok(())
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(
+		user_id = %command.user.id,
+		channel_id = %command.channel_id,
+		command = %command.data.name,
+	)
+)]
 pub(crate) async fn warn_for_failed_dm(
 	ctx: &Context,
 	command: &Command,

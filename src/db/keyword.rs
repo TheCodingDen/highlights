@@ -6,6 +6,7 @@
 use anyhow::Result;
 use rusqlite::{params, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
+use tracing::info_span;
 
 use crate::{await_db, db::connection};
 
@@ -89,6 +90,7 @@ impl Keyword {
 	///
 	/// Fetches all channel-specific keywords in the specified channel, as long as the creator of
 	/// the keyword didn't block the author.
+	#[tracing::instrument]
 	pub(crate) async fn get_relevant_keywords(
 		guild_id: GuildId,
 		channel_id: ChannelId,
@@ -98,6 +100,14 @@ impl Keyword {
 			let guild_id = guild_id.into_i64();
 			let channel_id = channel_id.into_i64();
 			let author_id = author_id.into_i64();
+
+			let span = info_span!(
+				"relevant_guild_keywords",
+				author_id = %author_id,
+				guild_id = %guild_id
+			);
+
+			let entered = span.enter();
 
 			let mut stmt = conn.prepare(
 				"SELECT guild_keywords.keyword, guild_keywords.user_id, guild_keywords.guild_id
@@ -142,6 +152,17 @@ impl Keyword {
 
 			let mut keywords = guild_keywords.collect::<Result<Vec<_>, _>>()?;
 
+			drop(entered);
+			drop(span);
+
+			let span = info_span!(
+				"relevant_channel_keywords",
+				author_id = %author_id,
+				channel_id = %channel_id
+			);
+
+			let _entered = span.enter();
+
 			let mut stmt = conn.prepare(
 				"SELECT keyword, user_id, channel_id
 					FROM channel_keywords
@@ -179,6 +200,7 @@ impl Keyword {
 	}
 
 	/// Fetches all guild-wide keywords created by the specified user in the specified guild.
+	#[tracing::instrument]
 	pub(crate) async fn user_guild_keywords(
 		user_id: UserId,
 		guild_id: GuildId,
@@ -201,6 +223,7 @@ impl Keyword {
 	}
 
 	/// Fetches all channel-specific keywords created by the specified user in the specified channel.
+	#[tracing::instrument]
 	pub(crate) async fn user_channel_keywords(
 		user_id: UserId,
 	) -> Result<Vec<Keyword>> {
@@ -221,6 +244,7 @@ impl Keyword {
 	}
 
 	/// Fetches all guild-wide and channel-specific keywords created by the specified user.
+	#[tracing::instrument]
 	pub(crate) async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
 		await_db!("user keywords": |conn| {
 			let mut stmt = conn.prepare(
@@ -254,6 +278,12 @@ impl Keyword {
 	}
 
 	/// Checks if this keyword has already been created by this user.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.kind = ?self.kind,
+	))]
 	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("keyword exists": |conn| {
 			match self.kind {
@@ -286,6 +316,7 @@ impl Keyword {
 	}
 
 	/// Returns the number of keywords this user has created across all guilds and channels.
+	#[tracing::instrument]
 	pub(crate) async fn user_keyword_count(user_id: UserId) -> Result<u32> {
 		await_db!("count user keywords": |conn| {
 			let guild_keywords = conn.query_row(
@@ -309,6 +340,12 @@ impl Keyword {
 	}
 
 	/// Adds this keyword to the DB.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.kind = ?self.kind,
+	))]
 	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert keyword": |conn| {
 			match self.kind {
@@ -341,6 +378,12 @@ impl Keyword {
 	}
 
 	/// Deletes this keyword from the DB.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.kind = ?self.kind,
+	))]
 	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete keyword": |conn| {
 			match self.kind {
@@ -373,6 +416,7 @@ impl Keyword {
 	}
 
 	/// Deletes all guild-wide keywords created by the specified user in the specified guild.
+	#[tracing::instrument]
 	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
@@ -387,6 +431,7 @@ impl Keyword {
 	}
 
 	/// Deletes all channel-specific keywords created by the specified user in the specified channel.
+	#[tracing::instrument]
 	pub(crate) async fn delete_in_channel(
 		user_id: UserId,
 		channel_id: ChannelId,

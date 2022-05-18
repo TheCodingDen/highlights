@@ -62,6 +62,7 @@ impl UserState {
 	/// Fetches the state of the user with the given ID from the DB.
 	///
 	/// Returns `None` if the user has no recorded state.
+	#[tracing::instrument]
 	pub(crate) async fn user_state(user_id: UserId) -> Result<Option<Self>> {
 		await_db!("user state": |conn| {
 
@@ -79,6 +80,7 @@ impl UserState {
 	}
 
 	/// Sets the state of the user in the DB.
+	#[tracing::instrument]
 	pub(crate) async fn set(self) -> Result<()> {
 		await_db!("set user state": |conn| {
 			conn.execute(
@@ -94,6 +96,7 @@ impl UserState {
 	}
 
 	/// Deletes this user state from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete user state": |conn| {
 			conn.execute(
@@ -107,6 +110,7 @@ impl UserState {
 	}
 
 	/// Clears any state of the user with the given ID.
+	#[tracing::instrument]
 	pub(crate) async fn clear(user_id: UserId) -> Result<()> {
 		await_db!("delete user state": |conn| {
 			conn.execute(

@@ -46,6 +46,7 @@ impl Block {
 	}
 
 	/// Fetches the list of blocks a user has added from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn user_blocks(user_id: UserId) -> Result<Vec<Self>> {
 		await_db!("user blocks": |conn| {
 			let mut stmt = conn.prepare(
@@ -61,6 +62,7 @@ impl Block {
 	}
 
 	/// Adds this blocked user to the DB.
+	#[tracing::instrument]
 	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert block": |conn| {
 			conn.execute(
@@ -77,6 +79,7 @@ impl Block {
 	}
 
 	/// Checks if this block exists in the DB.
+	#[tracing::instrument]
 	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("block exists": |conn| {
 			conn.query_row(
@@ -92,6 +95,7 @@ impl Block {
 	}
 
 	/// Deletes this blocked user from the DB (making them not blocked anymore).
+	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete block": |conn| {
 			conn.execute(

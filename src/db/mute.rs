@@ -46,6 +46,7 @@ impl Mute {
 	}
 
 	/// Fetches a list of mutes for the user with the given ID from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>> {
 		await_db!("user mutes": |conn| {
 
@@ -65,6 +66,7 @@ impl Mute {
 	/// Checks if this mute exists in the DB.
 	///
 	/// Returns true if a mute with `self.user_id` and `self.channel_id` exists in the DB.
+	#[tracing::instrument]
 	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("mute exists": |conn| {
 			conn.query_row(
@@ -77,6 +79,7 @@ impl Mute {
 	}
 
 	/// Inserts this mute into the DB.
+	#[tracing::instrument]
 	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert mute": |conn| {
 			conn.execute(
@@ -90,6 +93,7 @@ impl Mute {
 	}
 
 	/// Deletes this mute from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
 		await_db!("delete mute": |conn| {
 			conn.execute(

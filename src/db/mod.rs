@@ -4,6 +4,8 @@
 //! Interface for interacting with the sqlite database of keywords and other persistent user
 //! information.
 
+#![cfg_attr(not(feature = "bot"), allow(dead_code))]
+
 mod backup;
 use backup::start_backup_cycle;
 
@@ -17,11 +19,15 @@ mod user_state;
 
 pub(crate) use block::Block;
 pub(crate) use ignore::Ignore;
-pub(crate) use keyword::{Keyword, KeywordKind};
+pub(crate) use keyword::Keyword;
+#[cfg(feature = "bot")]
+pub(crate) use keyword::KeywordKind;
 pub(crate) use mute::Mute;
 pub(crate) use notification::Notification;
 pub(crate) use opt_out::OptOut;
-pub(crate) use user_state::{UserState, UserStateKind};
+pub(crate) use user_state::UserState;
+#[cfg(feature = "bot")]
+pub(crate) use user_state::UserStateKind;
 
 use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
@@ -37,6 +43,7 @@ use crate::settings::settings;
 static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
 
 /// Gets a connection from the global connection pool.
+#[tracing::instrument]
 pub(crate) fn connection() -> PooledConnection<SqliteConnectionManager> {
 	POOL.get()
 		.expect("Database pool was not initialized")
@@ -87,9 +94,11 @@ macro_rules! await_db {
 	($name:literal: |$conn:ident| $body:block) => {{
 		use ::anyhow::Context as _;
 
-		#[cfg(feature = "monitoring")]
-		let _timer = $crate::monitoring::Timer::query($name);
+		let parent = ::tracing::Span::current();
+
 		::tokio::task::spawn_blocking(move || -> ::anyhow::Result<_> {
+			let span = ::tracing::info_span!(parent: &parent, "await_db");
+			let _entered = span.enter();
 			#[allow(unused_mut)]
 			let mut $conn = $crate::db::connection();
 

@@ -55,6 +55,7 @@ impl Notification {
 	}
 
 	/// Fetches the notifications that were sent because of the given message from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn notifications_of_message(
 		message_id: MessageId,
 	) -> Result<Vec<Self>> {
@@ -75,6 +76,13 @@ impl Notification {
 	}
 
 	/// Inserts this notification into the DB.
+	#[tracing::instrument(
+		skip(self),
+		fields(
+			self.user_id = %self.user_id,
+			self.original_message = %self.original_message,
+			self.notification_message = %self.notification_message,
+	))]
 	pub(crate) async fn insert(self) -> Result<()> {
 		await_db!("insert notification": |conn| {
 			conn.execute(
@@ -98,6 +106,7 @@ impl Notification {
 	}
 
 	/// Removes notifications in the given message from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn delete_notification_message(
 		message_id: MessageId,
 	) -> Result<()> {
@@ -113,6 +122,7 @@ impl Notification {
 	}
 
 	/// Removes all notifications sent because of the given message from the DB.
+	#[tracing::instrument]
 	pub(crate) async fn delete_notifications_of_message(
 		message_id: MessageId,
 	) -> Result<()> {

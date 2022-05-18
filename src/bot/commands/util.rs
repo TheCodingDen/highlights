@@ -21,6 +21,7 @@ use std::collections::HashMap;
 #[macro_export]
 macro_rules! require_guild {
 	($ctx:expr, $command:expr) => {{
+		#[allow(clippy::needless_borrow)]
 		match $command.guild_id {
 			None => {
 				return $crate::bot::util::respond_eph(
@@ -64,6 +65,7 @@ macro_rules! check_opt_out {
 #[macro_export]
 macro_rules! require_embed_perms {
 	($ctx:expr, $command:expr) => {
+		#[allow(clippy::needless_borrow)]
 		if $command.guild_id.is_some() {
 			use ::anyhow::Context as _;
 			let self_id = $ctx.cache.current_user_id().await;
@@ -81,8 +83,8 @@ macro_rules! require_embed_perms {
 
 			if !permissions.embed_links() {
 				$crate::bot::util::respond_eph(
-					&$ctx,
-					&$command,
+					$ctx,
+					$command,
 					"Sorry, I need permission to embed links to use that \
 					command 😔",
 				)
