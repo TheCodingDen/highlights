@@ -3,15 +3,15 @@
 
 //! Automatic backup system.
 
-use chrono::{DateTime, Duration, Utc};
-use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
-use tokio::{fs, task, time::interval};
-
 use std::{
 	io::{Error as IoError, ErrorKind},
 	path::{Path, PathBuf},
 	time::Duration as StdDuration,
 };
+
+use chrono::{DateTime, Duration, Utc};
+use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
+use tokio::{fs, task, time::interval};
 
 use super::connection;
 

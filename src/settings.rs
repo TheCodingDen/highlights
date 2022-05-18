@@ -3,6 +3,16 @@
 
 //! Handling of bot configuration for hosters.
 
+#[cfg(feature = "bot")]
+use std::time::Duration;
+use std::{
+	collections::HashMap,
+	env::{self, VarError},
+	fs::read_to_string,
+	io::ErrorKind,
+	path::PathBuf,
+};
+
 use config::{
 	builder::DefaultState, ConfigBuilder, ConfigError, Environment, File,
 	FileFormat,
@@ -15,22 +25,11 @@ use tracing::metadata::LevelFilter;
 #[cfg(feature = "reporting")]
 use url::Url;
 
-use std::{
-	collections::HashMap,
-	env::{self, VarError},
-	fs::read_to_string,
-	io::ErrorKind,
-	path::PathBuf,
-};
-
-#[cfg(feature = "bot")]
-use std::time::Duration;
-
 #[cfg(feature = "bot")]
 mod duration_de {
-	use serde::{de, Deserializer};
-
 	use std::{fmt, time::Duration};
+
+	use serde::{de, Deserializer};
 	/// Visitor to deserialize a `Duration` from a number of seconds.
 	struct DurationVisitor;
 	impl<'de> de::Visitor<'de> for DurationVisitor {
@@ -60,11 +59,12 @@ use duration_de::deserialize_duration;
 
 #[cfg(feature = "monitoring")]
 mod user_address {
-	use serde::{de, Deserialize, Deserializer};
 	use std::{
 		fmt,
 		net::{SocketAddr, ToSocketAddrs},
 	};
+
+	use serde::{de, Deserialize, Deserializer};
 	#[derive(Debug, Clone, Copy)]
 	pub(crate) struct UserAddress {
 		pub(crate) socket_addr: SocketAddr,
@@ -106,10 +106,10 @@ mod user_address {
 }
 
 mod level {
+	use std::{collections::HashMap, fmt};
+
 	use serde::{de, Deserialize, Deserializer};
 	use tracing::metadata::LevelFilter;
-
-	use std::{collections::HashMap, fmt};
 
 	struct LevelFilterWrapper(LevelFilter);
 
@@ -194,7 +194,6 @@ mod level {
 }
 
 use level::{deserialize_level_filter, deserialize_level_filters};
-
 #[cfg(feature = "monitoring")]
 pub(crate) use user_address::UserAddress;
 

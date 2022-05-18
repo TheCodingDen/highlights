@@ -3,6 +3,8 @@
 
 //! Commands for adding, removing, and listing keywords.
 
+use std::{collections::HashMap, fmt::Write};
+
 use anyhow::{Context as _, Result};
 use futures_util::{stream::FuturesUnordered, TryStreamExt};
 use indoc::indoc;
@@ -19,8 +21,6 @@ use serenity::{
 	prelude::HttpError,
 	Error as SerenityError,
 };
-
-use std::{collections::HashMap, fmt::Write};
 
 use super::util::get_text_channels_in_guild;
 use crate::{

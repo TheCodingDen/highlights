@@ -3,8 +3,12 @@
 
 //! Functions for sending, editing, and deleting notifications.
 
+use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
+
 use anyhow::{anyhow, Context as _, Result};
 use futures_util::{stream, StreamExt, TryStreamExt};
+use indoc::indoc;
+use lazy_regex::regex;
 use serenity::{
 	builder::{CreateEmbed, CreateMessage, EditMessage},
 	client::Context,
@@ -18,8 +22,7 @@ use serenity::{
 	Error as SerenityError,
 };
 use tinyvec::TinyVec;
-
-use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
+use tokio::{select, time::sleep};
 
 use crate::{
 	bot::util::{followup_eph, user_can_read_channel},
@@ -27,9 +30,6 @@ use crate::{
 	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	settings::settings,
 };
-use indoc::indoc;
-use lazy_regex::regex;
-use tokio::{select, time::sleep};
 
 pub(crate) struct CachedMessages;
 

@@ -3,6 +3,8 @@
 
 //! Miscellaneous utility functions and macros used by commands.
 
+use std::collections::HashMap;
+
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
@@ -11,8 +13,6 @@ use serenity::{
 		id::{ChannelId, GuildId},
 	},
 };
-
-use std::collections::HashMap;
 
 /// Requires the given command to have come from a guild channel.
 ///

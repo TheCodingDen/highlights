@@ -7,9 +7,8 @@ use anyhow::Result;
 use rusqlite::{params, Row};
 use serenity::model::id::{MessageId, UserId};
 
-use crate::{await_db, db::connection};
-
 use super::IdI64Ext;
+use crate::{await_db, db::connection};
 
 /// Represents a sent notification message.
 #[derive(Debug, Clone)]

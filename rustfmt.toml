@@ -1,2 +1,6 @@
 hard_tabs = true
+newline_style = "Unix"
 max_width = 80
+group_imports = "StdExternalCrate"
+imports_granularity = "Crate"
+use_field_init_shorthand = true

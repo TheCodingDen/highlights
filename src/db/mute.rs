@@ -7,9 +7,8 @@ use anyhow::Result;
 use rusqlite::{params, Row};
 use serenity::model::id::{ChannelId, UserId};
 
-use crate::{await_db, db::connection};
-
 use super::IdI64Ext;
+use crate::{await_db, db::connection};
 
 /// Represents a muted channel.
 #[derive(Debug, Clone)]

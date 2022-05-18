@@ -3,6 +3,8 @@
 
 //! Error and panic reporting to a Discord webhook.
 
+use std::{fmt::Write, panic, time::Duration};
+
 use anyhow::Result;
 use reqwest::{
 	blocking::{self, Client as BlockingClient},
@@ -21,8 +23,6 @@ use tracing_subscriber::{
 };
 
 use crate::settings::settings;
-
-use std::{fmt::Write, panic, time::Duration};
 
 /// Message that can be serialized to be sent to a webhook.
 #[derive(Serialize)]

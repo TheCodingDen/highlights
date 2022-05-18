@@ -5,20 +5,10 @@
 
 #[macro_use]
 mod util;
-
-mod keywords;
-pub(crate) use keywords::{
-	add, ignore, ignores, keywords, remove, remove_server, unignore,
-};
-
-mod mutes;
-pub(crate) use mutes::{mute, mutes, unmute};
-
 mod blocks;
-pub(crate) use blocks::{block, blocks, unblock};
-
+mod keywords;
+mod mutes;
 mod opt_out;
-pub(crate) use opt_out::{opt_in, opt_out};
 
 use std::fmt::Write;
 
@@ -40,12 +30,19 @@ use serenity::{
 	},
 };
 
+pub(crate) use self::{
+	blocks::{block, blocks, unblock},
+	keywords::{
+		add, ignore, ignores, keywords, remove, remove_server, unignore,
+	},
+	mutes::{mute, mutes, unmute},
+	opt_out::{opt_in, opt_out},
+};
+use super::Shards;
 use crate::{
 	bot::util::respond, global::EMBED_COLOR, require_embed_perms,
 	settings::settings,
 };
-
-use super::Shards;
 
 pub(crate) async fn create_commands(ctx: Context) {
 	tracing::info!("Registering slash commands");

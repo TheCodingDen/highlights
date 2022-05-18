@@ -1,29 +1,18 @@
 // Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
-mod commands;
-
 #[macro_use]
 mod util;
+mod commands;
+mod highlighting;
+
+use std::{collections::HashMap, sync::Arc};
+
+use anyhow::{Context as _, Result};
 use futures_util::{
 	stream::{self, FuturesUnordered},
 	StreamExt, TryStreamExt,
 };
-use tinyvec::TinyVec;
-use tracing::{
-	field::{display, Empty},
-	info_span, Span,
-};
-
-mod highlighting;
-
-use crate::{
-	db::{Ignore, Keyword, Notification},
-	global::ERROR_COLOR,
-	settings::settings,
-};
-
-use anyhow::{Context as _, Result};
 use serenity::{
 	builder::CreateEmbed,
 	client::{bridge::gateway::ShardManager, Client, Context, EventHandler},
@@ -45,10 +34,18 @@ use serenity::{
 	prelude::{Mutex, TypeMapKey},
 	Error as SerenityError,
 };
-
-use std::{collections::HashMap, sync::Arc};
+use tinyvec::TinyVec;
+use tracing::{
+	field::{display, Empty},
+	info_span, Span,
+};
 
 use self::highlighting::CachedMessages;
+use crate::{
+	db::{Ignore, Keyword, Notification},
+	global::ERROR_COLOR,
+	settings::settings,
+};
 
 /// Type to serve as an event handler.
 struct Handler;
@@ -384,8 +381,9 @@ async fn handle_command(ctx: Context, command: Command) {
 	let _entered = span.enter();
 
 	let result = {
-		use commands::*;
 		use std::future::Future;
+
+		use commands::*;
 		use tokio::task::JoinHandle;
 
 		fn spawn_command<Fut>(

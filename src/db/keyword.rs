@@ -8,9 +8,8 @@ use rusqlite::{params, Row};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use tracing::info_span;
 
-use crate::{await_db, db::connection};
-
 use super::IdI64Ext;
+use crate::{await_db, db::connection};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum KeywordKind {

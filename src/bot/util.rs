@@ -3,6 +3,8 @@
 
 //! Miscellaneous utility functions and macros.
 
+use std::fmt::Display;
+
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
@@ -19,7 +21,6 @@ use serenity::{
 	prelude::HttpError,
 	Error as SerenityError,
 };
-use std::fmt::Display;
 
 /// Responds to a command with a ✅ emoji.
 #[inline]

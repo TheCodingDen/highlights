@@ -7,8 +7,6 @@
 #![cfg_attr(not(feature = "bot"), allow(dead_code))]
 
 mod backup;
-use backup::start_backup_cycle;
-
 mod block;
 mod ignore;
 mod keyword;
@@ -17,17 +15,7 @@ mod notification;
 mod opt_out;
 mod user_state;
 
-pub(crate) use block::Block;
-pub(crate) use ignore::Ignore;
-pub(crate) use keyword::Keyword;
-#[cfg(feature = "bot")]
-pub(crate) use keyword::KeywordKind;
-pub(crate) use mute::Mute;
-pub(crate) use notification::Notification;
-pub(crate) use opt_out::OptOut;
-pub(crate) use user_state::UserState;
-#[cfg(feature = "bot")]
-pub(crate) use user_state::UserStateKind;
+use std::{fs, io::ErrorKind};
 
 use once_cell::sync::OnceCell;
 use r2d2::{Pool, PooledConnection};
@@ -35,8 +23,13 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use serenity::model::id::{ChannelId, GuildId, MessageId, UserId};
 
-use std::{fs, io::ErrorKind};
-
+use self::backup::start_backup_cycle;
+pub(crate) use self::{
+	block::Block, ignore::Ignore, keyword::Keyword, mute::Mute,
+	notification::Notification, opt_out::OptOut, user_state::UserState,
+};
+#[cfg(feature = "bot")]
+pub(crate) use self::{keyword::KeywordKind, user_state::UserStateKind};
 use crate::settings::settings;
 
 /// Global connection pool to the database.

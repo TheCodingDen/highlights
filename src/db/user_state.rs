@@ -7,9 +7,8 @@ use anyhow::Result;
 use rusqlite::{params, OptionalExtension, Row};
 use serenity::model::id::UserId;
 
-use crate::{await_db, db::connection};
-
 use super::IdI64Ext;
+use crate::{await_db, db::connection};
 
 /// Description of a user's state.
 #[derive(Debug, Clone)]
