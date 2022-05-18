@@ -2,7 +2,7 @@
 
 Highlights is a simple but flexible highlighting bot for Discord. Add a keyword to get notified in direct messages when your keyword appears in that server.
 
-You can add highlights to your server directly with [this link](https://discord.com/api/oauth2/authorize?client_id=740802975576096829&scope=bot+applications.commands). If you run into any problems, please make an issue here or let me know on [the Highlights dev server](https://discord.gg/9phBJ9tzQ2), `@ThatsNoMoon#0175`.
+You can add highlights to your server directly with [this link](https://discord.com/api/oauth2/authorize?client_id=740802975576096829&scope=bot+applications.commands). If you run into any problems, please [make an issue here](https://github.com/ThatsNoMoon/highlights/issues/new?template=bug_report.md) or let me know on [the Highlights dev server](https://discord.gg/9phBJ9tzQ2), `@ThatsNoMoon#0175`.
 
 ## Features
 - Add keywords to be notified about, per-server or per-channel
@@ -13,7 +13,10 @@ You can add highlights to your server directly with [this link](https://discord.
 For self-hosters, highlights includes:
 - Automatic backups and backup pruning
 - Error reporting via [Discord webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)
-- Performance monitoring with [Prometheus](https://prometheus.io)
+- Performance monitoring and observability with [Jaeger](https://jaegertracing.io/)
+
+## Docker
+You can find a Dockerfile in this repository, or use [`thatsnomoon/highlights`](https://hub.docker.com/r/thatsnomoon/highlights). Also provided is a `docker-compose.yml` that will organize Highlights, a Jaeger agent, collector, and query server, and Cassandra, though for the time being you'll have to set up Cassandra to store Jaeger logs yourself.
 
 ## Download
 You can find downloads for 64 bit Windows and Linux, as well as 64 bit Linux ARM (for e.g. Raspberry Pi) on [the releases page](https://github.com/ThatsNoMoon/highlights/releases/).
@@ -23,6 +26,8 @@ Highlights requires `cargo` to be built. [rustup](https://rustup.rs) is the reco
 
 Once you have `cargo` installed, run `cargo build --release` (or `cargo build` for an unoptimized build) to produce an executable at `target/release/highlights` (or `target/debug/highlights`).
 
+If you're contributing to highlights, I recommend moving the `pre-commit` file to `.git/hooks` so your code is checked for issues before committing (avoiding the need for commits to fix `rustfmt` or `clippy` errors).
+
 ## Configuration
 
 Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION.PROPERTY`. Examples:
@@ -30,8 +35,6 @@ Highlights is configured using a TOML file at `./config.toml` by default. To use
 HIGHLIGHTS_BOT.TOKEN="your bot token goes here"
 HIGHLIGHTS_DATABASE.PATH="highlights_data"
 ```
-
-If you're contributing to highlights, I recommend moving the `pre-commit` file to `.git/hooks` so your code is checked for issues before committing (avoiding the need for commits to fix `rustfmt` or `clippy` errors).
 
 ## Backups
 
@@ -47,21 +50,7 @@ Highlights uses the timestamp embedded in the backup name to determine how old i
 
 ## Monitoring
 
-If you set the `logging.prometheus` config option, highlights will track command and database query execution times to be reported by [Prometheus](https://prometheus.io). The address should be in the form `address:port`, e.g. `127.0.0.1:9000`.
-
-Example prometheus config to scrape `127.0.0.1:9000`:
-```yml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-scrape_configs:
-  - job_name: 'highlights'
-    static_configs:
-      - targets: ['127.0.0.1:9000']
-```
-
-Highlights reports the metrics `highlights_command_time` and `highlights_query_time`.
+If you set the `logging.jaeger` config option, highlights will trace execution times to be reported by [Jaeger](https://jaegertracing.io/). The address should be in the form `address:port`, e.g. `127.0.0.1:6831`. You should provide the address of your Jaeger agent.
 
 ## License
 

@@ -9,13 +9,9 @@ FMT_RESULT=$?
 cargo clippy -- --deny warnings
 CLIPPY_RESULT=$?
 
-git stash pop -q
-
-if [[ "$FMT_RESULT" -ne 0 ]]; then
-	exit 1
-fi
-
-if [[ "$CLIPPY_RESULT" -ne 0 ]]; then
+if [[ "$FMT_RESULT" -eq 0 && "$CLIPPY_RESULT" -eq 0 ]]; then
+	git stash pop -q
+else
 	exit 1
 fi
 
