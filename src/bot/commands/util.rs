@@ -97,7 +97,7 @@ macro_rules! require_embed_perms {
 
 /// Convenience function to get a map of all cached text channels in the given
 /// guild.
-pub(crate) async fn get_text_channels_in_guild(
+pub(crate) fn get_text_channels_in_guild(
 	ctx: &Context,
 	guild_id: GuildId,
 ) -> Result<HashMap<ChannelId, GuildChannel>> {

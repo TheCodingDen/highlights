@@ -15,7 +15,7 @@ use serenity::{
 	http::{error::ErrorResponse, HttpError},
 	model::{
 		channel::Message,
-		id::{ChannelId, GuildId, MessageId, UserId},
+		id::{GuildId, MessageId, UserId},
 		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
 	prelude::TypeMapKey,
@@ -207,9 +207,9 @@ pub(crate) async fn notify_keywords(
 				return Ok(());
 			}
 
-			let message_to_send =
-				build_notification_message(&ctx, &message, &keywords, guild_id)
-					.await?;
+			let message_to_send = build_notification_message(
+				&ctx, &message, &keywords, guild_id,
+			)?;
 
 			send_notification_message(
 				&ctx,
@@ -232,14 +232,13 @@ pub(crate) async fn notify_keywords(
 ///
 /// Uses [`build_notification_embed`] to create the embed to include in the
 /// message.
-async fn build_notification_message(
+fn build_notification_message(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
 	guild_id: GuildId,
 ) -> Result<CreateMessage<'static>> {
-	let embed =
-		build_notification_embed(ctx, message, keywords, guild_id).await?;
+	let embed = build_notification_embed(ctx, message, keywords, guild_id)?;
 
 	let mut msg = CreateMessage::default();
 
@@ -256,14 +255,13 @@ async fn build_notification_message(
 ///
 /// Uses [`build_notification_embed`] to create the embed to include in the
 /// message.
-async fn build_notification_edit(
+fn build_notification_edit(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
 	guild_id: GuildId,
 ) -> Result<EditMessage<'static>> {
-	let embed =
-		build_notification_embed(ctx, message, keywords, guild_id).await?;
+	let embed = build_notification_embed(ctx, message, keywords, guild_id)?;
 
 	let mut msg = EditMessage::default();
 
@@ -295,7 +293,7 @@ async fn build_notification_edit(
 		channel_id = %message.channel_id,
 	)
 )]
-async fn build_notification_embed(
+fn build_notification_embed(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
@@ -453,8 +451,6 @@ async fn send_notification_message(
 #[tracing::instrument(skip(ctx))]
 pub(crate) async fn delete_sent_notifications(
 	ctx: &Context,
-	channel_id: ChannelId,
-	original_message: MessageId,
 	notification_messages: &[(UserId, MessageId)],
 ) {
 	for (user_id, message_id) in notification_messages {
@@ -532,8 +528,7 @@ pub(crate) async fn update_sent_notifications(
 
 		let result: Result<()> = async {
 			let message_to_send =
-				build_notification_edit(ctx, &message, &keywords, guild_id)
-					.await?;
+				build_notification_edit(ctx, &message, &keywords, guild_id)?;
 
 			let dm_channel = user_id
 				.create_dm_channel(ctx)
@@ -556,8 +551,7 @@ pub(crate) async fn update_sent_notifications(
 		}
 	}
 
-	delete_sent_notifications(ctx, message.channel_id, message.id, &to_delete)
-		.await;
+	delete_sent_notifications(ctx, &to_delete).await;
 
 	for (_, notification_message) in to_delete {
 		if let Err(e) =

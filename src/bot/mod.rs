@@ -265,13 +265,7 @@ async fn handle_deletion(
 		return;
 	}
 
-	highlighting::delete_sent_notifications(
-		&ctx,
-		channel_id,
-		message_id,
-		&notifications,
-	)
-	.await;
+	highlighting::delete_sent_notifications(&ctx, &notifications).await;
 
 	if let Err(e) =
 		Notification::delete_notifications_of_message(message_id).await

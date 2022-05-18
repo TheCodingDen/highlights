@@ -524,8 +524,7 @@ pub(crate) async fn keywords(ctx: Context, command: Command) -> Result<()> {
 					.map(|keyword| keyword.keyword)
 					.collect::<Vec<_>>();
 
-			let guild_channels =
-				get_text_channels_in_guild(&ctx, guild_id).await?;
+			let guild_channels = get_text_channels_in_guild(&ctx, guild_id)?;
 
 			let mut channel_keywords = HashMap::new();
 
