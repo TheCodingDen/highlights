@@ -1,3 +1,6 @@
+// Copyright 2022 ThatsNoMoon
+// Licensed under the Open Software License version 3.0
+
 use anyhow::Result;
 use tracing::Metadata;
 use tracing_subscriber::{
