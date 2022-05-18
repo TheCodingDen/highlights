@@ -3,9 +3,9 @@
 
 [bot]
 # Discord bot token
-#token = "..."
+token = "..."
 # Discord application (not bot account!) ID
-#application_id = "..."
+application_id = "..."
 # Disables sharing the bot invite link in about command
 private = false
 
@@ -18,8 +18,10 @@ patience_seconds = 120
 [logging]
 # Discord webhook to send errors and panics to
 #webhook = "..."
-# IP and port to jaeger agent
+# IP and port to Jaeger agent
 #jaeger = "..."
+# Ratio of traces to sample when monitoring with Jaeger, between 0.0 and 1.0
+sample_ratio = 1.0
 # Default log level for entire application
 level = "WARN"
 # Whether or not to use ANSI color codes (may not work on Windows)

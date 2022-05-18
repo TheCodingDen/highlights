@@ -25,7 +25,9 @@ pub(crate) fn init<S: Subscriber + for<'span> LookupSpan<'span>>(
 		let tracer = opentelemetry_jaeger::new_pipeline()
 			.with_agent_endpoint(address.socket_addr)
 			.with_service_name(env!("CARGO_PKG_NAME"))
-			.with_trace_config(trace::config().with_sampler(Sampler::AlwaysOn))
+			.with_trace_config(trace::config().with_sampler(
+				Sampler::TraceIdRatioBased(settings().logging.sample_ratio),
+			))
 			.with_auto_split_batch(true)
 			.install_batch(opentelemetry::runtime::Tokio)?;
 		let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);

@@ -240,6 +240,12 @@ pub(crate) struct LoggingSettings {
 	#[cfg(feature = "monitoring")]
 	pub(crate) jaeger: Option<UserAddress>,
 
+	/// Percentage of traces to sample.
+	///
+	/// See [`TraceIdRatioBased`](opentelemetry::sdk::trace::Sampler::TraceIdRatioBased).
+	#[cfg(feature = "monitoring")]
+	pub(crate) sample_ratio: f64,
+
 	/// Global level that log messages should be filtered to.
 	#[serde(deserialize_with = "deserialize_level_filter")]
 	pub(crate) level: LevelFilter,
@@ -280,6 +286,9 @@ impl Settings {
 		let b = b.set_default("behavior.max_keywords", 100u32)?
 			.set_default("behavior.patience_seconds", 60u64 * 2)?
 			.set_default("bot.private", false)?;
+
+		#[cfg(feature = "monitoring")]
+		let b = b.set_default("logging.sample_ratio", 1.0f64)?;
 
 		let mut b = b
 			.set_default("logging.level", "WARN")?
