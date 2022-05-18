@@ -22,7 +22,7 @@ pub(crate) struct Ignore {
 }
 
 impl Ignore {
-	/// Builds an `Ignore` from a `Row`, in this order:
+	/// Builds an [`Ignore`] from a [`Row`], in this order:
 	/// - `phrase`: `TEXT`
 	/// - `user_id`: `INTEGER`
 	/// - `guild id`: `INTEGER`
@@ -49,7 +49,8 @@ impl Ignore {
 		.expect("Failed to create guild_ignores table");
 	}
 
-	/// Fetches the list of ignored phrases of the specified user in the specified guild from the DB.
+	/// Fetches the list of ignored phrases of the specified user in the
+	/// specified guild from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn user_guild_ignores(
 		user_id: UserId,
@@ -71,7 +72,8 @@ impl Ignore {
 		})
 	}
 
-	/// Fetches the list of ignored phrases of the specified user across all guilds from the DB.
+	/// Fetches the list of ignored phrases of the specified user across all
+	/// guilds from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
 		await_db!("user ignores": |conn| {
@@ -156,7 +158,8 @@ impl Ignore {
 		})
 	}
 
-	/// Deletes all ignored phrases of the specified user in the specified guild from the DB.
+	/// Deletes all ignored phrases of the specified user in the specified guild
+	/// from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn delete_in_guild(
 		user_id: UserId,

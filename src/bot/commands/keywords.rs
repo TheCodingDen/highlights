@@ -34,8 +34,7 @@ use crate::{
 
 /// Add a keyword.
 ///
-/// Usage:
-/// - `/add <keyword> [channel]`
+/// Usage: `/add <keyword> [channel]`
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -175,8 +174,7 @@ fn is_valid_keyword(keyword: &str) -> bool {
 
 /// Remove a keyword.
 ///
-/// Usage:
-/// - `/remove <keyword> [channel]`
+/// Usage: `/remove <keyword> [channel]`
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -325,7 +323,8 @@ pub(crate) async fn unignore(ctx: Context, command: Command) -> Result<()> {
 	success(&ctx, &command).await
 }
 
-/// List ignored phrases in the current guild, or in all guilds when used in DMs.
+/// List ignored phrases in the current guild, or in all guilds when used in
+/// DMs.
 ///
 /// Usage: `/ignores`
 #[tracing::instrument(

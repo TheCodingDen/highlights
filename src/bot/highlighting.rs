@@ -31,19 +31,27 @@ use crate::{
 	settings::settings,
 };
 
+/// [`TypeMapKey`] for [`Client::data`](serenity::client::Client::data) to cache
+/// message contents so [`notify_keywords`] can determine if a message has been
+/// updated or deleted since its creation.
 pub(crate) struct CachedMessages;
 
 impl TypeMapKey for CachedMessages {
 	type Value = HashMap<MessageId, String>;
 }
 
-/// Checks if the provided keyword should be highlighted anywhere in the given message.
+/// Checks if the provided keyword should be highlighted anywhere in the given
+/// message.
 ///
-/// First each [`Ignore`](Ignore) is checked to determine if it appears in the message. If any do
-/// appear, then the keyword shouldn't be highlighted and `Ok(false)` is returned. Next, the keyword
-/// is similarly searched for in the message content. If it is found, the permissions of the user
-/// are checked to ensure they can read the message. If they can read the message, `Ok(true)`
-/// is returned.
+/// First each [`Ignore`] is checked to determine if it appears in the message.
+/// If any do appear, then the keyword shouldn't be highlighted and `Ok
+/// (false)` is returned. Next, the keyword is similarly searched for in the
+/// message content. If it is found, the permissions of the user are checked to
+/// ensure they can read the message. If they can read the message, `Ok
+/// (true)` is returned.
+///
+/// `Err(e)` is returned if an error occurs checking permissions, or if the
+/// message did not originate in a guild channel.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -98,19 +106,18 @@ pub(crate) async fn should_notify_keyword(
 	}
 }
 
-/// Sends a notification about a highlighted keyword.
+/// Notifies the user about the keyword provided in the message provided.
 ///
-/// This will first wait for the configured patience duration for a message or reaction from the
-/// user of the keyword. If they don't send a message or reaction in that time, then an embed is
-/// created to notify them and sent in a DM channel.
+/// This will first wait for the configured patience duration for a message or
+/// reaction from the user of the keyword. If they don't send a message or
+/// reaction in that time, then an embed is created to notify them and sent in
+/// a DM channel.
 ///
-/// If sending the notification fails because of an internal server error, it is retried up to five
-/// times with a delay of two seconds.
+/// Uses [`CachedMessages`] to determine if a message was edited or deleted
+/// while waiting to send a notification.
 ///
-/// If sending the notification fails with `"Cannot send messages to this user"`, a corresponding
-/// [`UserState`](UserState) is created.
-///
-/// Any other errors are logged as normal.
+/// Uses [`build_notification_message`] to build the notification message to
+/// send, and uses [`send_notification_message`] to send the message.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -221,6 +228,10 @@ pub(crate) async fn notify_keywords(
 	}
 }
 
+/// Builds a notification message.
+///
+/// Uses [`build_notification_embed`] to create the embed to include in the
+/// message.
 async fn build_notification_message(
 	ctx: &Context,
 	message: &Message,
@@ -240,6 +251,11 @@ async fn build_notification_message(
 	Ok(msg)
 }
 
+/// Builds a notification message edit to update a notification for an edited
+/// message.
+///
+/// Uses [`build_notification_embed`] to create the embed to include in the
+/// message.
 async fn build_notification_edit(
 	ctx: &Context,
 	message: &Message,
@@ -259,6 +275,18 @@ async fn build_notification_edit(
 	Ok(msg)
 }
 
+/// Builds a notification embed.
+///
+/// Includes:
+/// - List of keywords
+/// - Channel name
+/// - Guild name
+/// - Guild icon
+/// - Message content
+/// - Message link
+/// - Author username
+/// - Author avatar
+/// - Message timestamp
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -333,6 +361,15 @@ async fn build_notification_embed(
 	Ok(embed)
 }
 
+/// Sends a notification about a highlighted keyword.
+///
+/// If sending the notification fails because of an internal server error, it is
+/// retried up to five times with a delay of two seconds.
+///
+/// If sending the notification fails with `"Cannot send messages to this
+/// user"`, a corresponding [`UserState`] is created.
+///
+/// Any other errors are logged as is.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -412,6 +449,7 @@ async fn send_notification_message(
 	result
 }
 
+/// Deletes the given notification messages sent to the corresponding users.
 #[tracing::instrument(skip(ctx))]
 pub(crate) async fn delete_sent_notifications(
 	ctx: &Context,
@@ -443,6 +481,12 @@ pub(crate) async fn delete_sent_notifications(
 	}
 }
 
+/// Updates sent notifications after a message edit.
+///
+/// Edits the content of each notification to reflect the new content of the
+/// original message if the original message still contains the keyword the
+/// notification was created for. Deletes the notification if the new content
+/// no longer contains the keyword.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -544,7 +588,8 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 	};
 
 	if whitespace.is_match(keyword) {
-		// if the keyword has whitespace, only matches of whole phrases should be considered
+		// if the keyword has whitespace, only matches of whole phrases should
+		// be considered
 		content
 			.match_indices(keyword)
 			.filter(|(i, phrase)| {
@@ -562,13 +607,15 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 			.map(|(index, _)| index..index + keyword.len())
 			.any(|range| !overlaps_with_mention(range, content))
 	} else if non_alpha_num.is_match(keyword) {
-		// if the keyword contains non-alphanumeric characters, it could appear anywhere
+		// if the keyword contains non-alphanumeric characters, it could appear
+		// anywhere
 		content
 			.match_indices(keyword)
 			.map(|(i, _)| i..i + keyword.len())
 			.any(|range| !overlaps_with_mention(range, content))
 	} else {
-		// otherwise, it is only alphanumeric and could appear between non-alphanumeric text
+		// otherwise, it is only alphanumeric and could appear between
+		// non-alphanumeric text
 		non_alpha_num
 			.split(content)
 			.filter(|&frag| keyword == frag)
@@ -585,8 +632,8 @@ fn keyword_matches(keyword: &str, content: &str) -> bool {
 
 /// Checks the state of the last notification of the user.
 ///
-/// If the last notification failed, send a message warning the user they should enable DMs. Clears
-/// the user state afterwards.
+/// If the last notification failed, send a message warning the user they should
+/// enable DMs. Clears the user state afterwards.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -611,6 +658,7 @@ pub(crate) async fn check_notify_user_state(
 	Ok(())
 }
 
+/// Uses [`followup_eph`] to warn the user that their last notification failed.
 #[tracing::instrument(
 	skip_all,
 	fields(

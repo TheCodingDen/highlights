@@ -1,6 +1,8 @@
 // Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
+//! Logging setup using [`tracing`].
+
 use anyhow::Result;
 use tracing::Metadata;
 use tracing_subscriber::{
@@ -17,6 +19,13 @@ mod monitoring;
 #[cfg(feature = "reporting")]
 mod reporting;
 
+/// Applies configured filters to the given tracing metadata.
+///
+/// Returns true if the metadata passed configured filters and should be logged,
+/// and false if it should be filtered out.
+///
+/// Uses [`LoggingSettings::level`](crate::settings::LoggingSettings::level) and
+/// [`LoggingSettings::filters`](crate::settings::LoggingSettings::filters).
 fn use_filters(settings: &Settings, metadata: &Metadata) -> bool {
 	std::iter::successors(metadata.module_path(), |path| {
 		path.rsplit_once("::").map(|(prefix, _)| prefix)
@@ -33,6 +42,10 @@ fn use_filters(settings: &Settings, metadata: &Metadata) -> bool {
 	.unwrap_or(true)
 }
 
+/// Initializes logging via [`tracing`].
+///
+/// This initializes [`reporting`] and [`monitoring`], if
+/// enabled, as well as basic stdout logging.
 pub(crate) fn init() -> Result<()> {
 	let subscriber = tracing_subscriber::registry().with(
 		tracing_subscriber::fmt::layer()

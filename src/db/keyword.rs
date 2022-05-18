@@ -31,7 +31,7 @@ pub(crate) struct Keyword {
 }
 
 impl Keyword {
-	/// Builds a guild-wide `Keyword` from a `Row`, in this order:
+	/// Builds a guild-wide [`Keyword`] from a [`Row`], in this order:
 	/// - `keyword`: `TEXT`
 	/// - `user_id`: `INTEGER`
 	/// - `<guild id>`: `INTEGER`
@@ -43,7 +43,7 @@ impl Keyword {
 		})
 	}
 
-	/// Builds a channel-specific `Keyword` from a `Row`, in this order:
+	/// Builds a channel-specific [`Keyword`] from a [`Row`], in this order:
 	/// - `keyword`: `TEXT`
 	/// - `user_id`: `INTEGER`
 	/// - `<channel id>`: `INTEGER`
@@ -55,7 +55,8 @@ impl Keyword {
 		})
 	}
 
-	/// Creates the DB tables for storing guild-wide and channel specific keywords.
+	/// Creates the DB tables for storing guild-wide and channel specific
+	/// keywords.
 	pub(super) fn create_tables() {
 		let conn = connection();
 
@@ -84,11 +85,11 @@ impl Keyword {
 
 	/// Gets keywords that may be relelvant to a message.
 	///
-	/// Fetches all guild-wide keywords in the specified guild, as long as the creator of the
-	/// keyword didn't mute the channel or block the author.
+	/// Fetches all guild-wide keywords in the specified guild, as long as the
+	/// creator of the keyword didn't mute the channel or block the author.
 	///
-	/// Fetches all channel-specific keywords in the specified channel, as long as the creator of
-	/// the keyword didn't block the author.
+	/// Fetches all channel-specific keywords in the specified channel, as long
+	/// as the creator of the keyword didn't block the author.
 	#[tracing::instrument]
 	pub(crate) async fn get_relevant_keywords(
 		guild_id: GuildId,
@@ -198,7 +199,8 @@ impl Keyword {
 		})
 	}
 
-	/// Fetches all guild-wide keywords created by the specified user in the specified guild.
+	/// Fetches all guild-wide keywords created by the specified user in the
+	/// specified guild.
 	#[tracing::instrument]
 	pub(crate) async fn user_guild_keywords(
 		user_id: UserId,
@@ -221,7 +223,8 @@ impl Keyword {
 		})
 	}
 
-	/// Fetches all channel-specific keywords created by the specified user in the specified channel.
+	/// Fetches all channel-specific keywords created by the specified user in
+	/// the specified channel.
 	#[tracing::instrument]
 	pub(crate) async fn user_channel_keywords(
 		user_id: UserId,
@@ -242,7 +245,8 @@ impl Keyword {
 		})
 	}
 
-	/// Fetches all guild-wide and channel-specific keywords created by the specified user.
+	/// Fetches all guild-wide and channel-specific keywords created by the
+	/// specified user.
 	#[tracing::instrument]
 	pub(crate) async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
 		await_db!("user keywords": |conn| {
@@ -314,7 +318,8 @@ impl Keyword {
 		})
 	}
 
-	/// Returns the number of keywords this user has created across all guilds and channels.
+	/// Returns the number of keywords this user has created across all guilds
+	/// and channels.
 	#[tracing::instrument]
 	pub(crate) async fn user_keyword_count(user_id: UserId) -> Result<u32> {
 		await_db!("count user keywords": |conn| {
@@ -414,7 +419,8 @@ impl Keyword {
 		})
 	}
 
-	/// Deletes all guild-wide keywords created by the specified user in the specified guild.
+	/// Deletes all guild-wide keywords created by the specified user in the
+	/// specified guild.
 	#[tracing::instrument]
 	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
@@ -429,7 +435,8 @@ impl Keyword {
 		})
 	}
 
-	/// Deletes all channel-specific keywords created by the specified user in the specified channel.
+	/// Deletes all channel-specific keywords created by the specified user in
+	/// the specified channel.
 	#[tracing::instrument]
 	pub(crate) async fn delete_in_channel(
 		user_id: UserId,

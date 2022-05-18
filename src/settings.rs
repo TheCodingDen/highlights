@@ -30,6 +30,7 @@ mod duration_de {
 	use std::{fmt, time::Duration};
 
 	use serde::{de, Deserializer};
+
 	/// Visitor to deserialize a `Duration` from a number of seconds.
 	struct DurationVisitor;
 	impl<'de> de::Visitor<'de> for DurationVisitor {
@@ -65,6 +66,7 @@ mod user_address {
 	};
 
 	use serde::{de, Deserialize, Deserializer};
+
 	#[derive(Debug, Clone, Copy)]
 	pub(crate) struct UserAddress {
 		pub(crate) socket_addr: SocketAddr,
@@ -312,7 +314,7 @@ pub(crate) fn settings() -> &'static Settings {
 	SETTINGS.get().expect("Settings were not initialized")
 }
 
-/// Initialize the bot's [`Settings`](Settings).
+/// Initialize the bot's [`Settings`].
 pub(crate) fn init() {
 	match Settings::new() {
 		Ok(settings) => {

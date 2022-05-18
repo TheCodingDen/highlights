@@ -26,8 +26,7 @@ use crate::{
 
 /// Opt-out of being highlighted.
 ///
-/// Usage:
-/// - `/opt-out`
+/// Usage: `/opt-out`
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -148,8 +147,7 @@ pub(crate) async fn opt_out(ctx: Context, command: Command) -> Result<()> {
 
 /// Opt-in to being highlighted, after having opted out.
 ///
-/// Usage:
-/// - `/opt-in`
+/// Usage: `/opt-in`
 #[tracing::instrument(
 	skip_all,
 	fields(

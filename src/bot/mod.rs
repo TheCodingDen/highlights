@@ -1,6 +1,8 @@
 // Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
+//! Discord client creation and behavior.
+
 #[macro_use]
 mod util;
 mod commands;
@@ -52,11 +54,10 @@ struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
-	/// Message listener to execute commands or check for notifications.
+	/// Message listener to check for keywords.
 	///
-	/// This function essentially just checks the message to see if it's a command; if it is, then
-	/// [`handle_command`](handle_command) is called. If not, [`handle_keywords`](handle_keywords)
-	/// is called to check if there are any keywords to notify others of.
+	/// Calls [`handle_keywords`] for any non-bot messages in a guild to check
+	/// if there are any keywords to notify others of.
 	async fn message(&self, ctx: Context, message: Message) {
 		if message.author.bot {
 			return;
@@ -70,7 +71,10 @@ impl EventHandler for Handler {
 		handle_keywords(&ctx, &message, guild_id).await;
 	}
 
-	/// Deletes sent notifications if their original messages were deleted.
+	/// Message listener to check messages for notifications to delete.
+	///
+	/// Calls [`handle_deletion`] for any non-bot messages in a guild to check
+	/// if there are any notifications of that message to delete.
 	async fn message_delete(
 		&self,
 		ctx: Context,
@@ -86,11 +90,10 @@ impl EventHandler for Handler {
 		handle_deletion(ctx, channel_id, message_id, guild_id).await;
 	}
 
-	/// Edits notifications if their original messages are edited.
+	/// Message listener to edit notifications
 	///
-	/// Edits the content of a notification to reflect the new content of the original message if
-	/// the original message still contains the keyword the notification was created for. Deletes
-	/// the notification if the new content no longer contains the keyword.
+	/// Calls [`handle_update`] for any non-bot messages in a guild to check if
+	/// there are any notifications of that message to update.
 	async fn message_update(
 		&self,
 		ctx: Context,
@@ -108,8 +111,7 @@ impl EventHandler for Handler {
 
 	/// Runs minor setup for when the bot starts.
 	///
-	/// This calls [`init_mentions`](crate::global::init_mentions), sets the bot's status, and
-	/// logs a ready message.
+	/// Calls [`ready`].
 	async fn ready(&self, ctx: Context, _: Ready) {
 		ready(ctx).await;
 	}
@@ -125,6 +127,8 @@ impl EventHandler for Handler {
 	}
 }
 
+/// Sets the bot's activity to "Listening to /help" and
+/// [creates slash commands](commands::create_commands).
 async fn ready(ctx: Context) {
 	let span = info_span!(parent: None, "ready");
 
@@ -137,6 +141,9 @@ async fn ready(ctx: Context) {
 	tracing::info!("Ready to highlight!");
 }
 
+/// Finds notifications for an updated message and uses
+/// [`update_sent_notifications`](highlighting::update_sent_notifications) to
+/// update them.
 async fn handle_update(
 	ctx: Context,
 	new: Option<Message>,
@@ -214,6 +221,9 @@ async fn handle_update(
 	.await;
 }
 
+/// Finds notifications for a deleted message and uses
+/// [`delete_sent_notifications`](highlighting::delete_sent_notifications) to
+/// delete them.
 async fn handle_deletion(
 	ctx: Context,
 	channel_id: ChannelId,
@@ -272,11 +282,10 @@ async fn handle_deletion(
 
 /// Handles any keywords present in a message.
 ///
-/// This function queries for any keywords that could be relevant to the sent message with
-/// [`get_relevant_keywords`](Keyword::get_relevant_keywords), collects [`Ignore`](Ignore)s for any
-/// users with those keywords. It uses (`should_notify_keyword`)[highlighting::should_notify_keyword]
-/// to determine if there is a keyword that should be highlighted, then calls
-/// (`notify_keyword`)[highlighting::notify_keyword].
+/// This function queries for any keywords that could be relevant to the sent
+/// message with [`get_relevant_keywords`](Keyword::get_relevant_keywords),
+/// collects [`Ignore`]s for any users with those keywords. It then
+/// calls [`notify_keywords`](highlighting::notify_keywords).
 async fn handle_keywords(ctx: &Context, message: &Message, guild_id: GuildId) {
 	let res: Result<()> = async move {
 		let channel_id = message.channel_id;
@@ -364,6 +373,7 @@ async fn handle_keywords(ctx: &Context, message: &Message, guild_id: GuildId) {
 	}
 }
 
+/// Handles a slash [`command`](commands).
 async fn handle_command(ctx: Context, command: Command) {
 	let name = command.data.name.clone();
 	let channel_id = command.channel_id;
@@ -512,12 +522,15 @@ async fn handle_command(ctx: Context, command: Command) {
 	}
 }
 
+/// [`TypeMapKey`] to store a reference to the [`ShardManager`] for retrieving
+/// latency.
 struct Shards;
 
 impl TypeMapKey for Shards {
 	type Value = Arc<Mutex<ShardManager>>;
 }
 
+/// Initializes the Discord client.
 pub(crate) async fn init() -> Result<()> {
 	let mut client = Client::builder(
 		&settings().bot.token,

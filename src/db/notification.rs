@@ -17,14 +17,15 @@ pub(crate) struct Notification {
 	pub(crate) original_message: MessageId,
 	/// The ID of the sent notification message.
 	pub(crate) notification_message: MessageId,
-	/// The keyword in the original message that caused the notification to be sent.
+	/// The keyword in the original message that caused the notification to be
+	/// sent.
 	pub(crate) keyword: String,
 	/// The ID of the user that the notification was sent to.
 	pub(crate) user_id: UserId,
 }
 
 impl Notification {
-	/// Builds a `Notification` from a `Row`, in this order:
+	/// Builds a [`Notification`] from a [`Row`], in this order:
 	/// - `original_message`: `INTEGER`
 	/// - `notification_message`: `INTEGER`
 	/// - `keyword`: `TEXT`
@@ -53,7 +54,8 @@ impl Notification {
 		.expect("Failed to create sent_notifications table");
 	}
 
-	/// Fetches the notifications that were sent because of the given message from the DB.
+	/// Fetches the notifications that were sent because of the given message
+	/// from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn notifications_of_message(
 		message_id: MessageId,

@@ -22,8 +22,7 @@ pub(crate) mod logging;
 #[cfg(feature = "bot")]
 mod bot;
 
-/// Entrypoint function to initialize other modules and start the Discord
-/// client.
+/// Entrypoint function to initialize other modules.
 #[tokio::main]
 async fn main() -> Result<()> {
 	settings::init();

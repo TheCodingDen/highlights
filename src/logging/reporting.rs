@@ -30,12 +30,14 @@ struct WebhookMessage {
 	content: String,
 }
 
+/// [`Layer`](Layer) for reporting errors to a webhook.
 pub(crate) struct WebhookLayer {
 	url: Url,
 	client: Client,
 }
 
 impl WebhookLayer {
+	/// Create a new `WebhookLayer` that reports to the given Discord webhook URL.
 	pub(super) fn new(url: Url) -> Self {
 		WebhookLayer {
 			url,
@@ -44,6 +46,7 @@ impl WebhookLayer {
 	}
 }
 
+/// Formats `event` in the context `ctx` for display in a Discord webhook.
 fn format_event<S>(event: &Event<'_>, ctx: Context<'_, S>) -> String
 where
 	S: Subscriber + for<'s> LookupSpan<'s>,
@@ -176,6 +179,13 @@ pub(crate) fn report_panic(
 		.send()?)
 }
 
+/// Initializes webhook reporting.
+///
+/// If a [webhook URL](crate::settings::LoggingSettings::webhook) is configured,
+/// registers [`report_panic`] as a panic hook and returns a[`WebhookLayer`] to
+/// be registered with [`tracing_subscriber`].
+///
+/// If no webhook URL is configured, returns None.
 pub(crate) fn init() -> Option<WebhookLayer> {
 	if let Some(url) = settings().logging.webhook.clone() {
 		let default_panic_hook = panic::take_hook();

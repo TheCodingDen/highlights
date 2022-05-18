@@ -16,8 +16,8 @@ use serenity::{
 
 /// Requires the given command to have come from a guild channel.
 ///
-/// Uses [`respond_eph`](crate::bot::util::respond_eph) if the command did not \
-/// come from a guild channel. Evaluates to the guild's ID otherwise.
+/// Displays an error message and returns if the command did not come from a
+/// guild channel. Evaluates to the guild's ID otherwise.
 #[macro_export]
 macro_rules! require_guild {
 	($ctx:expr, $command:expr) => {{
@@ -38,8 +38,7 @@ macro_rules! require_guild {
 
 /// Requires the author of a given command to not be opted out.
 ///
-/// Uses [`respond_eph`](crate::bot::util::respond_eph) to display an error if
-/// the user is opted out.
+/// Displays an error message and returns if the user is opted out.
 #[macro_export]
 macro_rules! check_opt_out {
 	($ctx:expr, $command:expr) => {{
@@ -60,8 +59,9 @@ macro_rules! check_opt_out {
 
 /// Requires the current bot member to have permission to send embeds.
 ///
-/// Uses [`respond_eph`](crate::bot::util::respond_eph) if the current member does not have permission to send
-/// embeds. Does nothing if used on a command in a DM channel.
+/// Displays an error message and returns if the current member does not have
+/// permission to send embeds. Does nothing if used on a command in a DM
+/// channel.
 #[macro_export]
 macro_rules! require_embed_perms {
 	($ctx:expr, $command:expr) => {
@@ -95,7 +95,8 @@ macro_rules! require_embed_perms {
 	};
 }
 
-/// Convenience function to get a map of all cached text channels in the given guild.
+/// Convenience function to get a map of all cached text channels in the given
+/// guild.
 pub(crate) async fn get_text_channels_in_guild(
 	ctx: &Context,
 	guild_id: GuildId,

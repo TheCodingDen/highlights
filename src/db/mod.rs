@@ -46,7 +46,8 @@ pub(crate) fn connection() -> PooledConnection<SqliteConnectionManager> {
 
 /// Initializes the database.
 ///
-/// Creates the data folder and database file if necessary, and starts backups if enabled.
+/// Creates the data folder and database file if necessary, and starts backups
+/// if enabled.
 pub(crate) fn init() {
 	let data_dir = &settings().database.path;
 
@@ -81,7 +82,7 @@ pub(crate) fn init() {
 }
 
 /// Convenience macro to make a blocking tokio task and await it, creating a
-/// [`Timer`](crate::monitoring::Timer) for performance monitoring.
+/// [`tracing`] span for the operation.
 #[macro_export]
 macro_rules! await_db {
 	($name:literal: |$conn:ident| $body:block) => {{
@@ -103,6 +104,8 @@ macro_rules! await_db {
 	}};
 }
 
+/// Convenience trait for converting IDs to and from `i64`, the integer type
+/// SQLite supports.
 trait IdI64Ext {
 	fn into_i64(self) -> i64;
 

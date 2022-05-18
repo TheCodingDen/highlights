@@ -20,7 +20,7 @@ pub(crate) struct Block {
 }
 
 impl Block {
-	/// Builds a `Block` from a `Row`, in this order:
+	/// Builds a [`Block`] from a [`Row`], in this order:
 	/// - `user_id`: `INTEGER`
 	/// - `blocked_id`: `INTEGER`
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {
@@ -54,7 +54,10 @@ impl Block {
 				WHERE user_id = ?"
 			)?;
 
-			let blocks = stmt.query_map(params![user_id.into_i64()], Self::from_row)?;
+			let blocks = stmt.query_map(
+				params![user_id.into_i64()],
+				Self::from_row
+			)?;
 
 			blocks.map(|res| res.map_err(Into::into)).collect()
 		})

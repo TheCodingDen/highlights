@@ -1,7 +1,8 @@
 // Copyright 2022 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
-//! Handling for user states; whether or not the last notification DM was successful.
+//! Handling for user states; whether or not the last notification DM was
+//! successful.
 
 use anyhow::Result;
 use rusqlite::{params, OptionalExtension, Row};
@@ -27,7 +28,7 @@ pub(crate) enum UserStateKind {
 impl UserState {
 	const CANNOT_DM_STATE: u8 = UserStateKind::CannotDm as u8;
 
-	/// Builds a `UserState` from a `Row`, in this order:
+	/// Builds a [`UserState`] from a [`Row`], in this order:
 	/// - user_id: INTEGER
 	/// - state: INTEGER
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {

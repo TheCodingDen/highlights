@@ -15,8 +15,10 @@ use tracing_subscriber::{
 
 use crate::settings::settings;
 
+/// Composed [`Layer`](tracing_subscriber::layer::Layer) used for monitoring.
 pub(crate) type Layer<S> = Filtered<OpenTelemetryLayer<S, Tracer>, FilterFn, S>;
 
+/// Initializes monitoring using [`opentelemetry_jaeger`].
 pub(crate) fn init<S: Subscriber + for<'span> LookupSpan<'span>>(
 ) -> Result<Option<Layer<S>>> {
 	if let Some(address) = settings().logging.jaeger {

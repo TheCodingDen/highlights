@@ -25,7 +25,8 @@ use serenity::{
 /// Responds to a command with a ✅ emoji.
 #[inline]
 pub(crate) async fn success(ctx: &Context, command: &Command) -> Result<()> {
-	respond_eph(ctx, command, "✅\u{200b}") // zero-width space to force small emoji
+	// zero-width space to force small emoji
+	respond_eph(ctx, command, "✅\u{200b}")
 		.await
 		.context("Failed to add success reaction")?;
 
@@ -74,6 +75,9 @@ pub(crate) async fn respond_eph<S: Display>(
 	Ok(())
 }
 
+/// Sends a followup message to a command with the given message ephemerally.
+///
+/// The command must have been responded to already.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -97,7 +101,8 @@ pub(crate) async fn followup_eph<S: Display>(
 	Ok(())
 }
 
-/// Determines if a user with the given ID can read messages in the provided `GuildChannel`.
+/// Determines if a user with the given ID can read messages in the provided
+/// [`GuildChannel`].
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -143,8 +148,9 @@ pub(crate) async fn user_can_read_channel(
 
 /// Makes the result of an HTTP call optional.
 ///
-/// If the given `Result` is an `Err` containing an error with a 404 HTTP error, `Ok(None)` is
-/// returned. Otherwise, the `Result` is returned, `Ok(x)` being replaced with `Ok(Some(x))`.
+/// If the given `Result` is an `Err` containing an error with a 404 HTTP error,
+/// `Ok(None)` is returned. Otherwise, the `Result` is returned, `Ok(x)` being
+/// replaced with `Ok(Some(x))`.
 pub(crate) fn optional_result<T>(
 	res: Result<T, SerenityError>,
 ) -> Result<Option<T>, SerenityError> {

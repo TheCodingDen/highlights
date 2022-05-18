@@ -20,7 +20,7 @@ pub(crate) struct Mute {
 }
 
 impl Mute {
-	/// Builds a `Mute` from a `Row`, in this order:
+	/// Builds a [`Mute`] from a [`Row`], in this order:
 	/// - user_id: INTEGER
 	/// - channel_id: INTEGER
 	fn from_row(row: &Row) -> rusqlite::Result<Self> {
@@ -64,7 +64,8 @@ impl Mute {
 
 	/// Checks if this mute exists in the DB.
 	///
-	/// Returns true if a mute with `self.user_id` and `self.channel_id` exists in the DB.
+	/// Returns true if a mute with `self.user_id` and `self.channel_id` exists
+	/// in the DB.
 	#[tracing::instrument]
 	pub(crate) async fn exists(self) -> Result<bool> {
 		await_db!("mute exists": |conn| {

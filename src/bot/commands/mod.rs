@@ -44,6 +44,7 @@ use crate::{
 	settings::settings,
 };
 
+// Create all slash commands globally, and in a test guild if configured.
 pub(crate) async fn create_commands(ctx: Context) {
 	tracing::info!("Registering slash commands");
 	let commands = COMMAND_INFO
@@ -68,6 +69,8 @@ pub(crate) async fn create_commands(ctx: Context) {
 }
 
 /// Display the API latency of the bot.
+///
+/// Usage: `/ping`
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -115,7 +118,10 @@ pub(crate) async fn ping(ctx: Context, command: Command) -> Result<()> {
 
 /// Displays information about the bot.
 ///
-/// Displays the cargo package name and version, cargo source, author, and an invite URL.
+/// Usage: `/about`
+///
+/// Displays the cargo package name and version, cargo source, author, and an
+/// invite URL.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -175,8 +181,10 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 
 /// Displays information about using the bot.
 ///
-/// When given no arguments, displays the list of commands. When given an argument, displays
-/// detailed information about the command of that name.
+/// Usage: `/help [command]`
+///
+/// When given no arguments, displays the list of commands. When given an
+/// argument, displays detailed information about the command of that name.
 #[tracing::instrument(
 	skip_all,
 	fields(
@@ -252,6 +260,7 @@ pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
 	Ok(())
 }
 
+/// Description of a command for the help command and slash command creation.
 struct CommandInfo {
 	name: &'static str,
 	short_desc: &'static str,
@@ -261,6 +270,8 @@ struct CommandInfo {
 }
 
 impl CommandInfo {
+	/// Create a [`CreateApplicationCommand`] describing this command to create
+	/// a corresponding slash command.
 	fn create(&self) -> CreateApplicationCommand {
 		let mut builder = CreateApplicationCommand::default();
 		builder
