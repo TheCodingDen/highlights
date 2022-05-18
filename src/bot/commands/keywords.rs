@@ -12,6 +12,7 @@ use serenity::{
 	client::Context,
 	http::error::ErrorResponse,
 	model::{
+		channel::{Channel, ChannelType, GuildChannel},
 		id::{ChannelId, GuildId},
 		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
@@ -91,9 +92,8 @@ pub(crate) async fn add(ctx: Context, command: Command) -> Result<()> {
 			let channel = ctx
 				.cache
 				.guild_channel(channel.id)
-				.await
 				.context("Channel for keyword to add not cached")?;
-			let self_id = ctx.cache.current_user_id().await;
+			let self_id = ctx.cache.current_user_id();
 			match user_can_read_channel(&ctx, &channel, self_id).await {
 				Ok(Some(true)) => Keyword {
 					keyword,
@@ -359,7 +359,6 @@ pub(crate) async fn ignores(ctx: Context, command: Command) -> Result<()> {
 			let guild_name = ctx
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
-				.await
 				.context("Couldn't get guild to list ignores")?;
 
 			let response = format!(
@@ -402,7 +401,6 @@ pub(crate) async fn ignores(ctx: Context, command: Command) -> Result<()> {
 				let guild_name = ctx
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
-					.await
 					.context("Couldn't get guild to list ignores")?;
 
 				write!(
@@ -452,16 +450,22 @@ pub(crate) async fn remove_server(
 		}
 	};
 
-	let channels: Option<Vec<ChannelId>> = ctx
-		.cache
-		.guild_field(guild_id, |g| {
+	let channels: Option<Vec<ChannelId>> =
+		ctx.cache.guild_field(guild_id, |g| {
 			g.channels
 				.iter()
-				.filter(|(_, channel)| channel.is_text_based())
+				.filter(|(_, channel)| {
+					matches!(
+						channel,
+						Channel::Guild(GuildChannel {
+							kind: ChannelType::Text,
+							..
+						})
+					)
+				})
 				.map(|(&id, _)| id)
 				.collect()
-		})
-		.await;
+		});
 
 	let guild_keywords_deleted =
 		Keyword::delete_in_guild(command.user.id, guild_id).await?;
@@ -558,7 +562,6 @@ pub(crate) async fn keywords(ctx: Context, command: Command) -> Result<()> {
 			let guild_name = ctx
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
-				.await
 				.context("Couldn't get guild to list keywords")?;
 
 			let mut response = String::with_capacity(45);
@@ -619,8 +622,7 @@ pub(crate) async fn keywords(ctx: Context, command: Command) -> Result<()> {
 					KeywordKind::Channel(channel_id) => {
 						let guild_id = ctx
 							.cache
-							.guild_channel_field(channel_id, |c| c.guild_id)
-							.await;
+							.guild_channel_field(channel_id, |c| c.guild_id);
 
 						match guild_id {
 							Some(guild_id) => {
@@ -657,7 +659,6 @@ pub(crate) async fn keywords(ctx: Context, command: Command) -> Result<()> {
 				let guild_name = ctx
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
-					.await
 					.unwrap_or_else(|| {
 						format!("<Unknown server> ({})", guild_id)
 					});

@@ -117,7 +117,7 @@ pub(crate) async fn user_can_read_channel(
 
 	use MaybePartialGuild::*;
 
-	let guild = match ctx.cache().unwrap().guild(channel.guild_id).await {
+	let guild = match ctx.cache().unwrap().guild(channel.guild_id) {
 		Some(g) => FullGuild(g),
 		None => Partial(ctx.http().get_guild(channel.guild_id.0).await?),
 	};
@@ -137,7 +137,7 @@ pub(crate) async fn user_can_read_channel(
 		Partial(g) => g.user_permissions_in(channel, &member)?,
 	};
 
-	Ok(Some(permissions.read_messages()))
+	Ok(Some(permissions.view_channel()))
 }
 
 /// Makes the result of an HTTP call optional.

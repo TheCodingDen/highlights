@@ -78,7 +78,7 @@ pub(crate) async fn should_notify_keyword(
 		return Ok(false);
 	}
 
-	let channel = match ctx.cache.guild_channel(message.channel_id).await {
+	let channel = match ctx.cache.guild_channel(message.channel_id) {
 		Some(c) => c,
 		None => match ctx.http.get_channel(message.channel_id.0).await? {
 			serenity::model::channel::Channel::Guild(c) => c,
@@ -245,7 +245,7 @@ async fn build_notification_edit(
 	message: &Message,
 	keywords: &[String],
 	guild_id: GuildId,
-) -> Result<EditMessage> {
+) -> Result<EditMessage<'static>> {
 	let embed =
 		build_notification_embed(ctx, message, keywords, guild_id).await?;
 
@@ -281,12 +281,10 @@ async fn build_notification_embed(
 	let channel_name = ctx
 		.cache
 		.guild_channel_field(message.channel_id, |c| c.name.clone())
-		.await
 		.context("Couldn't get channel for keyword")?;
 	let (guild_name, guild_icon) = ctx
 		.cache
 		.guild_field(guild_id, |g| (g.name.clone(), g.icon_url()))
-		.await
 		.context("Couldn't get guild for keyword")?;
 	let title = if keywords.len() == 1 {
 		format!(

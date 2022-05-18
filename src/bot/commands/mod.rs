@@ -137,7 +137,6 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 		Some(
 			ctx.cache
 				.current_user()
-				.await
 				.invite_url_with_oauth2_scopes(
 					&ctx,
 					Permissions::empty(),
@@ -150,7 +149,7 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 	command
 		.create_interaction_response(&ctx, |r| {
 			r.interaction_response_data(|m| {
-				m.create_embed(|e| {
+				m.embed(|e| {
 					e.title(concat!(
 						env!("CARGO_PKG_NAME"),
 						" ",
@@ -192,14 +191,14 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
 	require_embed_perms!(&ctx, &command);
 
-	let username = ctx.cache.current_user_field(|u| u.name.clone()).await;
+	let username = ctx.cache.current_user_field(|u| u.name.clone());
 
 	match command.data.options.get(0) {
 		None => {
 			command
 				.create_interaction_response(&ctx, |r| {
 					r.interaction_response_data(|m| {
-						m.flags(ResponseFlags::EPHEMERAL).create_embed(|e| {
+						m.flags(ResponseFlags::EPHEMERAL).embed(|e| {
 							e.title(format!("{} – Help", username))
 								.description(
 									"Use `/help [command]` to see more \
@@ -237,7 +236,7 @@ pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
 			command
 				.create_interaction_response(&ctx, |r| {
 					r.interaction_response_data(|m| {
-						m.flags(ResponseFlags::EPHEMERAL).create_embed(|e| {
+						m.flags(ResponseFlags::EPHEMERAL).embed(|e| {
 							e.title(format!("Help – {}", info.name))
 								.description(&info.long_desc)
 								.color(EMBED_COLOR);

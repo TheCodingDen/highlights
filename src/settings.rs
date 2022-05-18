@@ -3,7 +3,10 @@
 
 //! Handling of bot configuration for hosters.
 
-use config::{Config, ConfigError, Environment, File, FileFormat};
+use config::{
+	builder::DefaultState, ConfigBuilder, ConfigError, Environment, File,
+	FileFormat,
+};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 #[cfg(feature = "bot")]
@@ -270,22 +273,19 @@ pub(crate) struct Settings {
 impl Settings {
 	/// Builds settings from environment variables and the configuration file.
 	pub(crate) fn new() -> Result<Self, ConfigError> {
-		let mut s = Config::new();
+		let b = ConfigBuilder::<DefaultState>::default();
 
 		#[cfg(feature = "bot")]
-		s.set_default("behavior.max_keywords", 100)?;
-		#[cfg(feature = "bot")]
-		s.set_default("behavior.patience_seconds", 60 * 2)?;
+		let b = b.set_default("behavior.max_keywords", 100u32)?
+			.set_default("behavior.patience_seconds", 60u64 * 2)?
+			.set_default("bot.private", false)?;
 
-		#[cfg(feature = "bot")]
-		s.set_default("bot.private", false)?;
-
-		s.set_default("logging.level", "WARN")?;
-		s.set_default("logging.filters.highlights", "INFO")?;
-		s.set_default("logging.color", "true")?;
-
-		s.set_default("database.path", "./data")?;
-		s.set_default("database.backup", true)?;
+		let mut b = b
+			.set_default("logging.level", "WARN")?
+			.set_default("logging.filters.highlights", "INFO")?
+			.set_default("logging.color", "true")?
+			.set_default("database.path", "./data")?
+			.set_default("database.backup", true)?;
 
 		let filename = env::var("HIGHLIGHTS_CONFIG").or_else(|e| match e {
 			VarError::NotPresent => Ok("./config.toml".to_owned()),
@@ -293,15 +293,15 @@ impl Settings {
 		})?;
 		match read_to_string(&filename) {
 			Ok(conf) => {
-				s.merge(File::from_str(&conf, FileFormat::Toml))?;
+				b = b.add_source(File::from_str(&conf, FileFormat::Toml));
 			}
 			Err(e) if e.kind() == ErrorKind::NotFound => (),
 			Err(e) => return Err(ConfigError::Foreign(Box::new(e))),
 		}
 
-		s.merge(Environment::with_prefix("HIGHLIGHTS"))?;
-
-		s.try_into()
+		b.add_source(Environment::with_prefix("HIGHLIGHTS"))
+			.build()?
+			.try_deserialize()
 	}
 }
 

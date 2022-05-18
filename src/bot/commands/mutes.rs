@@ -35,15 +35,10 @@ pub(crate) async fn mute(ctx: Context, mut command: Command) -> Result<()> {
 	let channel = ctx
 		.cache
 		.guild_channel(channel_id)
-		.await
 		.context("Failed to get guild channel to mute")?;
 
-	match user_can_read_channel(
-		&ctx,
-		&channel,
-		ctx.cache.current_user_id().await,
-	)
-	.await
+	match user_can_read_channel(&ctx, &channel, ctx.cache.current_user_id())
+		.await
 	{
 		Ok(Some(true)) => {
 			let mute = Mute {
@@ -131,7 +126,6 @@ pub(crate) async fn mutes(ctx: Context, command: Command) -> Result<()> {
 			let channels = ctx
 				.cache
 				.guild_channels(guild_id)
-				.await
 				.context("Couldn't get guild channels to list mutes")?;
 
 			let mutes = Mute::user_mutes(command.user.id)
@@ -153,7 +147,6 @@ pub(crate) async fn mutes(ctx: Context, command: Command) -> Result<()> {
 			let guild_name = ctx
 				.cache
 				.guild_field(guild_id, |g| g.name.clone())
-				.await
 				.context("Couldn't get guild to list mutes")?;
 
 			let response = format!(
@@ -180,15 +173,14 @@ pub(crate) async fn mutes(ctx: Context, command: Command) -> Result<()> {
 			let mut not_found = Vec::new();
 
 			for mute in mutes {
-				let channel =
-					match ctx.cache.guild_channel(mute.channel_id).await {
-						Some(channel) => channel,
-						None => {
-							not_found
-								.push(format!("<#{0}> ({0})", mute.channel_id));
-							continue;
-						}
-					};
+				let channel = match ctx.cache.guild_channel(mute.channel_id) {
+					Some(channel) => channel,
+					None => {
+						not_found
+							.push(format!("<#{0}> ({0})", mute.channel_id));
+						continue;
+					}
+				};
 
 				mutes_by_guild
 					.entry(channel.guild_id)
@@ -206,7 +198,6 @@ pub(crate) async fn mutes(ctx: Context, command: Command) -> Result<()> {
 				let guild_name = ctx
 					.cache
 					.guild_field(guild_id, |g| g.name.clone())
-					.await
 					.context("Couldn't get guild to list mutes")?;
 
 				write!(

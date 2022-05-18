@@ -100,7 +100,7 @@ pub(crate) async fn opt_out(ctx: Context, command: Command) -> Result<()> {
 			}
 		})
 		.timeout(Duration::from_secs(10))
-		.await
+		.build()
 		.next()
 		.await;
 

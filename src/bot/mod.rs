@@ -26,10 +26,7 @@ use crate::{
 use anyhow::{Context as _, Result};
 use serenity::{
 	builder::CreateEmbed,
-	client::{
-		bridge::gateway::{GatewayIntents, ShardManager},
-		Client, Context, EventHandler,
-	},
+	client::{bridge::gateway::ShardManager, Client, Context, EventHandler},
 	http::{
 		error::{DiscordJsonError, ErrorResponse},
 		HttpError,
@@ -37,7 +34,7 @@ use serenity::{
 	model::{
 		channel::Message,
 		event::MessageUpdateEvent,
-		gateway::{Activity, Ready},
+		gateway::{Activity, GatewayIntents, Ready},
 		id::{ChannelId, GuildId, MessageId},
 		interactions::{
 			application_command::ApplicationCommandInteraction as Command,
@@ -524,18 +521,18 @@ impl TypeMapKey for Shards {
 }
 
 pub(crate) async fn init() -> Result<()> {
-	let mut client = Client::builder(&settings().bot.token)
-		.event_handler(Handler)
-		.intents(
-			GatewayIntents::DIRECT_MESSAGES
-				| GatewayIntents::GUILD_MESSAGE_REACTIONS
-				| GatewayIntents::GUILD_MESSAGES
-				| GatewayIntents::GUILDS
-				| GatewayIntents::GUILD_MEMBERS,
-		)
-		.application_id(settings().bot.application_id)
-		.await
-		.context("Failed to create client")?;
+	let mut client = Client::builder(
+		&settings().bot.token,
+		GatewayIntents::DIRECT_MESSAGES
+			| GatewayIntents::GUILD_MESSAGE_REACTIONS
+			| GatewayIntents::GUILD_MESSAGES
+			| GatewayIntents::GUILDS
+			| GatewayIntents::GUILD_MEMBERS,
+	)
+	.event_handler(Handler)
+	.application_id(settings().bot.application_id)
+	.await
+	.context("Failed to create client")?;
 
 	{
 		let mut data = client.data.write().await;

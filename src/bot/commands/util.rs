@@ -68,17 +68,15 @@ macro_rules! require_embed_perms {
 		#[allow(clippy::needless_borrow)]
 		if $command.guild_id.is_some() {
 			use ::anyhow::Context as _;
-			let self_id = $ctx.cache.current_user_id().await;
+			let self_id = $ctx.cache.current_user_id();
 
 			let channel = $ctx
 				.cache
 				.guild_channel($command.channel_id)
-				.await
 				.context("Nonexistent guild channel")?;
 
 			let permissions = channel
 				.permissions_for_user($ctx, self_id)
-				.await
 				.context("Failed to get permissions for self")?;
 
 			if !permissions.embed_links() {
@@ -105,7 +103,6 @@ pub(crate) async fn get_text_channels_in_guild(
 	let channels = ctx
 		.cache
 		.guild_channels(guild_id)
-		.await
 		.context("Couldn't get guild to get channels")?;
 	let channels = channels
 		.into_iter()
