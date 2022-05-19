@@ -13,19 +13,17 @@ services:
     depends_on:
       jaeger-agent:
         condition: service_started
+    restart: unless-stopped
 
   jaeger-agent:
     image: jaegertracing/jaeger-agent:1.34
     networks:
       - net
     command: "--reporter.grpc.host-port=jaeger-collector:14250"
-    healthcheck:
-      test: ["CMD", "curl", "localhost:14271"]
-      interval: 30s
-      timeout: 10s
     depends_on:
       jaeger-collector:
         condition: service_started
+    restart: unless-stopped
 
   jaeger-collector:
     image: jaegertracing/jaeger-collector:1.34
@@ -34,13 +32,11 @@ services:
     environment:
       SPAN_STORAGE_TYPE: "cassandra"
       CASSANDRA_SERVERS: "cassandra"
-    healthcheck:
-      test: ["CMD", "curl", "localhost:14269"]
-      interval: 30s
-      timeout: 10s
+      CASSANDRA_KEYSPACE: "jaeger_v1_dc1"
     depends_on:
-      cassandra:
-        condition: service_healthy
+      cassandra-setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   jaeger-query:
     image: jaegertracing/jaeger-query:1.34
@@ -51,10 +47,20 @@ services:
     environment:
       SPAN_STORAGE_TYPE: "cassandra"
       CASSANDRA_SERVERS: "cassandra"
-    healthcheck:
-      test: ["CMD", "curl", "localhost:16687"]
-      interval: 30s
-      timeout: 10s
+      CASSANDRA_KEYSPACE: "jaeger_v1_dc1"
+    depends_on:
+      cassandra-setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  cassandra-setup:
+    image: thatsnomoon/highlights-jaeger-cassandra-setup:1.0.0
+    networks:
+      - net
+    environment:
+      MODE: "prod"
+      DATACENTER: "dc1"
+      REPLICATION_FACTOR: 1
     depends_on:
       cassandra:
         condition: service_healthy
@@ -66,9 +72,10 @@ services:
     volumes:
       - "cassandra-data:/opt/cassandra/data"
     healthcheck:
-      test: ["CMD", "cqlsh", "-e", "use jaeger_v1_test;"]
+      test: ["CMD", "cqlsh", "-e", "show version;"]
       interval: 30s
       timeout: 10s
+    restart: unless-stopped
 
 
 secrets:

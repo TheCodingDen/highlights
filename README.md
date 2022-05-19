@@ -16,7 +16,7 @@ For self-hosters, highlights includes:
 - Performance monitoring and observability with [Jaeger](https://jaegertracing.io/)
 
 ## Docker
-You can find a Dockerfile in this repository, or use [`thatsnomoon/highlights`](https://hub.docker.com/r/thatsnomoon/highlights). Also provided is a `docker-compose.yml` that will organize Highlights, a Jaeger agent, collector, and query server, and Cassandra, though for the time being you'll have to set up Cassandra to store Jaeger logs yourself.
+You can find a Dockerfile in this repository, or use [`thatsnomoon/highlights`](https://hub.docker.com/r/thatsnomoon/highlights). Also provided is a `docker-compose.yml` that will organize Highlights, a Jaeger agent, collector, and query server, and Cassandra, and should set up Cassandra to accept Jaeger logs.
 
 ## Download
 You can find downloads for 64 bit Windows and Linux, as well as 64 bit Linux ARM (for e.g. Raspberry Pi) on [the releases page](https://github.com/ThatsNoMoon/highlights/releases/).
