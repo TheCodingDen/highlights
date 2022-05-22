@@ -1,0 +1,166 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release-amd64:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Extract version from tag
+        id: version
+        uses: damienaicheh/extract-version-from-tag-action@v1.0.0
+
+      - name: Build
+        run: cargo build --release --verbose
+
+      - name: Archive executable (linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: ./target/release
+        run: tar czvf ../../highlights-linux-amd64.tar.gz highlights
+
+      - name: Archive executable (mac)
+        if: matrix.os == 'macos-latest'
+        working-directory: ./target/release
+        run: tar czvf ../../highlights-macos-amd64.tar.gz highlights
+
+      - name: Archive executable (windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: ./target/release
+        run: Compress-Archive -LiteralPath highlights.exe -DestinationPath ../../highlights-windows-amd64.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: highlights-*
+          draft: true
+          prerelease: ${{ steps.version.outputs.PRE_RELEASE != ''}}
+
+  release-macos-aarch64:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Extract version from tag
+        id: version
+        uses: damienaicheh/extract-version-from-tag-action@v1.0.0
+
+      - name: Install latest stable rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-apple-darwin
+          default: true
+          override: true
+
+      - name: Build
+        run: cargo build --release --target aarch64-apple-darwin --verbose
+
+      - name: Archive executable
+        working-directory: ./target/release
+        run: tar czvf ../../highlights-macos-aarch64.tar.gz highlights
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: highlights-*
+          draft: true
+          prerelease: ${{ steps.version.outputs.PRE_RELEASE != ''}}
+
+  release-linux-aarch64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Extract version from tag
+        id: version
+        uses: damienaicheh/extract-version-from-tag-action@v1.0.0
+
+      - name: Install latest stable rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-linux-gnu
+          default: true
+          override: true
+
+      - name: Build
+        run: cargo build --release --target aarch64-linux-gnu --verbose
+
+      - name: Archive executable
+        working-directory: ./target/release
+        run: tar czvf ../../highlights-linux-aarch64.tar.gz highlights
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: highlights-*
+          draft: true
+          prerelease: ${{ steps.version.outputs.PRE_RELEASE != ''}}
+
+  release-docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Extract version from tag
+        id: version
+        uses: damienaicheh/extract-version-from-tag-action@v1.0.0
+
+      - name: Login
+        uses: docker/login-action@v1
+        with:
+          username: thatsnomoon
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push amd64
+        uses: docker/build-push-action@v2
+        with:
+          context: ./
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            thatsnomoon/highlights:latest
+            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}.${{ steps.version.outputs.PATCH }}
+            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}
+            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}
+          cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
+          cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
+
+      - name: Build and push arm64
+        uses: docker/build-push-action@v2
+        with:
+          context: ./
+          file: ./Dockerfile
+          platforms: linux/arm64
+          build-args: |
+            RUSTTARGET=aarch64-unknown-linux-musl
+            MUSLHOST=x86_64-linux-musl
+            MUSLTARGET=aarch64-linux-musl
+          push: true
+          tags: |
+            thatsnomoon/highlights:latest
+            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}.${{ steps.version.outputs.PATCH }}
+            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}
+            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}
+          cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
+          cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
