@@ -52,6 +52,10 @@ jobs:
           echo [target.${{ matrix.target }}] > .cargo/config.toml
           echo linker = '"'${{ matrix.linker }}'"' >> .cargo/config.toml
 
+      - name: Install cross-compiling toolchain
+        if: matrix.cross
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build
         if: "!matrix.cross"
         run: cargo build --release --verbose
