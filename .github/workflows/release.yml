@@ -5,12 +5,35 @@ on:
       - "v*"
 
 jobs:
-  release-amd64:
+  create-release:
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - build: linux-amd64
+            os: ubuntu-latest
+            cross: false
+
+          - build: macos-amd64
+            os: macos-latest
+            cross: false
+
+          - build: windows-amd64
+            os: windows-latest
+            cross: false
+
+          - build: linux-aarch64
+            os: ubuntu-latest
+            cross: true
+            linker-package: gcc-aarch64-linux-gnu
+            linker: aarch64-linux-gnu-gcc
+            target: aarch64-unknown-linux-gnu
+
+          - build: macos-aarch64
+            os: macos-latest
+            cross: true
+            target: aarch64-apple-darwin
 
     steps:
       - name: Checkout
@@ -20,89 +43,43 @@ jobs:
         id: version
         uses: damienaicheh/extract-version-from-tag-action@v1.0.0
 
+      - name: Install cross-compiler
+        if: matrix.os == 'ubuntu-latest' && matrix.cross
+        run: |
+          sudo apt update
+          sudo apt install ${{ matrix.linker-package }}
+          mkdir -p .cargo
+          echo [target.${{ matrix.target }}] > .cargo/config.toml
+          echo linker = '"'${{ matrix.linker }}'"' >> .cargo/config.toml
+
       - name: Build
+        if: "!matrix.cross"
         run: cargo build --release --verbose
 
-      - name: Archive executable (linux)
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: ./target/release
-        run: tar czvf ../../highlights-linux-amd64.tar.gz highlights
+      - name: Build (linux cross)
+        if: matrix.os == 'ubuntu-latest' && matrix.cross
+        run: cargo build --release --verbose --target ${{ matrix.target }}
+        env:
+          CC: ${{ matrix.linker }}
 
-      - name: Archive executable (mac)
-        if: matrix.os == 'macos-latest'
+      - name: Build (mac cross)
+        if: matrix.os == 'macos-latest' && matrix.cross
+        run: cargo build --release --verbose --target ${{ matrix.target }}
+
+      - name: Archive executable
+        if: matrix.os != 'windows-latest' && !matrix.cross
         working-directory: ./target/release
-        run: tar czvf ../../highlights-macos-amd64.tar.gz highlights
+        run: tar czvf ../../highlights-${{ matrix.build }}.tar.gz highlights
+
+      - name: Archive executable (cross)
+        if: matrix.os != 'windows-latest' && matrix.cross
+        working-directory: ./target/${{ matrix.target }}/release
+        run: tar czvf ../../../highlights-${{ matrix.build }}.tar.gz highlights
 
       - name: Archive executable (windows)
         if: matrix.os == 'windows-latest'
         working-directory: ./target/release
         run: Compress-Archive -LiteralPath highlights.exe -DestinationPath ../../highlights-windows-amd64.zip
-
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: highlights-*
-          draft: true
-          prerelease: ${{ env.PRE_RELEASE != ''}}
-
-  release-macos-aarch64:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Extract version from tag
-        id: version
-        uses: damienaicheh/extract-version-from-tag-action@v1.0.0
-
-      - name: Install latest stable rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: aarch64-apple-darwin
-          default: true
-          override: true
-
-      - name: Build
-        run: cargo build --release --target aarch64-apple-darwin --verbose
-
-      - name: Archive executable
-        working-directory: ./target/aarch64-apple-darwin/release
-        run: tar czvf ../../../highlights-macos-aarch64.tar.gz highlights
-
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: highlights-*
-          draft: true
-          prerelease: ${{ env.PRE_RELEASE != ''}}
-
-  release-linux-aarch64:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Extract version from tag
-        id: version
-        uses: damienaicheh/extract-version-from-tag-action@v1.0.0
-
-      - name: Install latest stable rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: aarch64-unknown-linux-gnu
-          default: true
-          override: true
-
-      - name: Build
-        run: cargo build --release --target aarch64-unknown-linux-gnu --verbose
-
-      - name: Archive executable
-        working-directory: ./target/aarch64-unknown-linux-gnu/release
-        run: tar czvf ../../../highlights-linux-aarch64.tar.gz highlights
 
       - name: Create release
         uses: softprops/action-gh-release@v1
