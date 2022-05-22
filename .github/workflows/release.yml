@@ -68,8 +68,8 @@ jobs:
         run: cargo build --release --target aarch64-apple-darwin --verbose
 
       - name: Archive executable
-        working-directory: ./target/release
-        run: tar czvf ../../highlights-macos-aarch64.tar.gz highlights
+        working-directory: ./target/aarch64-apple-darwin/release
+        run: tar czvf ../../../highlights-macos-aarch64.tar.gz highlights
 
       - name: Create release
         uses: softprops/action-gh-release@v1
@@ -93,16 +93,16 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: aarch64-linux-gnu
+          target: aarch64-unknown-linux-gnu
           default: true
           override: true
 
       - name: Build
-        run: cargo build --release --target aarch64-linux-gnu --verbose
+        run: cargo build --release --target aarch64-unknown-linux-gnu --verbose
 
       - name: Archive executable
-        working-directory: ./target/release
-        run: tar czvf ../../highlights-linux-aarch64.tar.gz highlights
+        working-directory: ./target/aarch64-unknown-linux-gnu/release
+        run: tar czvf ../../../highlights-linux-aarch64.tar.gz highlights
 
       - name: Create release
         uses: softprops/action-gh-release@v1
