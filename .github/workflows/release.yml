@@ -43,7 +43,7 @@ jobs:
         with:
           files: highlights-*
           draft: true
-          prerelease: ${{ steps.version.outputs.PRE_RELEASE != ''}}
+          prerelease: ${{ env.PRE_RELEASE != ''}}
 
   release-macos-aarch64:
     runs-on: macos-latest
@@ -76,7 +76,7 @@ jobs:
         with:
           files: highlights-*
           draft: true
-          prerelease: ${{ steps.version.outputs.PRE_RELEASE != ''}}
+          prerelease: ${{ env.PRE_RELEASE != ''}}
 
   release-linux-aarch64:
     runs-on: ubuntu-latest
@@ -109,7 +109,7 @@ jobs:
         with:
           files: highlights-*
           draft: true
-          prerelease: ${{ steps.version.outputs.PRE_RELEASE != ''}}
+          prerelease: ${{ env.PRE_RELEASE != ''}}
 
   release-docker:
     runs-on: ubuntu-latest
@@ -140,9 +140,9 @@ jobs:
           push: true
           tags: |
             thatsnomoon/highlights:latest
-            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}.${{ steps.version.outputs.PATCH }}
-            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}
-            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}
+            thatsnomoon/highlights:${{ env.MAJOR }}
           cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
           cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
 
@@ -159,8 +159,8 @@ jobs:
           push: true
           tags: |
             thatsnomoon/highlights:latest
-            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}.${{ steps.version.outputs.PATCH }}
-            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}.${{ steps.version.outputs.MINOR }}
-            thatsnomoon/highlights:${{ steps.version.outputs.MAJOR }}
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}
+            thatsnomoon/highlights:${{ env.MAJOR }}
           cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
           cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
