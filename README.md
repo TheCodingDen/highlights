@@ -18,6 +18,13 @@ For self-hosters, highlights includes:
 ## Docker
 You can find a Dockerfile in this repository, or use [`thatsnomoon/highlights`](https://hub.docker.com/r/thatsnomoon/highlights). Also provided is a `docker-compose.yml` that will organize Highlights, a Jaeger agent, collector, and query server, and Cassandra, and should set up Cassandra to accept Jaeger logs.
 
+### AArch64, other alternate architectures
+
+The Dockerfile provided supports building to any architecture supported by both Rust and [musl.cc](https://musl.cc). I build `thatsnomoon/highlights` for AArch64 alongside x86_64; if you need a different architecture, use `docker buildx build` with `--platform=linux/<architecture>` and provide appropriate values for the following build args:
+- `--build-arg RUSTTARGET=<rust target triple>` (ex: `aarch64-unknown-linux-musl`)
+- `--build-arg MUSLHOST=<musl host triple>` (ex: `x86_64-linux-musl`; see [supported musl.cc hosts](https://more.musl.cc/10.2.1))
+- `--build-arg MUSLTARGET=<musl target triple>` (ex: `aarch64-linux-musl`; for x86_64, see [supported musl.cc targets here](https://more.musl.cc/10.2.1/x86_64-linux-musl))
+
 ## Download
 You can find downloads for 64 bit Windows and Linux, as well as 64 bit Linux ARM (for e.g. Raspberry Pi) on [the releases page](https://github.com/ThatsNoMoon/highlights/releases/).
 
