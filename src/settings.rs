@@ -283,8 +283,8 @@ impl Settings {
 		let b = ConfigBuilder::<DefaultState>::default();
 
 		#[cfg(feature = "bot")]
-		let b = b.set_default("behavior.max_keywords", 100u32)?
-			.set_default("behavior.patience_seconds", 60u64 * 2)?
+		let b = b.set_default("behavior.max_keywords", 100i64)?
+			.set_default("behavior.patience_seconds", 60i64 * 2)?
 			.set_default("bot.private", false)?;
 
 		#[cfg(feature = "monitoring")]
