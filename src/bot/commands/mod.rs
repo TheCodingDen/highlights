@@ -29,6 +29,7 @@ use serenity::{
 		Permissions,
 	},
 };
+use tracing::{debug, info};
 
 pub(crate) use self::{
 	blocks::{block, blocks, unblock},
@@ -46,13 +47,13 @@ use crate::{
 
 // Create all slash commands globally, and in a test guild if configured.
 pub(crate) async fn create_commands(ctx: Context) {
-	tracing::info!("Registering slash commands");
+	info!("Registering slash commands");
 	let commands = COMMAND_INFO
 		.iter()
 		.map(CommandInfo::create)
 		.collect::<Vec<_>>();
 	if let Some(guild) = settings().bot.test_guild {
-		tracing::debug!("Registering commands in test guild");
+		debug!("Registering commands in test guild");
 
 		guild
 			.set_application_commands(&ctx, |create| {

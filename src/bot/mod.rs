@@ -38,8 +38,9 @@ use serenity::{
 };
 use tinyvec::TinyVec;
 use tracing::{
+	debug, error,
 	field::{display, Empty},
-	info_span, Span,
+	info, info_span, Span,
 };
 
 use self::highlighting::CachedMessages;
@@ -138,7 +139,7 @@ async fn ready(ctx: Context) {
 
 	commands::create_commands(ctx).await;
 
-	tracing::info!("Ready to highlight!");
+	info!("Ready to highlight!");
 }
 
 /// Finds notifications for an updated message and uses
@@ -183,7 +184,7 @@ async fn handle_update(
 	{
 		Ok(n) => n,
 		Err(e) => {
-			tracing::error!("{:?}", e);
+			error!("{:?}", e);
 			return;
 		}
 	};
@@ -203,7 +204,7 @@ async fn handle_update(
 			{
 				Ok(m) => m,
 				Err(e) => {
-					tracing::error!("{:?}", e);
+					error!("{:?}", e);
 					return;
 				}
 			}
@@ -256,7 +257,7 @@ async fn handle_deletion(
 				})
 				.collect::<Vec<_>>(),
 			Err(e) => {
-				tracing::error!("{:?}", e);
+				error!("{:?}", e);
 				return;
 			}
 		};
@@ -270,7 +271,7 @@ async fn handle_deletion(
 	if let Err(e) =
 		Notification::delete_notifications_of_message(message_id).await
 	{
-		tracing::error!("{:?}", e);
+		error!("{:?}", e);
 	}
 }
 
@@ -296,6 +297,8 @@ async fn handle_keywords(ctx: &Context, message: &Message, guild_id: GuildId) {
 		let _entered = span.enter();
 
 		let lowercase_content = &message.content.to_lowercase();
+
+		debug!("Getting keywords");
 
 		let keywords_by_user = Keyword::get_relevant_keywords(
 			guild_id,
@@ -342,8 +345,11 @@ async fn handle_keywords(ctx: &Context, message: &Message, guild_id: GuildId) {
 				.await?;
 
 			if keywords.is_empty() {
+				debug!("No keywords for {user_id}");
 				continue;
 			}
+
+			debug!("Notifying {user_id} of {} keywords", keywords.len());
 
 			let ctx = ctx.clone();
 			futures.push(highlighting::notify_keywords(
@@ -363,7 +369,7 @@ async fn handle_keywords(ctx: &Context, message: &Message, guild_id: GuildId) {
 	.await;
 
 	if let Err(e) = res.context("Failed to handle keywords") {
-		tracing::error!("{:?}", e);
+		error!("{:?}", e);
 	}
 }
 
@@ -441,7 +447,7 @@ async fn handle_command(ctx: Context, command: Command) {
 	};
 
 	if let Err(e) = result {
-		tracing::debug!("Reporting failure to user");
+		debug!("Reporting failure to user");
 		const BUG_REPORT_PROMPT: &str =
 			"I would appreciate if you could take a minute to [file a bug report]\
 			(https://github.com/ThatsNoMoon/highlights/issues/new?template=bug_report.md) \
@@ -501,10 +507,10 @@ async fn handle_command(ctx: Context, command: Command) {
 			Err(e) => Err(e).context("Failed to send failure response"),
 		};
 
-		tracing::error!("{:?}", e);
+		error!("{:?}", e);
 
 		if let Err(e) = response_result {
-			tracing::error!("{:?}", e);
+			error!("{:?}", e);
 		}
 	}
 
@@ -512,7 +518,7 @@ async fn handle_command(ctx: Context, command: Command) {
 		.await
 		.context("Failed to check and notify user state")
 	{
-		tracing::error!("{:?}", e);
+		error!("{:?}", e);
 	}
 }
 

@@ -12,6 +12,7 @@ use std::{
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
 use tokio::{fs, task, time::interval};
+use tracing::{debug, error, info, warn};
 
 use super::connection;
 
@@ -122,7 +123,7 @@ async fn clean_backups(backup_dir: &Path) {
 					// includes some wiggle room so backups made 23.99999 hours
 					// apart aren't deleted
 					if gap < Duration::days(1) - Duration::minutes(1) {
-						tracing::debug!(
+						debug!(
 							"Deleting old restart backup from {}",
 							time.date()
 						);
@@ -133,7 +134,7 @@ async fn clean_backups(backup_dir: &Path) {
 					}
 				} else if weekly_found < 4 {
 					if gap < Duration::weeks(1) - Duration::minutes(10) {
-						tracing::debug!(
+						debug!(
 							"Deleting old daily backup from {}",
 							time.date()
 						);
@@ -144,7 +145,7 @@ async fn clean_backups(backup_dir: &Path) {
 					}
 				} else if monthly_found < 12 {
 					if gap < Duration::days(30) - Duration::minutes(30) {
-						tracing::debug!(
+						debug!(
 							"Deleting old weekly backup from {}",
 							time.date()
 						);
@@ -154,10 +155,7 @@ async fn clean_backups(backup_dir: &Path) {
 						monthly_found += 1;
 					}
 				} else if gap < Duration::days(364) {
-					tracing::debug!(
-						"Deleting old monthly backup from {}",
-						time.date()
-					);
+					debug!("Deleting old monthly backup from {}", time.date());
 					results.push(fs::remove_file(path).await);
 				} else {
 					last_time = time;
@@ -173,7 +171,7 @@ async fn clean_backups(backup_dir: &Path) {
 	let mut dir = match fs::read_dir(&backup_dir).await {
 		Ok(dir) => dir,
 		Err(e) => {
-			tracing::error!(
+			error!(
 				"Error reading backup directory for cleaning: {0}\n{0:?}",
 				e
 			);
@@ -185,12 +183,12 @@ async fn clean_backups(backup_dir: &Path) {
 		match dir.next_entry().await {
 			Ok(Some(dir)) => {
 				if let Err(path) = backups.add(dir.path()) {
-					tracing::warn!("Invalid backup name: {:?}", path);
+					warn!("Invalid backup name: {:?}", path);
 				}
 			}
 			Ok(None) => break,
 			Err(e) => {
-				tracing::error!(
+				error!(
 					"Error reading backup directory for cleaning: {0}\n{0:?}",
 					e
 				);
@@ -201,7 +199,7 @@ async fn clean_backups(backup_dir: &Path) {
 
 	for result in backups.clean().await {
 		if let Err(e) = result {
-			tracing::error!("Error cleaning backup: {0}\n{0:?}", e);
+			error!("Error cleaning backup: {0}\n{0:?}", e);
 		}
 	}
 }
@@ -219,18 +217,15 @@ pub(crate) fn start_backup_cycle(backup_dir: PathBuf) {
 		loop {
 			daily.tick().await;
 
-			tracing::info!("Backing up database...");
+			info!("Backing up database...");
 			if let Err(error) = ensure_backup_dir_exists(&backup_dir).await {
-				tracing::error!(
-					"Failed to create backup directory: {0}\n{0:?}",
-					error
-				);
+				error!("Failed to create backup directory: {0}\n{0:?}", error);
 				continue;
 			}
 
-			tracing::info!("Cleaning up old backups...");
+			info!("Cleaning up old backups...");
 			if let Err(error) = create_backup(backup_dir.clone()).await {
-				tracing::error!("Error backing up database: {0}\n{0:?}", error);
+				error!("Error backing up database: {0}\n{0:?}", error);
 			}
 
 			clean_backups(&backup_dir).await;

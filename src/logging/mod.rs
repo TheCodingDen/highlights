@@ -4,7 +4,7 @@
 //! Logging setup using [`tracing`].
 
 use anyhow::Result;
-use tracing::Metadata;
+use tracing::{warn, Metadata};
 use tracing_subscriber::{
 	filter::FilterFn,
 	layer::{Layer, SubscriberExt},
@@ -72,14 +72,12 @@ pub(crate) fn init() -> Result<()> {
 
 	#[cfg(feature = "monitoring")]
 	if !is_monitoring {
-		tracing::warn!(
-			"Jaeger agent address not provided; not reporting traces"
-		);
+		warn!("Jaeger agent address not provided; not reporting traces");
 	}
 
 	#[cfg(feature = "reporting")]
 	if !is_reporting {
-		tracing::warn!("Webhook URL is not present, not reporting panics");
+		warn!("Webhook URL is not present, not reporting panics");
 	}
 
 	Ok(())

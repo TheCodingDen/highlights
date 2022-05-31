@@ -12,9 +12,10 @@ use reqwest::{
 };
 use serde::Serialize;
 use tracing::{
+	error,
 	metadata::LevelFilter,
 	span::{Attributes, Record},
-	Event, Id, Subscriber,
+	warn, Event, Id, Subscriber,
 };
 use tracing_subscriber::{
 	fmt::{format::DefaultFields, FormatFields, FormattedFields},
@@ -155,7 +156,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WebhookLayer {
 				.send()
 				.await
 			{
-				tracing::warn!("Error reporting error: {}", e)
+				warn!("Error reporting error: {}", e)
 			}
 		});
 	}
@@ -196,7 +197,7 @@ pub(crate) fn init() -> Option<WebhookLayer> {
 			let url = url.clone();
 			Box::new(move |info| {
 				if let Err(e) = report_panic(info, url.clone()) {
-					tracing::error!("Error reporting panic: {}", e);
+					error!("Error reporting panic: {}", e);
 				}
 
 				default_panic_hook(info);

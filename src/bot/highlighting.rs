@@ -23,6 +23,7 @@ use serenity::{
 };
 use tinyvec::TinyVec;
 use tokio::{select, time::sleep};
+use tracing::{debug, error};
 
 use crate::{
 	bot::util::{followup_eph, user_can_read_channel},
@@ -73,16 +74,19 @@ pub(crate) async fn should_notify_keyword(
 		.iter()
 		.any(|mention| mention.id == keyword.user_id)
 	{
+		debug!("Message mentions user, not processing keyword");
 		return Ok(false);
 	}
 
 	for ignore in ignores {
 		if keyword_matches(&ignore.phrase, content) {
+			debug!("Matching ignore found, not processing keyword");
 			return Ok(false);
 		}
 	}
 
 	if !keyword_matches(&keyword.keyword, content) {
+		debug!("Keyword didn't match");
 		return Ok(false);
 	}
 
@@ -157,13 +161,15 @@ pub(crate) async fn notify_keywords(
 		.author_id(user_id)
 		.timeout(settings().behavior.patience);
 
+	debug!("Waiting for reaction or reply");
+
 	select! {
 		reaction = reaction => reply_or_reaction = reaction.map(|_| ()),
 		reply = reply => reply_or_reaction = reply.map(|_| ()),
 	}
 
 	if reply_or_reaction.is_none() {
-		tracing::debug!("Recipient did not interact within patience duration");
+		debug!("Recipient did not interact within patience duration");
 		let result: Result<()> = async {
 			let content = match ctx
 				.data
@@ -175,14 +181,12 @@ pub(crate) async fn notify_keywords(
 			{
 				Some(m) => m,
 				None => {
-					tracing::debug!(
-						"Original message not found in cache - deleted"
-					);
+					debug!("Original message not found in cache - deleted");
 					return Ok(());
 				}
 			};
 
-			tracing::debug!("Original message found in cache");
+			debug!("Original message found in cache");
 
 			message.content = content;
 
@@ -203,7 +207,7 @@ pub(crate) async fn notify_keywords(
 				.await?;
 
 			if keywords.is_empty() {
-				tracing::debug!("No keywords to notify after being patient");
+				debug!("No keywords to notify after being patient");
 				return Ok(());
 			}
 
@@ -223,7 +227,7 @@ pub(crate) async fn notify_keywords(
 		.await;
 
 		if let Err(error) = result {
-			tracing::error!("{:?}", error);
+			error!("{:?}", error);
 		}
 	}
 }
@@ -472,7 +476,7 @@ pub(crate) async fn delete_sent_notifications(
 		.await;
 
 		if let Err(e) = result {
-			tracing::error!("{:?}", e);
+			error!("{:?}", e);
 		}
 	}
 }
@@ -547,7 +551,7 @@ pub(crate) async fn update_sent_notifications(
 		.await;
 
 		if let Err(e) = result {
-			tracing::error!("Failed to update notification: {:?}", e);
+			error!("Failed to update notification: {:?}", e);
 		}
 	}
 
@@ -558,7 +562,7 @@ pub(crate) async fn update_sent_notifications(
 			Notification::delete_notification_message(notification_message)
 				.await
 		{
-			tracing::error!("Failed to delete notification message: {:?}", e);
+			error!("Failed to delete notification message: {:?}", e);
 		}
 	}
 }
