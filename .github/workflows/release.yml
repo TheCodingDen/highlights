@@ -120,8 +120,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: thatsnomoon/highlights-amd64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
-          cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
-          cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
+          cache-from: type=registry,ref=thatsnomoon/highlights:buildcache-amd64
+          cache-to: type=registry,ref=thatsnomoon/highlights:buildcache-amd64,mode=max
 
       - name: Build and push arm64
         uses: docker/build-push-action@v2
@@ -135,8 +135,8 @@ jobs:
             MUSLTARGET=aarch64-linux-musl
           push: true
           tags: thatsnomoon/highlights-arm64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
-          cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
-          cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
+          cache-from: type=registry,ref=thatsnomoon/highlights:buildcache-arm64
+          cache-to: type=registry,ref=thatsnomoon/highlights:buildcache-arm64,mode=max
 
       - name: Create and push multi-arch manifest
         run: "\
