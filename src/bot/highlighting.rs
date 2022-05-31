@@ -394,10 +394,11 @@ async fn send_notification_message(
 	let mut result = Ok(());
 
 	for _ in 0..NOTIFICATION_RETRIES {
-		let mut message_to_send = message_to_send.clone();
-
 		match dm_channel
-			.send_message(&ctx, |_| &mut message_to_send)
+			.send_message(&ctx, |m| {
+				*m = message_to_send.clone();
+				m
+			})
 			.await
 		{
 			Ok(sent_message) => {
