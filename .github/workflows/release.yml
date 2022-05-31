@@ -119,11 +119,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          tags: |
-            thatsnomoon/highlights:latest
-            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
-            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}
-            thatsnomoon/highlights:${{ env.MAJOR }}
+          tags: thatsnomoon/highlights-amd64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
           cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
           cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
 
@@ -138,10 +134,33 @@ jobs:
             MUSLHOST=x86_64-linux-musl
             MUSLTARGET=aarch64-linux-musl
           push: true
-          tags: |
-            thatsnomoon/highlights:latest
-            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
-            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}
-            thatsnomoon/highlights:${{ env.MAJOR }}
+          tags: thatsnomoon/highlights-arm64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}
           cache-from: type=registry,ref=thatsnomoon/highlights:buildcache
           cache-to: type=registry,ref=thatsnomoon/highlights:buildcache,mode=max
+
+      - name: Create and push multi-arch manifest
+        run: "\
+          docker manifest create thatsnomoon/highlights:latest \
+            thatsnomoon/highlights-amd64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }} \
+            thatsnomoon/highlights-arm64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}\n\
+          docker manifest create \
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }} \
+            thatsnomoon/highlights-amd64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }} \
+            thatsnomoon/highlights-arm64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}\n\
+          docker manifest create \
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }} \
+            thatsnomoon/highlights-amd64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }} \
+            thatsnomoon/highlights-arm64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}\n\
+          docker manifest create \
+            thatsnomoon/highlights:${{ env.MAJOR }} \
+            thatsnomoon/highlights-amd64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }} \
+            thatsnomoon/highlights-arm64:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}\n\
+
+
+          docker manifest push thatsnomoon/highlights:latest\n\
+          docker manifest push \
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}.${{ env.PATCH }}\n\
+          docker manifest push \
+            thatsnomoon/highlights:${{ env.MAJOR }}.${{ env.MINOR }}\n\
+          docker manifest push \
+            thatsnomoon/highlights:${{ env.MAJOR }}"
