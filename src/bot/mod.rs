@@ -534,7 +534,8 @@ impl TypeMapKey for Shards {
 pub(crate) async fn init() -> Result<()> {
 	let mut client = Client::builder(
 		&settings().bot.token,
-		GatewayIntents::DIRECT_MESSAGES
+		GatewayIntents::MESSAGE_CONTENT
+			| GatewayIntents::DIRECT_MESSAGES
 			| GatewayIntents::GUILD_MESSAGE_REACTIONS
 			| GatewayIntents::GUILD_MESSAGES
 			| GatewayIntents::GUILDS
