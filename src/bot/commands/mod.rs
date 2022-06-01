@@ -41,7 +41,9 @@ pub(crate) use self::{
 };
 use super::Shards;
 use crate::{
-	bot::util::respond, global::EMBED_COLOR, require_embed_perms,
+	bot::{util::respond, STARTED},
+	global::EMBED_COLOR,
+	require_embed_perms,
 	settings::settings,
 };
 
@@ -150,6 +152,29 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 		)
 	};
 
+	let uptime = STARTED.get().expect("Start time not set").elapsed();
+
+	let uptime = {
+		let seconds = uptime.as_secs();
+
+		let days = seconds / 86_400;
+		let hours = seconds / 3600 % 24;
+		let minutes = seconds / 60 % 60;
+		let seconds = seconds % 60;
+
+		if days >= 20 {
+			format!("{days} days")
+		} else if days > 0 {
+			format!("{days} days, {hours} hours")
+		} else if hours > 0 {
+			format!("{hours} hours, {minutes} minutes")
+		} else if minutes > 0 {
+			format!("{minutes} minutes, {seconds} seconds")
+		} else {
+			format!("{seconds} seconds")
+		}
+	};
+
 	command
 		.create_interaction_response(&ctx, |r| {
 			r.interaction_response_data(|m| {
@@ -170,7 +195,7 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 							true,
 						);
 					};
-					e
+					e.field("Uptime", uptime, true)
 				})
 			})
 		})

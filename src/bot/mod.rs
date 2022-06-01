@@ -8,13 +8,14 @@ mod util;
 mod commands;
 mod highlighting;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use anyhow::{Context as _, Result};
 use futures_util::{
 	stream::{self, FuturesUnordered},
 	StreamExt, TryStreamExt,
 };
+use once_cell::sync::OnceCell;
 use serenity::{
 	builder::CreateEmbed,
 	client::{bridge::gateway::ShardManager, Client, Context, EventHandler},
@@ -128,8 +129,11 @@ impl EventHandler for Handler {
 	}
 }
 
-/// Sets the bot's activity to "Listening to /help" and
-/// [creates slash commands](commands::create_commands).
+/// [`Instant`] of when the bot was started.
+static STARTED: OnceCell<Instant> = OnceCell::new();
+
+/// Sets the bot's activity to "Listening to /help",
+/// [creates slash commands](commands::create_commands), and sets [`STARTED`].
 async fn ready(ctx: Context) {
 	let span = info_span!(parent: None, "ready");
 
@@ -138,6 +142,8 @@ async fn ready(ctx: Context) {
 	ctx.set_activity(Activity::listening("/help")).await;
 
 	commands::create_commands(ctx).await;
+
+	let _ = STARTED.set(Instant::now());
 
 	info!("Ready to highlight!");
 }
