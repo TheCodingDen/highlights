@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use futures_util::{stream, StreamExt, TryStreamExt};
 use indoc::indoc;
 use lazy_regex::regex;
@@ -14,7 +14,7 @@ use serenity::{
 	client::Context,
 	http::{error::ErrorResponse, HttpError},
 	model::{
-		channel::Message,
+		channel::{Channel, Message},
 		id::{GuildId, MessageId, UserId},
 		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
@@ -93,7 +93,7 @@ pub(crate) async fn should_notify_keyword(
 	let channel = match ctx.cache.guild_channel(message.channel_id) {
 		Some(c) => c,
 		None => match ctx.http.get_channel(message.channel_id.0).await? {
-			serenity::model::channel::Channel::Guild(c) => c,
+			Channel::Guild(c) => c,
 			_ => {
 				return Err(anyhow!(
 					"Channel {} wasn't a guild channel",
@@ -211,9 +211,9 @@ pub(crate) async fn notify_keywords(
 				return Ok(());
 			}
 
-			let message_to_send = build_notification_message(
-				&ctx, &message, &keywords, guild_id,
-			)?;
+			let message_to_send =
+				build_notification_message(&ctx, &message, &keywords, guild_id)
+					.await?;
 
 			send_notification_message(
 				&ctx,
@@ -236,13 +236,14 @@ pub(crate) async fn notify_keywords(
 ///
 /// Uses [`build_notification_embed`] to create the embed to include in the
 /// message.
-fn build_notification_message(
+async fn build_notification_message(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
 	guild_id: GuildId,
 ) -> Result<CreateMessage<'static>> {
-	let embed = build_notification_embed(ctx, message, keywords, guild_id)?;
+	let embed =
+		build_notification_embed(ctx, message, keywords, guild_id).await?;
 
 	let mut msg = CreateMessage::default();
 
@@ -259,13 +260,14 @@ fn build_notification_message(
 ///
 /// Uses [`build_notification_embed`] to create the embed to include in the
 /// message.
-fn build_notification_edit(
+async fn build_notification_edit(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
 	guild_id: GuildId,
 ) -> Result<EditMessage<'static>> {
-	let embed = build_notification_embed(ctx, message, keywords, guild_id)?;
+	let embed =
+		build_notification_embed(ctx, message, keywords, guild_id).await?;
 
 	let mut msg = EditMessage::default();
 
@@ -297,7 +299,7 @@ fn build_notification_edit(
 		channel_id = %message.channel_id,
 	)
 )]
-fn build_notification_embed(
+async fn build_notification_embed(
 	ctx: &Context,
 	message: &Message,
 	keywords: &[String],
@@ -308,10 +310,27 @@ fn build_notification_embed(
 		guild_id, message.channel_id, message.id
 	);
 
-	let channel_name = ctx
+	let channel_name = match ctx
 		.cache
 		.guild_channel_field(message.channel_id, |c| c.name.clone())
-		.context("Couldn't get channel for keyword")?;
+	{
+		Some(n) => n,
+		None => {
+			match ctx
+				.http
+				.get_channel(message.channel_id.0)
+				.await
+				.context("Failed to fetch channel for keyword")?
+			{
+				Channel::Guild(gc) => gc.name,
+				Channel::Private(_) => {
+					bail!("Private channel received for keyword")
+				}
+				Channel::Category(_) => bail!("Category received for keyword"),
+				_ => bail!("Unknown channel type received for keyword"),
+			}
+		}
+	};
 	let (guild_name, guild_icon) = ctx
 		.cache
 		.guild_field(guild_id, |g| (g.name.clone(), g.icon_url()))
@@ -533,7 +552,8 @@ pub(crate) async fn update_sent_notifications(
 
 		let result: Result<()> = async {
 			let message_to_send =
-				build_notification_edit(ctx, &message, &keywords, guild_id)?;
+				build_notification_edit(ctx, &message, &keywords, guild_id)
+					.await?;
 
 			let dm_channel = user_id
 				.create_dm_channel(ctx)
