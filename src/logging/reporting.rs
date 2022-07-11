@@ -3,7 +3,7 @@
 
 //! Error and panic reporting to a Discord webhook.
 
-use std::{fmt::Write, panic, time::Duration};
+use std::{fmt::Write, mem, panic, time::Duration};
 
 use anyhow::Result;
 use reqwest::{
@@ -18,7 +18,11 @@ use tracing::{
 	warn, Event, Id, Subscriber,
 };
 use tracing_subscriber::{
-	fmt::{format::DefaultFields, FormatFields, FormattedFields},
+	field::RecordFields,
+	fmt::{
+		format::{DefaultFields, Writer},
+		FormatFields, FormattedFields,
+	},
 	layer::{Context, Layer},
 	registry::LookupSpan,
 };
@@ -31,7 +35,7 @@ struct WebhookMessage {
 	content: String,
 }
 
-/// [`Layer`](Layer) for reporting errors to a webhook.
+/// [`Layer`] for reporting errors to a webhook.
 pub(crate) struct WebhookLayer {
 	url: Url,
 	client: Client,
@@ -47,6 +51,36 @@ impl WebhookLayer {
 	}
 }
 
+/// Proxy type for [`DefaultFields`].
+///
+/// This ensures that the webhook fields don't end up with ANSI control
+/// sequences, as they would if they shared a [`DefaultFields`] buffer with
+/// the [`tracing_subscriber::fmt::Layer`] outputting to stdout.
+struct WebhookFields;
+
+impl<'w> FormatFields<'w> for WebhookFields {
+	fn format_fields<R: RecordFields>(
+		&self,
+		writer: Writer<'w>,
+		fields: R,
+	) -> std::fmt::Result {
+		DefaultFields::new().format_fields(writer, fields)
+	}
+
+	fn add_fields(
+		&self,
+		current: &'w mut FormattedFields<Self>,
+		fields: &Record<'_>,
+	) -> std::fmt::Result {
+		let content = mem::take(&mut current.fields);
+		let mut new = FormattedFields::new(content);
+		let res = DefaultFields::new().add_fields(&mut new, fields);
+
+		current.fields = new.fields;
+		res
+	}
+}
+
 /// Formats `event` in the context `ctx` for display in a Discord webhook.
 fn format_event<S>(event: &Event<'_>, ctx: Context<'_, S>) -> String
 where
@@ -58,7 +92,7 @@ where
 	if let Some(scope) = ctx.event_scope(event) {
 		for span in scope.from_root() {
 			if let Some(fields) =
-				span.extensions().get::<FormattedFields<DefaultFields>>()
+				span.extensions().get::<FormattedFields<WebhookFields>>()
 			{
 				let _ = write!(contents, "__{}__", span.name());
 				if !fields.is_empty() {
@@ -82,11 +116,11 @@ where
 
 	let _ = write!(contents, "__{}__: ", metadata.target());
 
-	let mut formatter = FormattedFields::<DefaultFields>::new(contents);
+	let mut formatter = FormattedFields::<WebhookFields>::new(contents);
 
 	let writer = formatter.as_writer();
 
-	let _ = DefaultFields::new().format_fields(writer, event);
+	let _ = WebhookFields.format_fields(writer, event);
 
 	formatter.fields
 }
@@ -102,12 +136,12 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WebhookLayer {
 		let mut extensions = span.extensions_mut();
 
 		if extensions
-			.get_mut::<FormattedFields<DefaultFields>>()
+			.get_mut::<FormattedFields<WebhookFields>>()
 			.is_none()
 		{
 			let mut fields =
-				FormattedFields::<DefaultFields>::new(String::new());
-			if DefaultFields::new()
+				FormattedFields::<WebhookFields>::new(String::new());
+			if WebhookFields
 				.format_fields(fields.as_writer(), attrs)
 				.is_ok()
 			{
@@ -121,14 +155,14 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for WebhookLayer {
 		let mut extensions = span.extensions_mut();
 
 		if let Some(fields) =
-			extensions.get_mut::<FormattedFields<DefaultFields>>()
+			extensions.get_mut::<FormattedFields<WebhookFields>>()
 		{
-			let _ = DefaultFields::new().add_fields(fields, values);
+			let _ = WebhookFields.add_fields(fields, values);
 			return;
 		}
 
-		let mut fields = FormattedFields::<DefaultFields>::new(String::new());
-		if DefaultFields::new()
+		let mut fields = FormattedFields::<WebhookFields>::new(String::new());
+		if WebhookFields
 			.format_fields(fields.as_writer(), values)
 			.is_ok()
 		{
@@ -183,7 +217,7 @@ pub(crate) fn report_panic(
 /// Initializes webhook reporting.
 ///
 /// If a [webhook URL](crate::settings::LoggingSettings::webhook) is configured,
-/// registers [`report_panic`] as a panic hook and returns a[`WebhookLayer`] to
+/// registers [`report_panic`] as a panic hook and returns a [`WebhookLayer`] to
 /// be registered with [`tracing_subscriber`].
 ///
 /// If no webhook URL is configured, returns None.
