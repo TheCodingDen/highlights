@@ -4,7 +4,9 @@
 //! Logging setup using [`tracing`].
 
 use anyhow::Result;
-use tracing::{warn, Metadata};
+#[cfg(any(feature = "monitoring", feature = "reporting"))]
+use tracing::warn;
+use tracing::Metadata;
 use tracing_subscriber::{
 	filter::FilterFn,
 	layer::{Layer, SubscriberExt},
