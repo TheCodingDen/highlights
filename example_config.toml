@@ -31,7 +31,10 @@ color = true
 highlights = "INFO"
 
 [database]
-# The folder where database and backups are stored
+# The folder where the SQLite database and backups are stored
 path = "./data"
-# Whether to automatically backup database
+# Database connection URL for use with PostgreSQL (or SQLite, if desired.
+# Backups cannot be done using an SQLite URL.).
+#url = "postgres://username:password@host:port/database"
+# Whether to automatically backup SQLite database
 backup = true

@@ -11,9 +11,11 @@ You can add highlights to your server directly with [this link](https://discord.
 - Block obnoxious users
 
 For self-hosters, highlights includes:
-- Automatic backups and backup pruning
+- PostgreSQL and SQLite support
+- Automatic SQLite backups and backup pruning
 - Error reporting via [Discord webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)
 - Performance monitoring and observability with [Jaeger](https://jaegertracing.io/)
+- Feature flags for smaller custom builds
 
 ## Docker
 You can find a Dockerfile in this repository, or use [`thatsnomoon/highlights`](https://hub.docker.com/r/thatsnomoon/highlights). Also provided is a `docker-compose.yml` that will organize Highlights, a Jaeger agent, collector, and query server, and Cassandra, and should set up Cassandra to accept Jaeger logs.
