@@ -65,6 +65,7 @@ jobs:
         run: cargo build --release --verbose --target ${{ matrix.target }}
         env:
           CC: ${{ matrix.linker }}
+          TARGET: ${{ matrix.target }}
 
       - name: Build (mac cross)
         if: matrix.os == 'macos-latest' && matrix.cross
