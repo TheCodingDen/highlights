@@ -89,7 +89,16 @@ pub(crate) async fn init() -> Result<()> {
 					backup::start_backup_cycle(db_path, backup_dir);
 				}
 			}
-			(None, Some(url)) => init_connection(url.to_string()).await?,
+			(None, Some(url)) => {
+				init_connection(url.to_string()).await?;
+				#[cfg(feature = "backup")]
+				if settings().database.backup == Some(true) {
+					tracing::warn!(
+						"Backups cannot be done using a URL to \
+						connect to the database. Use a path instead."
+					);
+				}
+			}
 			(None, None) => {
 				bail!("One of database.path and database.url must be set")
 			}
