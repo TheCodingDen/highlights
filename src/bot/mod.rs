@@ -24,15 +24,14 @@ use serenity::{
 		HttpError,
 	},
 	model::{
+		application::interaction::{
+			application_command::ApplicationCommandInteraction as Command,
+			Interaction, MessageFlags,
+		},
 		channel::Message,
 		event::MessageUpdateEvent,
 		gateway::{Activity, GatewayIntents, Ready},
 		id::{ChannelId, GuildId, MessageId},
-		interactions::{
-			application_command::ApplicationCommandInteraction as Command,
-			Interaction,
-			InteractionApplicationCommandCallbackDataFlags as ResponseFlags,
-		},
 	},
 	prelude::{Mutex, TypeMapKey},
 	Error as SerenityError,
@@ -481,7 +480,7 @@ async fn handle_command(ctx: Context, command: Command) {
 		let response_result = command
 			.create_interaction_response(&ctx, |r| {
 				r.interaction_response_data(|d| {
-					d.flags(ResponseFlags::EPHEMERAL).add_embed(embed.clone())
+					d.flags(MessageFlags::EPHEMERAL).add_embed(embed.clone())
 				})
 			})
 			.await;
@@ -504,7 +503,7 @@ async fn handle_command(ctx: Context, command: Command) {
 			{
 				command
 					.create_followup_message(&ctx, |c| {
-						c.flags(ResponseFlags::EPHEMERAL).add_embed(embed)
+						c.flags(MessageFlags::EPHEMERAL).add_embed(embed)
 					})
 					.await
 					.context("Failed to send failure followup")

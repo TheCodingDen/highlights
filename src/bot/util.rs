@@ -10,13 +10,13 @@ use serenity::{
 	client::Context,
 	http::{error::ErrorResponse, CacheHttp},
 	model::{
+		application::interaction::{
+			application_command::ApplicationCommandInteraction as Command,
+			MessageFlags,
+		},
 		channel::GuildChannel,
 		guild::{Guild, PartialGuild},
 		id::UserId,
-		interactions::{
-			application_command::ApplicationCommandInteraction as Command,
-			InteractionApplicationCommandCallbackDataFlags as ResponseFlags,
-		},
 	},
 	prelude::HttpError,
 	Error as SerenityError,
@@ -66,7 +66,7 @@ pub(crate) async fn respond_eph<S: Display>(
 	command
 		.create_interaction_response(ctx, |r| {
 			r.interaction_response_data(|m| {
-				m.flags(ResponseFlags::EPHEMERAL).content(response)
+				m.flags(MessageFlags::EPHEMERAL).content(response)
 			})
 		})
 		.await
@@ -93,7 +93,7 @@ pub(crate) async fn followup_eph<S: Display>(
 ) -> Result<()> {
 	command
 		.create_followup_message(ctx, |r| {
-			r.flags(ResponseFlags::EPHEMERAL).content(response)
+			r.flags(MessageFlags::EPHEMERAL).content(response)
 		})
 		.await
 		.context("Failed to send command followup")?;

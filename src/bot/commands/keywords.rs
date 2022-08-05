@@ -14,9 +14,9 @@ use serenity::{
 	client::Context,
 	http::error::ErrorResponse,
 	model::{
+		application::interaction::application_command::ApplicationCommandInteraction as Command,
 		channel::{Channel, ChannelType, GuildChannel},
 		id::{ChannelId, GuildId},
-		interactions::application_command::ApplicationCommandInteraction as Command,
 	},
 	prelude::HttpError,
 	Error as SerenityError,

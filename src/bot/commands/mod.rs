@@ -19,13 +19,14 @@ use serenity::{
 	builder::{CreateApplicationCommand, CreateApplicationCommandOption},
 	client::Context,
 	model::{
-		interactions::{
-			application_command::{
-				ApplicationCommand, ApplicationCommandInteraction as Command,
+		application::{
+			command::Command as ApplicationCommand,
+			interaction::{
+				application_command::ApplicationCommandInteraction as Command,
+				MessageFlags,
 			},
-			InteractionApplicationCommandCallbackDataFlags as ResponseFlags,
+			oauth::Scope,
 		},
-		oauth2::OAuth2Scope,
 		Permissions,
 	},
 };
@@ -139,7 +140,7 @@ pub(crate) async fn about(ctx: Context, command: Command) -> Result<()> {
 	let invite_url = if settings().bot.private {
 		None
 	} else {
-		let scopes = [OAuth2Scope::Bot, OAuth2Scope::ApplicationsCommands];
+		let scopes = [Scope::Bot, Scope::ApplicationsCommands];
 		Some(
 			ctx.cache
 				.current_user()
@@ -229,7 +230,7 @@ pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
 			command
 				.create_interaction_response(&ctx, |r| {
 					r.interaction_response_data(|m| {
-						m.flags(ResponseFlags::EPHEMERAL).embed(|e| {
+						m.flags(MessageFlags::EPHEMERAL).embed(|e| {
 							e.title(format!("{} – Help", username))
 								.description(
 									"Use `/help [command]` to see more \
@@ -267,7 +268,7 @@ pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
 			command
 				.create_interaction_response(&ctx, |r| {
 					r.interaction_response_data(|m| {
-						m.flags(ResponseFlags::EPHEMERAL).embed(|e| {
+						m.flags(MessageFlags::EPHEMERAL).embed(|e| {
 							e.title(format!("Help – {}", info.name))
 								.description(&info.long_desc)
 								.color(EMBED_COLOR);
@@ -312,7 +313,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 	Lazy::new(|| {
 		use serenity::{
 			builder::CreateApplicationCommandOption as Option,
-			model::interactions::application_command::ApplicationCommandOptionType as OptionType,
+			model::application::command::CommandOptionType,
 		};
 		let mut commands = [
 			CommandInfo {
@@ -352,7 +353,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("keyword")
 							.description("The keyword to listen to")
-							.kind(OptionType::String)
+							.kind(CommandOptionType::String)
 							.required(true);
 						opt
 					},
@@ -361,7 +362,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("channel")
 							.description("A specific channel for this keyword")
-							.kind(OptionType::Channel);
+							.kind(CommandOptionType::Channel);
 						opt
 					}
 				],
@@ -395,7 +396,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("keyword")
 							.description("The keyword to listen to")
-							.kind(OptionType::String)
+							.kind(CommandOptionType::String)
 							.required(true);
 						opt
 					},
@@ -404,7 +405,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("channel")
 							.description("The specific channel for this keyword")
-							.kind(OptionType::Channel);
+							.kind(CommandOptionType::Channel);
 						opt
 					}
 				],
@@ -434,7 +435,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("channel")
 							.description("The channel to mute")
-							.kind(OptionType::Channel)
+							.kind(CommandOptionType::Channel)
 							.required(true);
 						opt
 					}
@@ -460,7 +461,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("channel")
 							.description("The channel to unmute")
-							.kind(OptionType::Channel)
+							.kind(CommandOptionType::Channel)
 							.required(true);
 						opt
 					}
@@ -487,7 +488,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("user")
 							.description("The user to block")
-							.kind(OptionType::User)
+							.kind(CommandOptionType::User)
 							.required(true);
 						opt
 					}
@@ -513,7 +514,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("user")
 							.description("The user to unblock")
-							.kind(OptionType::User)
+							.kind(CommandOptionType::User)
 							.required(true);
 						opt
 					}
@@ -548,7 +549,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("phrase")
 							.description("The phrase to ignore")
-							.kind(OptionType::String)
+							.kind(CommandOptionType::String)
 							.required(true);
 						opt
 					}
@@ -578,7 +579,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("phrase")
 							.description("The phrase to unignore")
-							.kind(OptionType::String)
+							.kind(CommandOptionType::String)
 							.required(true);
 						opt
 					}
@@ -672,7 +673,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 						opt
 							.name("server")
 							.description("The ID of the server to remove")
-							.kind(OptionType::String)
+							.kind(CommandOptionType::String)
 							.required(true);
 						opt
 					}
@@ -748,7 +749,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 			let mut opt = Option::default();
 			opt.name("command")
 				.description("Command to view help for")
-				.kind(OptionType::String);
+				.kind(CommandOptionType::String);
 
 			for command in &commands {
 				opt.add_string_choice(&command.name, &command.name);

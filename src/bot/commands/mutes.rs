@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Write};
 use anyhow::{Context as _, Result};
 use serenity::{
 	client::Context,
-	model::interactions::application_command::ApplicationCommandInteraction as Command,
+	model::application::interaction::application_command::ApplicationCommandInteraction as Command,
 };
 
 use crate::{

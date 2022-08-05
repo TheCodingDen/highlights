@@ -12,10 +12,12 @@ use rand::{distributions::Standard, Rng};
 use serenity::{
 	client::Context,
 	collector::ComponentInteractionCollectorBuilder,
-	model::interactions::{
-		application_command::ApplicationCommandInteraction as Command,
-		message_component::ButtonStyle,
-		InteractionApplicationCommandCallbackDataFlags as ResponseFlags,
+	model::application::{
+		component::ButtonStyle,
+		interaction::{
+			application_command::ApplicationCommandInteraction as Command,
+			MessageFlags,
+		},
 	},
 };
 
@@ -67,7 +69,7 @@ pub(crate) async fn opt_out(ctx: Context, command: Command) -> Result<()> {
 	command
 		.create_interaction_response(&ctx, |r| {
 			r.interaction_response_data(|m| {
-				m.flags(ResponseFlags::EPHEMERAL)
+				m.flags(MessageFlags::EPHEMERAL)
 					.content(OPT_OUT_WARNING)
 					.components(|c| {
 						c.create_action_row(|row| {
