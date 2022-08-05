@@ -68,7 +68,7 @@ impl Mute {
 					.add(Column::UserId.eq(self.user_id.into_db()))
 					.add(Column::ChannelId.eq(self.channel_id.into_db())),
 			)
-			.into_values::<u32, QueryAs>()
+			.into_values::<i64, QueryAs>()
 			.one(connection())
 			.await?;
 

@@ -97,7 +97,7 @@ impl Ignore {
 					.add(Column::GuildId.eq(self.guild_id.into_db()))
 					.add(Column::Phrase.eq(&*self.phrase)),
 			)
-			.into_values::<u32, QueryAs>()
+			.into_values::<i64, QueryAs>()
 			.one(connection())
 			.await?;
 

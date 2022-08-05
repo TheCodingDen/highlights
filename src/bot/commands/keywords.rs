@@ -50,7 +50,7 @@ pub(crate) async fn add(ctx: Context, command: Command) -> Result<()> {
 
 	let keyword_count = Keyword::user_keyword_count(user_id).await?;
 
-	if keyword_count >= settings().behavior.max_keywords {
+	if keyword_count >= settings().behavior.max_keywords as u64 {
 		static MSG: Lazy<String, fn() -> String> = Lazy::new(|| {
 			format!(
 				"You can't create more than {} keywords!",

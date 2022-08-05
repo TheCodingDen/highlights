@@ -270,7 +270,7 @@ impl Keyword {
 									.eq(&*self.keyword),
 							),
 					)
-					.into_values::<u32, QueryAs>()
+					.into_values::<i64, QueryAs>()
 					.one(connection())
 					.await?;
 
@@ -300,7 +300,7 @@ impl Keyword {
 									.eq(&*self.keyword),
 							),
 					)
-					.into_values::<u32, QueryAs>()
+					.into_values::<i64, QueryAs>()
 					.one(connection())
 					.await?;
 
@@ -314,7 +314,7 @@ impl Keyword {
 	/// Returns the number of keywords this user has created across all guilds
 	/// and channels.
 	#[tracing::instrument]
-	pub(crate) async fn user_keyword_count(user_id: UserId) -> Result<u32> {
+	pub(crate) async fn user_keyword_count(user_id: UserId) -> Result<u64> {
 		let guild_keywords = guild_keyword::Entity::find()
 			.select_only()
 			.column_as(
@@ -322,7 +322,7 @@ impl Keyword {
 				QueryAs::KeywordCount,
 			)
 			.filter(guild_keyword::Column::UserId.eq(user_id.into_db()))
-			.into_values::<u32, QueryAs>()
+			.into_values::<i64, QueryAs>()
 			.one(connection())
 			.await?
 			.context("No count for guild keywords returned")?;
@@ -334,12 +334,12 @@ impl Keyword {
 				QueryAs::KeywordCount,
 			)
 			.filter(channel_keyword::Column::UserId.eq(user_id.into_db()))
-			.into_values::<u32, QueryAs>()
+			.into_values::<i64, QueryAs>()
 			.one(connection())
 			.await?
 			.context("No count for channel keywords returned")?;
 
-		Ok(guild_keywords + channel_keywords)
+		Ok(guild_keywords as u64 + channel_keywords as u64)
 	}
 
 	/// Adds this keyword to the DB.

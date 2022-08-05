@@ -140,11 +140,7 @@ macro_rules! await_db {
 	}};
 }
 
-#[cfg(feature = "sqlite")]
 type DbInt = i64;
-
-#[cfg(not(feature = "sqlite"))]
-type DbInt = u64;
 
 /// Convenience trait for converting IDs to and from `DbInt`.
 trait IdDbExt {

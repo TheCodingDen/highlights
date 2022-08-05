@@ -75,7 +75,7 @@ impl Block {
 					.add(Column::UserId.eq(self.user_id.into_db()))
 					.add(Column::BlockedId.eq(self.blocked_id.into_db())),
 			)
-			.into_values::<u32, QueryAs>()
+			.into_values::<i64, QueryAs>()
 			.one(connection())
 			.await?;
 
