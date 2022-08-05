@@ -3,12 +3,33 @@
 
 //! Handling for mutes.
 
-use anyhow::Result;
-use rusqlite::{params, Row};
+use anyhow::{Context as _, Result};
+use futures_util::TryStreamExt;
+use sea_orm::{
+	entity::prelude::{
+		DeriveActiveModelBehavior, DeriveColumn, DeriveEntityModel,
+		DerivePrimaryKey, DeriveRelation, EntityTrait, EnumIter, IdenStatic,
+		PrimaryKeyTrait,
+	},
+	ColumnTrait, Condition, IntoActiveModel, QueryFilter, QuerySelect,
+};
 use serenity::model::id::{ChannelId, UserId};
 
-use super::IdI64Ext;
-use crate::{await_db, db::connection};
+use super::{connection, DbInt, IdDbExt};
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, DeriveEntityModel, DeriveActiveModelBehavior,
+)]
+#[sea_orm(table_name = "mutes")]
+pub struct Model {
+	#[sea_orm(primary_key)]
+	pub(crate) user_id: DbInt,
+	#[sea_orm(primary_key)]
+	pub(crate) channel_id: DbInt,
+}
+
+#[derive(Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
 
 /// Represents a muted channel.
 #[derive(Debug, Clone)]
@@ -20,46 +41,17 @@ pub(crate) struct Mute {
 }
 
 impl Mute {
-	/// Builds a [`Mute`] from a [`Row`], in this order:
-	/// - user_id: INTEGER
-	/// - channel_id: INTEGER
-	fn from_row(row: &Row) -> rusqlite::Result<Self> {
-		Ok(Mute {
-			user_id: UserId::from_i64(row.get(0)?),
-			channel_id: ChannelId::from_i64(row.get(1)?),
-		})
-	}
-
-	/// Creates the DB table for storing mutes.
-	pub(super) fn create_table() {
-		let conn = connection();
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS mutes (
-			user_id INTEGER NOT NULL,
-			channel_id INTEGER NOT NULL,
-			PRIMARY KEY (user_id, channel_id)
-			)",
-			params![],
-		)
-		.expect("Failed to create follows table");
-	}
-
 	/// Fetches a list of mutes for the user with the given ID from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn user_mutes(user_id: UserId) -> Result<Vec<Mute>> {
-		await_db!("user mutes": |conn| {
-
-			let mut stmt = conn.prepare(
-				"SELECT user_id, channel_id
-				FROM mutes
-				WHERE user_id = ?"
-			)?;
-
-			let mutes =
-				stmt.query_map(params![user_id.into_i64()], Mute::from_row)?;
-
-			mutes.map(|res| res.map_err(Into::into)).collect()
-		})
+		Entity::find()
+			.filter(Column::UserId.eq(user_id.into_db()))
+			.stream(connection())
+			.await?
+			.map_err(Into::into)
+			.map_ok(Mute::from)
+			.try_collect()
+			.await
 	}
 
 	/// Checks if this mute exists in the DB.
@@ -68,41 +60,62 @@ impl Mute {
 	/// in the DB.
 	#[tracing::instrument]
 	pub(crate) async fn exists(self) -> Result<bool> {
-		await_db!("mute exists": |conn| {
-			conn.query_row(
-				"SELECT COUNT(*) FROM mutes
-				WHERE user_id = ? AND channel_id = ?",
-				params![self.user_id.into_i64(), self.channel_id.into_i64()],
-				|row| Ok(row.get::<_, u32>(0)? == 1),
-			).map_err(Into::into)
-		})
+		let count = Entity::find()
+			.select_only()
+			.column_as(Column::UserId.count(), QueryAs::MuteCount)
+			.filter(
+				Condition::all()
+					.add(Column::UserId.eq(self.user_id.into_db()))
+					.add(Column::ChannelId.eq(self.channel_id.into_db())),
+			)
+			.into_values::<u32, QueryAs>()
+			.one(connection())
+			.await?;
+
+		let count = count.context("No count for mutes returned")?;
+		Ok(count == 1)
 	}
 
 	/// Inserts this mute into the DB.
 	#[tracing::instrument]
 	pub(crate) async fn insert(self) -> Result<()> {
-		await_db!("insert mute": |conn| {
-			conn.execute(
-				"INSERT INTO mutes (user_id, channel_id)
-				VALUES (?, ?)",
-				params![self.user_id.into_i64(), self.channel_id.into_i64()],
-			)?;
+		Entity::insert(Model::from(self).into_active_model())
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Deletes this mute from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
-		await_db!("delete mute": |conn| {
-			conn.execute(
-				"DELETE FROM mutes
-				WHERE user_id = ? AND channel_id = ?",
-				params![self.user_id.into_i64(), self.channel_id.into_i64()],
-			)?;
+		Entity::delete(Model::from(self).into_active_model())
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
+	}
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, DeriveColumn)]
+enum QueryAs {
+	MuteCount,
+}
+
+impl From<Model> for Mute {
+	fn from(model: Model) -> Self {
+		Self {
+			user_id: UserId::from_db(model.user_id),
+			channel_id: ChannelId::from_db(model.channel_id),
+		}
+	}
+}
+
+impl From<Mute> for Model {
+	fn from(mute: Mute) -> Self {
+		Self {
+			user_id: mute.user_id.into_db(),
+			channel_id: mute.channel_id.into_db(),
+		}
 	}
 }

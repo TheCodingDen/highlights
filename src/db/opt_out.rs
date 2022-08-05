@@ -4,11 +4,32 @@
 //! Handling for user opt-outs.
 
 use anyhow::Result;
-use rusqlite::params;
+use futures_util::FutureExt;
+use sea_orm::{
+	entity::prelude::{
+		DeriveActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey,
+		DeriveRelation, EntityTrait, EnumIter, IdenStatic, PrimaryKeyTrait,
+	},
+	ActiveValue, ColumnTrait, DbErr, QueryFilter, TransactionTrait,
+};
 use serenity::model::id::UserId;
 
-use super::IdI64Ext;
-use crate::{await_db, db::connection};
+use super::{
+	block, channel_keyword, connection, guild_keyword, ignore, mute, DbInt,
+	IdDbExt,
+};
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, DeriveEntityModel, DeriveActiveModelBehavior,
+)]
+#[sea_orm(table_name = "opt_outs")]
+pub struct Model {
+	#[sea_orm(primary_key)]
+	pub(crate) user_id: DbInt,
+}
+
+#[derive(Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
 
 /// Represents an opt-out made by a user.
 ///
@@ -20,93 +41,78 @@ pub(crate) struct OptOut {
 }
 
 impl OptOut {
-	/// Creates the DB table to store users who have opted out.
-	pub(super) fn create_table() {
-		let conn = connection();
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS opt_outs (
-			user_id INTEGER PRIMARY KEY
-			)",
-			params![],
-		)
-		.expect("Failed to create opt_outs table");
-	}
-
 	/// Checks if this opt-out already exists in the DB.
 	#[tracing::instrument]
 	pub(crate) async fn exists(self) -> Result<bool> {
-		await_db!("opt-out exists": |conn| {
-			conn.query_row(
-				"SELECT COUNT(*) FROM opt_outs
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-				|row| Ok(row.get::<_, u32>(0)? == 1),
-			).map_err(Into::into)
-		})
+		let result = Entity::find_by_id(self.user_id.into_db())
+			.one(connection())
+			.await?;
+
+		Ok(result.is_some())
 	}
 
 	/// Adds this opt-out to the DB.
 	#[tracing::instrument]
 	pub(crate) async fn insert(self) -> Result<()> {
-		await_db!("insert opt-out": |conn| {
-			conn.execute(
-				"INSERT INTO opt_outs (user_id)
-				VALUES (?)",
-				params![self.user_id.into_i64()],
-			)?;
-
-			Ok(())
+		Entity::insert(ActiveModel {
+			user_id: ActiveValue::Set(self.user_id.into_db()),
 		})
+		.exec(connection())
+		.await?;
+
+		Ok(())
 	}
 
 	/// Deletes this opt-out from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
-		await_db!("delete opt-out": |conn| {
-			conn.execute(
-				"DELETE FROM opt_outs
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
-
-			Ok(())
+		Entity::delete(ActiveModel {
+			user_id: ActiveValue::Set(self.user_id.into_db()),
 		})
+		.exec(connection())
+		.await?;
+
+		Ok(())
 	}
 
 	/// Deletes this user's data from the DB as they opt out.
 	#[tracing::instrument]
 	pub(crate) async fn delete_user_data(self) -> Result<()> {
-		await_db!("opt-out user data deletion": |conn| {
-			let conn = conn.transaction()?;
-			conn.execute(
-				"DELETE FROM guild_keywords
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
-			conn.execute(
-				"DELETE FROM channel_keywords
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
-			conn.execute(
-				"DELETE FROM blocks
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
-			conn.execute(
-				"DELETE FROM mutes
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
-			conn.execute(
-				"DELETE FROM guild_ignores
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
+		let user_id = self.user_id.into_db();
 
-			conn.commit()?;
+		connection()
+			.transaction(|transaction| {
+				async move {
+					guild_keyword::Entity::delete_many()
+						.filter(guild_keyword::Column::UserId.eq(user_id))
+						.exec(transaction)
+						.await?;
 
-			Ok(())
-		})
+					channel_keyword::Entity::delete_many()
+						.filter(channel_keyword::Column::UserId.eq(user_id))
+						.exec(transaction)
+						.await?;
+
+					block::Entity::delete_many()
+						.filter(block::Column::UserId.eq(user_id))
+						.exec(transaction)
+						.await?;
+
+					mute::Entity::delete_many()
+						.filter(mute::Column::UserId.eq(user_id))
+						.exec(transaction)
+						.await?;
+
+					ignore::Entity::delete_many()
+						.filter(ignore::Column::UserId.eq(user_id))
+						.exec(transaction)
+						.await?;
+
+					Ok::<(), DbErr>(())
+				}
+				.boxed()
+			})
+			.await
+			.map_err(Into::into)
 	}
 }

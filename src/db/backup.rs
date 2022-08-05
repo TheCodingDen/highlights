@@ -14,8 +14,6 @@ use rusqlite::{backup::Backup, Connection, Error, OpenFlags};
 use tokio::{fs, task, time::interval};
 use tracing::{debug, error, info, warn};
 
-use super::connection;
-
 /// Format used for backup timestamps. Can't use ISO-8601 because windows
 /// doesn't seem to allow file names to contain `:`.
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H_%M_%S%.f%z";
@@ -36,10 +34,11 @@ async fn ensure_backup_dir_exists(path: &Path) -> Result<(), IoError> {
 
 /// Creates a backup in the specified directory.
 #[tracing::instrument]
-async fn create_backup(backup_dir: PathBuf) -> Result<(), Error> {
+async fn create_backup(
+	conn: Connection,
+	backup_dir: PathBuf,
+) -> Result<(), Error> {
 	task::spawn_blocking(move || {
-		let conn = connection();
-
 		let backup_name = format!(
 			"{}_data_backup_{}.db",
 			env!("CARGO_PKG_NAME"),
@@ -208,7 +207,7 @@ async fn clean_backups(backup_dir: &Path) {
 ///
 /// Creates `<data directory>/backup` if it doesn't exist already, creates a
 /// backup, cleans up old backups, and repeats once every 24hrs.
-pub(crate) fn start_backup_cycle(backup_dir: PathBuf) {
+pub(crate) fn start_backup_cycle(db_path: PathBuf, backup_dir: PathBuf) {
 	let _ = ensure_backup_dir_exists(&backup_dir);
 
 	task::spawn(async move {
@@ -223,11 +222,25 @@ pub(crate) fn start_backup_cycle(backup_dir: PathBuf) {
 				continue;
 			}
 
-			info!("Cleaning up old backups...");
-			if let Err(error) = create_backup(backup_dir.clone()).await {
+			let conn = match Connection::open_with_flags(
+				&db_path,
+				OpenFlags::SQLITE_OPEN_READ_ONLY,
+			) {
+				Ok(c) => c,
+				Err(error) => {
+					error!(
+						"Error connecting to database to backup: {0}\n{0:?}",
+						error
+					);
+					continue;
+				}
+			};
+
+			if let Err(error) = create_backup(conn, backup_dir.clone()).await {
 				error!("Error backing up database: {0}\n{0:?}", error);
 			}
 
+			info!("Cleaning up old backups...");
 			clean_backups(&backup_dir).await;
 		}
 	});

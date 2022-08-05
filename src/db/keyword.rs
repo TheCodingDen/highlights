@@ -3,13 +3,19 @@
 
 //! Handling for keywords.
 
-use anyhow::Result;
-use rusqlite::{params, Row};
+use anyhow::{Context, Result};
+use futures_util::TryStreamExt;
+use sea_orm::{
+	sea_query::Expr, ColumnTrait, Condition, DeriveColumn, EntityTrait,
+	EnumIter, IdenStatic, IntoActiveModel, QueryFilter, QuerySelect,
+	QueryTrait,
+};
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use tracing::info_span;
 
-use super::IdI64Ext;
-use crate::{await_db, db::connection};
+use super::{
+	block, channel_keyword, connection, guild_keyword, mute, opt_out, IdDbExt,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum KeywordKind {
@@ -30,57 +36,29 @@ pub(crate) struct Keyword {
 	pub(crate) kind: KeywordKind,
 }
 
+enum EitherModel {
+	Channel(channel_keyword::Model),
+	Guild(guild_keyword::Model),
+}
+
 impl Keyword {
-	/// Builds a guild-wide [`Keyword`] from a [`Row`], in this order:
-	/// - `keyword`: `TEXT`
-	/// - `user_id`: `INTEGER`
-	/// - `<guild id>`: `INTEGER`
-	fn from_guild_row(row: &Row) -> rusqlite::Result<Self> {
-		Ok(Keyword {
-			keyword: row.get(0)?,
-			user_id: UserId::from_i64(row.get(1)?),
-			kind: KeywordKind::Guild(GuildId::from_i64(row.get(2)?)),
-		})
-	}
-
-	/// Builds a channel-specific [`Keyword`] from a [`Row`], in this order:
-	/// - `keyword`: `TEXT`
-	/// - `user_id`: `INTEGER`
-	/// - `<channel id>`: `INTEGER`
-	fn from_channel_row(row: &Row) -> rusqlite::Result<Self> {
-		Ok(Keyword {
-			keyword: row.get(0)?,
-			user_id: UserId::from_i64(row.get(1)?),
-			kind: KeywordKind::Channel(ChannelId::from_i64(row.get(2)?)),
-		})
-	}
-
-	/// Creates the DB tables for storing guild-wide and channel specific
-	/// keywords.
-	pub(super) fn create_tables() {
-		let conn = connection();
-
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS guild_keywords (
-				keyword TEXT NOT NULL,
-				user_id INTEGER NOT NULL,
-				guild_id INTEGER NOT NULL,
-				PRIMARY KEY (keyword, user_id, guild_id)
-			)",
-			params![],
-		)
-		.expect("Failed to create guild_keywords table");
-
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS channel_keywords (
-				keyword TEXT NOT NULL,
-				user_id INTEGER NOT NULL,
-				channel_id INTEGER NOT NULL,
-				PRIMARY KEY (keyword, user_id, channel_id)
-			)",
-			params![],
-		)
-		.expect("Failed to create channel_keywords table");
+	fn into_model(self) -> EitherModel {
+		match self.kind {
+			KeywordKind::Guild(guild_id) => {
+				EitherModel::Guild(guild_keyword::Model {
+					keyword: self.keyword,
+					user_id: self.user_id.into_db(),
+					guild_id: guild_id.into_db(),
+				})
+			}
+			KeywordKind::Channel(channel_id) => {
+				EitherModel::Channel(channel_keyword::Model {
+					keyword: self.keyword,
+					user_id: self.user_id.into_db(),
+					channel_id: channel_id.into_db(),
+				})
+			}
+		}
 	}
 
 	/// Gets keywords that may be relelvant to a message.
@@ -96,107 +74,107 @@ impl Keyword {
 		channel_id: ChannelId,
 		author_id: UserId,
 	) -> Result<Vec<Keyword>> {
-		await_db!("get keywords": |conn| {
-			let guild_id = guild_id.into_i64();
-			let channel_id = channel_id.into_i64();
-			let author_id = author_id.into_i64();
+		let span = info_span!(
+			"relevant_guild_keywords",
+			author_id = %author_id,
+			guild_id = %guild_id
+		);
 
-			let span = info_span!(
-				"relevant_guild_keywords",
-				author_id = %author_id,
-				guild_id = %guild_id
-			);
+		let entered = span.enter();
 
-			let entered = span.enter();
+		let opted_out = opt_out::Entity::find()
+			.select_only()
+			.column(opt_out::Column::UserId)
+			.into_query();
 
-			let mut stmt = conn.prepare(
-				"SELECT guild_keywords.keyword, guild_keywords.user_id, guild_keywords.guild_id
-					FROM guild_keywords
-					WHERE guild_keywords.guild_id = ?
-						AND guild_keywords.user_id != ?
-						AND NOT EXISTS (
-							SELECT opt_outs.user_id
-								FROM opt_outs
-								WHERE opt_outs.user_id = ?
-						)
-						AND NOT EXISTS (
-							SELECT opt_outs.user_id
-								FROM opt_outs
-								WHERE opt_outs.user_id = guild_keywords.user_id
-						)
-						AND NOT EXISTS (
-							SELECT mutes.user_id
-								FROM mutes
-								WHERE mutes.user_id = guild_keywords.user_id
-									AND mutes.channel_id = ?
-						)
-						AND NOT EXISTS (
-							SELECT blocks.user_id
-								FROM blocks
-								WHERE blocks.user_id = guild_keywords.user_id
-									AND blocks.blocked_id = ?
-						)
-				",
-			)?;
+		let muted_channels =
+			mute::Entity::find()
+				.select_only()
+				.column(mute::Column::ChannelId)
+				.filter(Expr::tbl(mute::Entity, mute::Column::UserId).equals(
+					guild_keyword::Entity,
+					guild_keyword::Column::UserId,
+				))
+				.into_query();
 
-			let guild_keywords = stmt.query_map(
-					params![
-						guild_id,
-						author_id,
-						author_id,
-						channel_id,
-						author_id
-					],
-					Keyword::from_guild_row
-				)?;
+		let users_with_block = block::Entity::find()
+			.select_only()
+			.column(block::Column::UserId)
+			.filter(block::Column::BlockedId.eq(author_id.into_db()))
+			.into_query();
 
-			let mut keywords = guild_keywords.collect::<Result<Vec<_>, _>>()?;
+		let keywords: Vec<Keyword> = guild_keyword::Entity::find()
+			.filter(
+				Condition::all()
+					.add(guild_keyword::Column::UserId.ne(author_id.into_db()))
+					.add(guild_keyword::Column::GuildId.eq(guild_id.into_db()))
+					.add(
+						guild_keyword::Column::UserId
+							.not_in_subquery(opted_out.clone()),
+					)
+					.add(
+						Expr::expr(Expr::value(author_id.into_db()))
+							.not_in_subquery(opted_out.clone()),
+					)
+					.add(
+						guild_keyword::Column::UserId
+							.not_in_subquery(users_with_block.clone()),
+					)
+					.add(
+						Expr::expr(Expr::value(channel_id.into_db()))
+							.not_in_subquery(muted_channels.clone()),
+					),
+			)
+			.stream(connection())
+			.await?
+			.map_err(anyhow::Error::from)
+			.map_ok(Keyword::from)
+			.try_collect()
+			.await?;
 
-			drop(entered);
-			drop(span);
+		drop(entered);
+		drop(span);
 
-			let span = info_span!(
-				"relevant_channel_keywords",
-				author_id = %author_id,
-				channel_id = %channel_id
-			);
+		let span = info_span!(
+			"relevant_channel_keywords",
+			author_id = %author_id,
+			channel_id = %channel_id
+		);
 
-			let _entered = span.enter();
+		let _entered = span.enter();
 
-			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, channel_id
-					FROM channel_keywords
-					WHERE user_id != ?
-						AND channel_id = ?
-						AND NOT EXISTS (
-							SELECT opt_outs.user_id
-								FROM opt_outs
-								where opt_outs.user_id = ?
-						)
-						AND NOT EXISTS (
-							SELECT opt_outs.user_id
-								FROM opt_outs
-								WHERE opt_outs.user_id = channel_keywords.user_id
-						)
-						AND NOT EXISTS (
-							SELECT blocks.user_id
-								FROM blocks
-								WHERE blocks.user_id = channel_keywords.user_id
-									AND blocks.blocked_id = ?
-						)"
-			)?;
-
-			let channel_keywords = stmt.query_map(
-				params![author_id, channel_id, author_id, author_id],
-				Keyword::from_channel_row
-			)?;
-
-			let channel_keywords = channel_keywords.collect::<Result<Vec<_>, _>>()?;
-
-			keywords.extend(channel_keywords);
-
-			Ok(keywords)
-		})
+		channel_keyword::Entity::find()
+			.filter(
+				Condition::all()
+					.add(
+						channel_keyword::Column::UserId.ne(author_id.into_db()),
+					)
+					.add(
+						channel_keyword::Column::ChannelId
+							.eq(channel_id.into_db()),
+					)
+					.add(
+						channel_keyword::Column::UserId
+							.not_in_subquery(opted_out.clone()),
+					)
+					.add(
+						Expr::expr(Expr::value(author_id.into_db()))
+							.not_in_subquery(opted_out),
+					)
+					.add(
+						channel_keyword::Column::UserId
+							.not_in_subquery(users_with_block),
+					),
+			)
+			.stream(connection())
+			.await?
+			.map_err(anyhow::Error::from)
+			.map_ok(Keyword::from)
+			.try_fold(keywords, |mut keywords, keyword| async move {
+				keywords.push(keyword);
+				Ok(keywords)
+			})
+			.await
 	}
 
 	/// Fetches all guild-wide keywords created by the specified user in the
@@ -206,78 +184,59 @@ impl Keyword {
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<Vec<Keyword>> {
-		await_db!("user guild keywords": |conn| {
-
-			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, guild_id
-				FROM guild_keywords
-				WHERE user_id = ? AND guild_id = ?"
-			)?;
-
-			let keywords = stmt.query_map(
-				params![user_id.into_i64(), guild_id.into_i64()],
-				Keyword::from_guild_row
-			)?;
-
-			keywords.map(|res| res.map_err(Into::into)).collect()
-		})
+		guild_keyword::Entity::find()
+			.filter(
+				Condition::all()
+					.add(guild_keyword::Column::UserId.eq(user_id.into_db()))
+					.add(guild_keyword::Column::GuildId.eq(guild_id.into_db())),
+			)
+			.stream(connection())
+			.await?
+			.map_err(Into::into)
+			.map_ok(Keyword::from)
+			.try_collect()
+			.await
 	}
 
-	/// Fetches all channel-specific keywords created by the specified user in
-	/// the specified channel.
+	/// Fetches all channel-specific keywords created by the specified user.
 	#[tracing::instrument]
 	pub(crate) async fn user_channel_keywords(
 		user_id: UserId,
 	) -> Result<Vec<Keyword>> {
-		await_db!("user channel keywords": |conn| {
-			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, channel_id
-				FROM channel_keywords
-				WHERE user_id = ?"
-			)?;
-
-			let keywords = stmt.query_map(
-				params![user_id.into_i64()],
-				Keyword::from_channel_row
-			)?;
-
-			keywords.map(|res| res.map_err(Into::into)).collect()
-		})
+		channel_keyword::Entity::find()
+			.filter(channel_keyword::Column::UserId.eq(user_id.into_db()))
+			.stream(connection())
+			.await?
+			.map_err(Into::into)
+			.map_ok(Keyword::from)
+			.try_collect()
+			.await
 	}
 
 	/// Fetches all guild-wide and channel-specific keywords created by the
 	/// specified user.
 	#[tracing::instrument]
 	pub(crate) async fn user_keywords(user_id: UserId) -> Result<Vec<Keyword>> {
-		await_db!("user keywords": |conn| {
-			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, guild_id
-				FROM guild_keywords
-				WHERE user_id = ?"
-			)?;
+		let keywords: Vec<Keyword> = guild_keyword::Entity::find()
+			.filter(guild_keyword::Column::UserId.eq(user_id.into_db()))
+			.stream(connection())
+			.await?
+			.map_err(anyhow::Error::from)
+			.map_ok(Keyword::from)
+			.try_collect()
+			.await?;
 
-			let guild_keywords = stmt.query_map(
-				params![user_id.into_i64()],
-				Keyword::from_guild_row
-			)?;
-
-			let mut keywords = guild_keywords.collect::<Result<Vec<_>, _>>()?;
-
-			let mut stmt = conn.prepare(
-				"SELECT keyword, user_id, channel_id
-				FROM channel_keywords
-				WHERE user_id = ?"
-			)?;
-
-			let channel_keywords = stmt.query_map(
-				params![user_id.into_i64()],
-				Keyword::from_channel_row
-			)?;
-
-			keywords.extend(channel_keywords.collect::<Result<Vec<_>, _>>()?);
-
-			Ok(keywords)
-		})
+		channel_keyword::Entity::find()
+			.filter(channel_keyword::Column::UserId.eq(user_id.into_db()))
+			.stream(connection())
+			.await?
+			.map_err(anyhow::Error::from)
+			.map_ok(Keyword::from)
+			.try_fold(keywords, |mut keywords, keyword| async move {
+				keywords.push(keyword);
+				Ok(keywords)
+			})
+			.await
 	}
 
 	/// Checks if this keyword has already been created by this user.
@@ -288,59 +247,99 @@ impl Keyword {
 			self.kind = ?self.kind,
 	))]
 	pub(crate) async fn exists(self) -> Result<bool> {
-		await_db!("keyword exists": |conn| {
-			match self.kind {
-				KeywordKind::Guild(guild_id) => {
-					conn.query_row(
-						"SELECT COUNT(*) FROM guild_keywords
-						WHERE keyword = ? AND user_id = ? AND guild_id = ?",
-						params![
-							&self.keyword,
-							self.user_id.into_i64(),
-							guild_id.into_i64()
-						],
-						|row| Ok(row.get::<_, u32>(0)? == 1),
-					).map_err(Into::into)
-				}
-				KeywordKind::Channel(channel_id) => {
-					conn.query_row(
-						"SELECT COUNT(*) FROM channel_keywords
-						WHERE keyword = ? AND user_id = ? AND channel_id = ?",
-						params![
-							&self.keyword,
-							self.user_id.into_i64(),
-							channel_id.into_i64()
-						],
-						|row| Ok(row.get::<_, u32>(0)? == 1),
-					).map_err(Into::into)
-				}
+		match self.kind {
+			KeywordKind::Guild(guild_id) => {
+				let count = guild_keyword::Entity::find()
+					.select_only()
+					.column_as(
+						guild_keyword::Column::UserId.count(),
+						QueryAs::KeywordCount,
+					)
+					.filter(
+						Condition::all()
+							.add(
+								guild_keyword::Column::UserId
+									.eq(self.user_id.into_db()),
+							)
+							.add(
+								guild_keyword::Column::GuildId
+									.eq(guild_id.into_db()),
+							)
+							.add(
+								guild_keyword::Column::Keyword
+									.eq(&*self.keyword),
+							),
+					)
+					.into_values::<u32, QueryAs>()
+					.one(connection())
+					.await?;
+
+				let count =
+					count.context("No count for guild keywords returned")?;
+				Ok(count == 1)
 			}
-		})
+			KeywordKind::Channel(channel_id) => {
+				let count = channel_keyword::Entity::find()
+					.select_only()
+					.column_as(
+						channel_keyword::Column::UserId.count(),
+						QueryAs::KeywordCount,
+					)
+					.filter(
+						Condition::all()
+							.add(
+								channel_keyword::Column::UserId
+									.eq(self.user_id.into_db()),
+							)
+							.add(
+								channel_keyword::Column::ChannelId
+									.eq(channel_id.into_db()),
+							)
+							.add(
+								channel_keyword::Column::Keyword
+									.eq(&*self.keyword),
+							),
+					)
+					.into_values::<u32, QueryAs>()
+					.one(connection())
+					.await?;
+
+				let count =
+					count.context("No count for channel keywords returned")?;
+				Ok(count == 1)
+			}
+		}
 	}
 
 	/// Returns the number of keywords this user has created across all guilds
 	/// and channels.
 	#[tracing::instrument]
 	pub(crate) async fn user_keyword_count(user_id: UserId) -> Result<u32> {
-		await_db!("count user keywords": |conn| {
-			let guild_keywords = conn.query_row(
-				"SELECT COUNT(*)
-					FROM guild_keywords
-					WHERE user_id = ?",
-				params![user_id.into_i64()],
-				|row| row.get::<_, u32>(0),
-			)?;
+		let guild_keywords = guild_keyword::Entity::find()
+			.select_only()
+			.column_as(
+				guild_keyword::Column::UserId.count(),
+				QueryAs::KeywordCount,
+			)
+			.filter(guild_keyword::Column::UserId.eq(user_id.into_db()))
+			.into_values::<u32, QueryAs>()
+			.one(connection())
+			.await?
+			.context("No count for guild keywords returned")?;
 
-			let channel_keywords = conn.query_row(
-				"SELECT COUNT(*)
-					FROM channel_keywords
-					WHERE user_id = ?",
-				params![user_id.into_i64()],
-				|row| row.get::<_, u32>(0),
-			)?;
+		let channel_keywords = channel_keyword::Entity::find()
+			.select_only()
+			.column_as(
+				channel_keyword::Column::UserId.count(),
+				QueryAs::KeywordCount,
+			)
+			.filter(channel_keyword::Column::UserId.eq(user_id.into_db()))
+			.into_values::<u32, QueryAs>()
+			.one(connection())
+			.await?
+			.context("No count for channel keywords returned")?;
 
-			Ok(guild_keywords + channel_keywords)
-		})
+		Ok(guild_keywords + channel_keywords)
 	}
 
 	/// Adds this keyword to the DB.
@@ -351,34 +350,20 @@ impl Keyword {
 			self.kind = ?self.kind,
 	))]
 	pub(crate) async fn insert(self) -> Result<()> {
-		await_db!("insert keyword": |conn| {
-			match self.kind {
-				KeywordKind::Guild(guild_id) => {
-					conn.execute(
-						"INSERT INTO guild_keywords (keyword, user_id, guild_id)
-							VALUES (?, ?, ?)",
-						params![
-							&self.keyword,
-							self.user_id.into_i64(),
-							guild_id.into_i64()
-						],
-					)?;
-				}
-				KeywordKind::Channel(channel_id) => {
-					conn.execute(
-						"INSERT INTO channel_keywords (keyword, user_id, channel_id)
-							VALUES (?, ?, ?)",
-						params![
-							&self.keyword,
-							self.user_id.into_i64(),
-							channel_id.into_i64()
-						],
-					)?;
-				}
+		match self.into_model() {
+			EitherModel::Guild(model) => {
+				guild_keyword::Entity::insert(model.into_active_model())
+					.exec(connection())
+					.await?;
 			}
+			EitherModel::Channel(model) => {
+				channel_keyword::Entity::insert(model.into_active_model())
+					.exec(connection())
+					.await?;
+			}
+		}
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Deletes this keyword from the DB.
@@ -389,34 +374,20 @@ impl Keyword {
 			self.kind = ?self.kind,
 	))]
 	pub(crate) async fn delete(self) -> Result<()> {
-		await_db!("delete keyword": |conn| {
-			match self.kind {
-				KeywordKind::Guild(guild_id) => {
-					conn.execute(
-						"DELETE FROM guild_keywords
-							WHERE keyword = ? AND user_id = ? AND guild_id = ?",
-						params![
-							&self.keyword,
-							self.user_id.into_i64(),
-							guild_id.into_i64()
-						],
-					)?;
-				}
-				KeywordKind::Channel(channel_id) => {
-					conn.execute(
-						"DELETE FROM channel_keywords
-							WHERE keyword = ? AND user_id = ? AND channel_id = ?",
-						params![
-							&self.keyword,
-							self.user_id.into_i64(),
-							channel_id.into_i64()
-						],
-					)?;
-				}
+		match self.into_model() {
+			EitherModel::Guild(model) => {
+				guild_keyword::Entity::delete(model.into_active_model())
+					.exec(connection())
+					.await?;
 			}
+			EitherModel::Channel(model) => {
+				channel_keyword::Entity::delete(model.into_active_model())
+					.exec(connection())
+					.await?;
+			}
+		}
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Deletes all guild-wide keywords created by the specified user in the
@@ -425,14 +396,17 @@ impl Keyword {
 	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
-	) -> Result<usize> {
-		await_db!("delete keywords in guild": |conn| {
-			conn.execute(
-				"DELETE FROM guild_keywords
-					WHERE user_id = ? AND guild_id = ?",
-				params![user_id.into_i64(), guild_id.into_i64()]
-			).map_err(Into::into)
-		})
+	) -> Result<u64> {
+		let result = guild_keyword::Entity::delete_many()
+			.filter(
+				Condition::all()
+					.add(guild_keyword::Column::UserId.eq(user_id.into_db()))
+					.add(guild_keyword::Column::GuildId.eq(guild_id.into_db())),
+			)
+			.exec(connection())
+			.await?;
+
+		Ok(result.rows_affected)
 	}
 
 	/// Deletes all channel-specific keywords created by the specified user in
@@ -441,13 +415,45 @@ impl Keyword {
 	pub(crate) async fn delete_in_channel(
 		user_id: UserId,
 		channel_id: ChannelId,
-	) -> Result<usize> {
-		await_db!("delete keywords in channel": |conn| {
-			conn.execute(
-				"DELETE FROM channel_keywords
-					WHERE user_id = ? AND channel_id = ?",
-				params![user_id.into_i64(), channel_id.into_i64()]
-			).map_err(Into::into)
-		})
+	) -> Result<u64> {
+		let result = channel_keyword::Entity::delete_many()
+			.filter(
+				Condition::all()
+					.add(channel_keyword::Column::UserId.eq(user_id.into_db()))
+					.add(
+						channel_keyword::Column::ChannelId
+							.eq(channel_id.into_db()),
+					),
+			)
+			.exec(connection())
+			.await?;
+
+		Ok(result.rows_affected)
+	}
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, DeriveColumn)]
+enum QueryAs {
+	KeywordCount,
+	MutedChannel,
+}
+
+impl From<guild_keyword::Model> for Keyword {
+	fn from(model: guild_keyword::Model) -> Self {
+		Self {
+			keyword: model.keyword,
+			user_id: UserId::from_db(model.user_id),
+			kind: KeywordKind::Guild(GuildId::from_db(model.guild_id)),
+		}
+	}
+}
+
+impl From<channel_keyword::Model> for Keyword {
+	fn from(model: channel_keyword::Model) -> Self {
+		Self {
+			keyword: model.keyword,
+			user_id: UserId::from_db(model.user_id),
+			kind: KeywordKind::Channel(ChannelId::from_db(model.channel_id)),
+		}
 	}
 }

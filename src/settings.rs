@@ -3,6 +3,8 @@
 
 //! Handling of bot configuration for hosters.
 
+#[cfg(feature = "sqlite")]
+use std::path::PathBuf;
 #[cfg(feature = "bot")]
 use std::time::Duration;
 use std::{
@@ -10,7 +12,6 @@ use std::{
 	env::{self, VarError},
 	fs::read_to_string,
 	io::ErrorKind,
-	path::PathBuf,
 };
 
 use config::{
@@ -22,7 +23,6 @@ use serde::Deserialize;
 #[cfg(feature = "bot")]
 use serenity::model::id::GuildId;
 use tracing::metadata::LevelFilter;
-#[cfg(feature = "reporting")]
 use url::Url;
 
 #[cfg(feature = "bot")]
@@ -260,10 +260,18 @@ pub(crate) struct LoggingSettings {
 /// Settings for the database.
 #[derive(Debug, Deserialize)]
 pub(crate) struct DatabaseSettings {
-	/// Path to the directory that should hold the database.
-	pub(crate) path: PathBuf,
+	/// Path to the directory that should hold the SQLite database.
+	#[cfg(feature = "sqlite")]
+	pub(crate) path: Option<PathBuf>,
+	/// Database connection URL.
+	#[cfg(feature = "sqlite")]
+	pub(crate) url: Option<Url>,
+	/// Database connection URL.
+	#[cfg(not(feature = "sqlite"))]
+	pub(crate) url: Url,
 	/// Whether or not to run automatic daily backups.
-	pub(crate) backup: bool,
+	#[cfg(feature = "backup")]
+	pub(crate) backup: Option<bool>,
 }
 
 /// Collection of settings.
@@ -293,9 +301,7 @@ impl Settings {
 		let mut b = b
 			.set_default("logging.level", "WARN")?
 			.set_default("logging.filters.highlights", "INFO")?
-			.set_default("logging.color", "true")?
-			.set_default("database.path", "./data")?
-			.set_default("database.backup", true)?;
+			.set_default("logging.color", "true")?;
 
 		let filename = env::var("HIGHLIGHTS_CONFIG").or_else(|e| match e {
 			VarError::NotPresent => Ok("./config.toml".to_owned()),

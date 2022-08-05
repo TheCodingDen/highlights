@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
 	logging::init()?;
 
-	db::init();
+	db::init().await?;
 
 	#[cfg(feature = "bot")]
 	bot::init().await?;

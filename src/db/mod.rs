@@ -6,79 +6,115 @@
 
 #![cfg_attr(not(feature = "bot"), allow(dead_code))]
 
+#[cfg(not(any(feature = "sqlite", feature = "postgresql")))]
+compile_error!("The sqlite feature or the postgresql feature must be enabled");
+
+#[cfg(feature = "backup")]
 mod backup;
 mod block;
+mod channel_keyword;
+mod guild_keyword;
 mod ignore;
 mod keyword;
+mod migration;
 mod mute;
 mod notification;
 mod opt_out;
 mod user_state;
 
-use std::{fs, io::ErrorKind};
-
+use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
-use r2d2::{Pool, PooledConnection};
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::OpenFlags;
+use sea_orm::{Database, DatabaseConnection};
+use sea_orm_migration::MigratorTrait;
 use serenity::model::id::{ChannelId, GuildId, MessageId, UserId};
 
-use self::backup::start_backup_cycle;
-pub(crate) use self::{
-	block::Block, ignore::Ignore, keyword::Keyword, mute::Mute,
-	notification::Notification, opt_out::OptOut, user_state::UserState,
-};
+use self::migration::Migrator;
 #[cfg(feature = "bot")]
-pub(crate) use self::{keyword::KeywordKind, user_state::UserStateKind};
+pub(crate) use self::{
+	block::Block,
+	ignore::Ignore,
+	keyword::{Keyword, KeywordKind},
+	mute::Mute,
+	notification::Notification,
+	opt_out::OptOut,
+	user_state::{UserState, UserStateKind},
+};
 use crate::settings::settings;
 
 /// Global connection pool to the database.
-static POOL: OnceCell<Pool<SqliteConnectionManager>> = OnceCell::new();
+static CONNECTION: OnceCell<DatabaseConnection> = OnceCell::new();
 
 /// Gets a connection from the global connection pool.
 #[tracing::instrument]
-pub(crate) fn connection() -> PooledConnection<SqliteConnectionManager> {
-	POOL.get()
-		.expect("Database pool was not initialized")
+pub(crate) fn connection() -> &'static DatabaseConnection {
+	CONNECTION
 		.get()
-		.expect("Failed to obtain database connection")
+		.expect("Database connection was not initialized")
 }
 
 /// Initializes the database.
 ///
 /// Creates the data folder and database file if necessary, and starts backups
 /// if enabled.
-pub(crate) fn init() {
-	let data_dir = &settings().database.path;
+pub(crate) async fn init() -> Result<()> {
+	#[cfg(feature = "sqlite")]
+	{
+		use std::{fs::create_dir, io::ErrorKind};
 
-	if let Err(error) = fs::create_dir(data_dir) {
-		if error.kind() != ErrorKind::AlreadyExists {
-			Err::<(), _>(error).expect("Failed to create data directory");
+		use anyhow::{bail, Context as _};
+
+		let (path, url) = {
+			let s = settings();
+			(s.database.path.as_ref(), s.database.url.as_ref())
+		};
+
+		match (path, url) {
+			(Some(data_dir), None) => {
+				if let Err(error) = create_dir(data_dir) {
+					if error.kind() != ErrorKind::AlreadyExists {
+						Err::<(), _>(error)
+							.context("Failed to create data directory")?;
+					}
+				}
+
+				let db_path = data_dir.join("data.db");
+
+				init_connection(format!("sqlite://{}", db_path.display()))
+					.await?;
+
+				#[cfg(feature = "backup")]
+				if settings().database.backup != Some(false) {
+					let backup_dir = data_dir.join("backup");
+
+					backup::start_backup_cycle(db_path, backup_dir);
+				}
+			}
+			(None, Some(url)) => init_connection(url.to_string()).await?,
+			(None, None) => {
+				bail!("One of database.path and database.url must be set")
+			}
+			(Some(_), Some(_)) => {
+				bail!("Only one of database.path and database.url can be set")
+			}
 		}
 	}
 
-	let manager = SqliteConnectionManager::file(data_dir.join("data.db"))
-		.with_flags(
-			OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_READ_WRITE,
-		);
+	#[cfg(not(feature = "sqlite"))]
+	init_connection(settings().database.url.to_string()).await?;
 
-	let pool = Pool::new(manager).expect("Failed to open database pool");
+	Migrator::up(connection(), None).await?;
 
-	POOL.set(pool).unwrap();
+	Ok(())
+}
 
-	Mute::create_table();
-	Block::create_table();
-	Ignore::create_table();
-	OptOut::create_table();
-	Keyword::create_tables();
-	UserState::create_table();
-	Notification::create_table();
+async fn init_connection(url: String) -> Result<()> {
+	let conn = Database::connect(url).await?;
 
-	if settings().database.backup {
-		let backup_dir = data_dir.join("backup");
+	CONNECTION
+		.set(conn)
+		.map_err(|_| anyhow!("Database connection already initialized"))?;
 
-		start_backup_cycle(backup_dir);
-	}
+	Ok(())
 }
 
 /// Convenience macro to make a blocking tokio task and await it, creating a
@@ -94,7 +130,7 @@ macro_rules! await_db {
 			let span = ::tracing::info_span!(parent: &parent, "await_db");
 			let _entered = span.enter();
 			#[allow(unused_mut)]
-			let mut $conn = $crate::db::connection();
+			let mut $conn = $crate::db::pool();
 
 			$body
 		})
@@ -104,22 +140,27 @@ macro_rules! await_db {
 	}};
 }
 
-/// Convenience trait for converting IDs to and from `i64`, the integer type
-/// SQLite supports.
-trait IdI64Ext {
-	fn into_i64(self) -> i64;
+#[cfg(feature = "sqlite")]
+type DbInt = i64;
 
-	fn from_i64(x: i64) -> Self;
+#[cfg(not(feature = "sqlite"))]
+type DbInt = u64;
+
+/// Convenience trait for converting IDs to and from `DbInt`.
+trait IdDbExt {
+	fn into_db(self) -> DbInt;
+
+	fn from_db(x: DbInt) -> Self;
 }
 
 macro_rules! impl_id_ext {
 	($ty:ty $(, $($tys:ty),*)?) => {
-		impl IdI64Ext for $ty {
-			fn into_i64(self) -> i64 {
+		impl IdDbExt for $ty {
+			fn into_db(self) -> DbInt {
 				self.0.try_into().unwrap()
 			}
 
-			fn from_i64(x: i64) -> Self {
+			fn from_db(x: DbInt) -> Self {
 				Self(x.try_into().unwrap())
 			}
 		}

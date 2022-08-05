@@ -4,11 +4,32 @@
 //! Handling for sent notification messages.
 
 use anyhow::Result;
-use rusqlite::{params, Row};
+use futures_util::TryStreamExt;
+use sea_orm::{
+	entity::prelude::{
+		DeriveActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey,
+		DeriveRelation, EntityTrait, EnumIter, IdenStatic, PrimaryKeyTrait,
+	},
+	ColumnTrait, IntoActiveModel, QueryFilter,
+};
 use serenity::model::id::{MessageId, UserId};
 
-use super::IdI64Ext;
-use crate::{await_db, db::connection};
+use super::{connection, DbInt, IdDbExt};
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, DeriveEntityModel, DeriveActiveModelBehavior,
+)]
+#[sea_orm(table_name = "sent_notifications")]
+pub struct Model {
+	pub(crate) user_id: DbInt,
+	pub(crate) original_message: DbInt,
+	#[sea_orm(primary_key)]
+	pub(crate) notification_message: DbInt,
+	pub(crate) keyword: String,
+}
+
+#[derive(Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
 
 /// Represents a sent notification message.
 #[derive(Debug, Clone)]
@@ -25,55 +46,20 @@ pub(crate) struct Notification {
 }
 
 impl Notification {
-	/// Builds a [`Notification`] from a [`Row`], in this order:
-	/// - `original_message`: `INTEGER`
-	/// - `notification_message`: `INTEGER`
-	/// - `keyword`: `TEXT`
-	/// - `user_id`: `INTEGER`
-	fn from_row(row: &Row) -> rusqlite::Result<Self> {
-		Ok(Self {
-			original_message: MessageId::from_i64(row.get(0)?),
-			notification_message: MessageId::from_i64(row.get(1)?),
-			keyword: row.get(2)?,
-			user_id: UserId::from_i64(row.get(3)?),
-		})
-	}
-
-	/// Creates the DB table for storing mutes.
-	pub(super) fn create_table() {
-		let conn = connection();
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS sent_notifications (
-			original_message INTEGER NOT NULL,
-			notification_message INTEGER NOT NULL,
-			keyword TEXT NOT NULL,
-			user_id INTEGER NOT NULL
-			)",
-			params![],
-		)
-		.expect("Failed to create sent_notifications table");
-	}
-
 	/// Fetches the notifications that were sent because of the given message
 	/// from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn notifications_of_message(
 		message_id: MessageId,
 	) -> Result<Vec<Self>> {
-		await_db!("notifications from message": |conn| {
-			let mut stmt = conn.prepare(
-				"SELECT original_message, notification_message, keyword, user_id
-				FROM sent_notifications
-				WHERE original_message = ?"
-			)?;
-
-			let notifications = stmt.query_map(
-				params![message_id.into_i64()],
-				Self::from_row
-			)?;
-
-			notifications.map(|res| res.map_err(Into::into)).collect()
-		})
+		Entity::find()
+			.filter(Column::OriginalMessage.eq(message_id.into_db()))
+			.stream(connection())
+			.await?
+			.map_err(Into::into)
+			.map_ok(Notification::from)
+			.try_collect()
+			.await
 	}
 
 	/// Inserts this notification into the DB.
@@ -85,25 +71,11 @@ impl Notification {
 			self.notification_message = %self.notification_message,
 	))]
 	pub(crate) async fn insert(self) -> Result<()> {
-		await_db!("insert notification": |conn| {
-			conn.execute(
-				"INSERT INTO sent_notifications (
-					original_message,
-					notification_message,
-					keyword,
-					user_id
-				)
-				VALUES (?, ?, ?, ?)",
-				params![
-					self.original_message.into_i64(),
-					self.notification_message.into_i64(),
-					&*self.keyword,
-					self.user_id.into_i64()
-				],
-			)?;
+		Entity::insert(Model::from(self).into_active_model())
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Removes notifications in the given message from the DB.
@@ -111,15 +83,11 @@ impl Notification {
 	pub(crate) async fn delete_notification_message(
 		message_id: MessageId,
 	) -> Result<()> {
-		await_db!("delete notification": |conn| {
-			conn.execute(
-				"DELETE FROM sent_notifications
-				WHERE notification_message = ?",
-				params![message_id.into_i64()],
-			)?;
+		Entity::delete_by_id(message_id.into_db())
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Removes all notifications sent because of the given message from the DB.
@@ -127,14 +95,35 @@ impl Notification {
 	pub(crate) async fn delete_notifications_of_message(
 		message_id: MessageId,
 	) -> Result<()> {
-		await_db!("delete notifications": |conn| {
-			conn.execute(
-				"DELETE FROM sent_notifications
-				WHERE original_message = ?",
-				params![message_id.into_i64()],
-			)?;
+		Entity::delete_many()
+			.filter(Column::OriginalMessage.eq(message_id.into_db()))
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
+	}
+}
+
+impl From<Model> for Notification {
+	fn from(model: Model) -> Self {
+		Self {
+			user_id: UserId::from_db(model.user_id),
+			original_message: MessageId::from_db(model.original_message),
+			notification_message: MessageId::from_db(
+				model.notification_message,
+			),
+			keyword: model.keyword,
+		}
+	}
+}
+
+impl From<Notification> for Model {
+	fn from(notification: Notification) -> Self {
+		Self {
+			user_id: notification.user_id.into_db(),
+			original_message: notification.original_message.into_db(),
+			notification_message: notification.notification_message.into_db(),
+			keyword: notification.keyword,
+		}
 	}
 }

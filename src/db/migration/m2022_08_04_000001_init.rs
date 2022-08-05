@@ -1,0 +1,248 @@
+use sea_orm::sea_query::Index;
+use sea_orm_migration::prelude::{
+	async_trait, ColumnDef, DbErr, DeriveMigrationName, MigrationTrait,
+	SchemaManager, Table,
+};
+
+use crate::db::{
+	block, channel_keyword, guild_keyword, ignore, mute, notification, opt_out,
+	user_state,
+};
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+	async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+		manager
+			.create_table(
+				Table::create()
+					.table(guild_keyword::Entity)
+					.if_not_exists()
+					.col(
+						ColumnDef::new(guild_keyword::Column::UserId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(guild_keyword::Column::GuildId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(guild_keyword::Column::Keyword)
+							.string()
+							.not_null(),
+					)
+					.primary_key(
+						Index::create()
+							.col(guild_keyword::Column::UserId)
+							.col(guild_keyword::Column::GuildId)
+							.col(guild_keyword::Column::Keyword),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(channel_keyword::Entity)
+					.if_not_exists()
+					.col(
+						ColumnDef::new(channel_keyword::Column::UserId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(channel_keyword::Column::ChannelId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(channel_keyword::Column::Keyword)
+							.string()
+							.not_null(),
+					)
+					.primary_key(
+						Index::create()
+							.col(channel_keyword::Column::UserId)
+							.col(channel_keyword::Column::ChannelId)
+							.col(channel_keyword::Column::Keyword),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(ignore::Entity)
+					.col(
+						ColumnDef::new(ignore::Column::Phrase)
+							.string()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(ignore::Column::UserId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(ignore::Column::GuildId)
+							.big_integer()
+							.not_null(),
+					)
+					.primary_key(
+						Index::create()
+							.col(ignore::Column::Phrase)
+							.col(ignore::Column::UserId)
+							.col(ignore::Column::GuildId),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(mute::Entity)
+					.col(
+						ColumnDef::new(mute::Column::UserId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(mute::Column::ChannelId)
+							.big_integer()
+							.not_null(),
+					)
+					.primary_key(
+						Index::create()
+							.col(mute::Column::UserId)
+							.col(mute::Column::ChannelId),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(block::Entity)
+					.col(
+						ColumnDef::new(block::Column::UserId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(block::Column::BlockedId)
+							.big_integer()
+							.not_null(),
+					)
+					.primary_key(
+						Index::create()
+							.col(block::Column::UserId)
+							.col(block::Column::BlockedId),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(notification::Entity)
+					.col(
+						ColumnDef::new(notification::Column::UserId)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(notification::Column::OriginalMessage)
+							.big_integer()
+							.not_null(),
+					)
+					.col(
+						ColumnDef::new(
+							notification::Column::NotificationMessage,
+						)
+						.big_integer()
+						.not_null()
+						.primary_key(),
+					)
+					.col(
+						ColumnDef::new(notification::Column::Keyword)
+							.string()
+							.not_null(),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(opt_out::Entity)
+					.col(
+						ColumnDef::new(opt_out::Column::UserId)
+							.big_integer()
+							.not_null()
+							.primary_key(),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		manager
+			.create_table(
+				Table::create()
+					.table(user_state::Entity)
+					.col(
+						ColumnDef::new(user_state::Column::UserId)
+							.big_integer()
+							.not_null()
+							.primary_key(),
+					)
+					.col(
+						ColumnDef::new(user_state::Column::State)
+							.small_integer()
+							.not_null(),
+					)
+					.to_owned(),
+			)
+			.await?;
+
+		Ok(())
+	}
+
+	async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+		manager
+			.drop_table(Table::drop().table(guild_keyword::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(channel_keyword::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(mute::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(block::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(ignore::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(opt_out::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(notification::Entity).to_owned())
+			.await?;
+		manager
+			.drop_table(Table::drop().table(user_state::Entity).to_owned())
+			.await?;
+
+		Ok(())
+	}
+}

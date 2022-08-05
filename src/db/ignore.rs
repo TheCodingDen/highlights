@@ -3,12 +3,35 @@
 
 //! Handling for ignored phrases.
 
-use anyhow::Result;
-use rusqlite::{params, Row};
+use anyhow::{Context as _, Result};
+use futures_util::TryStreamExt;
+use sea_orm::{
+	entity::prelude::{
+		DeriveActiveModelBehavior, DeriveColumn, DeriveEntityModel,
+		DerivePrimaryKey, DeriveRelation, EntityTrait, EnumIter, IdenStatic,
+		PrimaryKeyTrait,
+	},
+	ColumnTrait, Condition, IntoActiveModel, QueryFilter, QuerySelect,
+};
 use serenity::model::id::{GuildId, UserId};
 
-use super::IdI64Ext;
-use crate::{await_db, db::connection};
+use super::{connection, DbInt, IdDbExt};
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, DeriveEntityModel, DeriveActiveModelBehavior,
+)]
+#[sea_orm(table_name = "guild_ignores")]
+pub struct Model {
+	#[sea_orm(primary_key)]
+	pub(crate) phrase: String,
+	#[sea_orm(primary_key)]
+	pub(crate) user_id: DbInt,
+	#[sea_orm(primary_key)]
+	pub(crate) guild_id: DbInt,
+}
+
+#[derive(Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
 
 /// Represents an ignored phrase.
 #[derive(Debug, Clone)]
@@ -22,33 +45,6 @@ pub(crate) struct Ignore {
 }
 
 impl Ignore {
-	/// Builds an [`Ignore`] from a [`Row`], in this order:
-	/// - `phrase`: `TEXT`
-	/// - `user_id`: `INTEGER`
-	/// - `guild id`: `INTEGER`
-	fn from_row(row: &Row) -> rusqlite::Result<Self> {
-		Ok(Ignore {
-			phrase: row.get(0)?,
-			user_id: UserId::from_i64(row.get(1)?),
-			guild_id: GuildId::from_i64(row.get(2)?),
-		})
-	}
-
-	/// Creates the DB table to store ignored phrases.
-	pub(super) fn create_table() {
-		let conn = connection();
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS guild_ignores (
-			phrase TEXT NOT NULL,
-			user_id INTEGER NOT NULL,
-			guild_id INTEGER NOT NULL,
-			PRIMARY KEY (phrase, user_id, guild_id)
-			)",
-			params![],
-		)
-		.expect("Failed to create guild_ignores table");
-	}
-
 	/// Fetches the list of ignored phrases of the specified user in the
 	/// specified guild from the DB.
 	#[tracing::instrument]
@@ -56,38 +52,32 @@ impl Ignore {
 		user_id: UserId,
 		guild_id: GuildId,
 	) -> Result<Vec<Ignore>> {
-		await_db!("user guild ignores": |conn| {
-			let mut stmt = conn.prepare(
-				"SELECT phrase, user_id, guild_id
-				FROM guild_ignores
-				WHERE user_id = ? AND guild_id = ?"
-			)?;
-
-			let ignores = stmt.query_map(
-				params![user_id.into_i64(), guild_id.into_i64()],
-				Ignore::from_row
-			)?;
-
-			ignores.map(|res| res.map_err(Into::into)).collect()
-		})
+		Entity::find()
+			.filter(
+				Condition::all()
+					.add(Column::UserId.eq(user_id.into_db()))
+					.add(Column::GuildId.eq(guild_id.into_db())),
+			)
+			.stream(connection())
+			.await?
+			.map_err(Into::into)
+			.map_ok(Ignore::from)
+			.try_collect()
+			.await
 	}
 
 	/// Fetches the list of ignored phrases of the specified user across all
 	/// guilds from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn user_ignores(user_id: UserId) -> Result<Vec<Ignore>> {
-		await_db!("user ignores": |conn| {
-			let mut stmt = conn.prepare(
-				"SELECT phrase, user_id, guild_id
-				FROM guild_ignores
-				WHERE user_id = ?"
-			)?;
-
-			let ignores =
-				stmt.query_map(params![user_id.into_i64()], Ignore::from_row)?;
-
-			ignores.map(|res| res.map_err(Into::into)).collect()
-		})
+		Entity::find()
+			.filter(Column::UserId.eq(user_id.into_db()))
+			.stream(connection())
+			.await?
+			.map_err(Into::into)
+			.map_ok(Ignore::from)
+			.try_collect()
+			.await
 	}
 
 	/// Checks if this ignored phrase already exists in the DB.
@@ -98,18 +88,21 @@ impl Ignore {
 			self.guild_id = %self.guild_id,
 	))]
 	pub(crate) async fn exists(self) -> Result<bool> {
-		await_db!("ignore exists": |conn| {
-			conn.query_row(
-				"SELECT COUNT(*) FROM guild_ignores
-				WHERE phrase = ? AND user_id = ? AND guild_id = ?",
-				params![
-					&*self.phrase,
-					self.user_id.into_i64(),
-					self.guild_id.into_i64()
-				],
-				|row| Ok(row.get::<_, u32>(0)? == 1),
-			).map_err(Into::into)
-		})
+		let count = Entity::find()
+			.select_only()
+			.column_as(Column::UserId.count(), QueryAs::IgnoreCount)
+			.filter(
+				Condition::all()
+					.add(Column::UserId.eq(self.user_id.into_db()))
+					.add(Column::GuildId.eq(self.guild_id.into_db()))
+					.add(Column::Phrase.eq(&*self.phrase)),
+			)
+			.into_values::<u32, QueryAs>()
+			.one(connection())
+			.await?;
+
+		let count = count.context("No count for ignores returned")?;
+		Ok(count == 1)
 	}
 
 	/// Adds this ignored phrase to the DB.
@@ -120,19 +113,11 @@ impl Ignore {
 			self.guild_id = %self.guild_id,
 	))]
 	pub(crate) async fn insert(self) -> Result<()> {
-		await_db!("insert ignore": |conn| {
-			conn.execute(
-				"INSERT INTO guild_ignores (phrase, user_id, guild_id)
-				VALUES (?, ?, ?)",
-				params![
-					&*self.phrase,
-					self.user_id.into_i64(),
-					self.guild_id.into_i64()
-				],
-			)?;
+		Entity::insert(Model::from(self).into_active_model())
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Deletes this ignored phrase from the DB.
@@ -143,19 +128,11 @@ impl Ignore {
 			self.guild_id = %self.guild_id,
 	))]
 	pub(crate) async fn delete(self) -> Result<()> {
-		await_db!("delete ignore": |conn| {
-			conn.execute(
-				"DELETE FROM guild_ignores
-				WHERE phrase = ? AND user_id = ? AND guild_id = ?",
-				params![
-					&*self.phrase,
-					self.user_id.into_i64(),
-					self.guild_id.into_i64()
-				],
-			)?;
+		Entity::delete(Model::from(self).into_active_model())
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Deletes all ignored phrases of the specified user in the specified guild
@@ -164,13 +141,41 @@ impl Ignore {
 	pub(crate) async fn delete_in_guild(
 		user_id: UserId,
 		guild_id: GuildId,
-	) -> Result<usize> {
-		await_db!("delete ignores in guild": |conn| {
-			conn.execute(
-				"DELETE FROM guild_ignores
-					WHERE user_id = ? AND guild_id = ?",
-				params![user_id.into_i64(), guild_id.into_i64()]
-			).map_err(Into::into)
-		})
+	) -> Result<u64> {
+		let result = Entity::delete_many()
+			.filter(
+				Condition::all()
+					.add(Column::UserId.eq(user_id.into_db()))
+					.add(Column::GuildId.eq(guild_id.into_db())),
+			)
+			.exec(connection())
+			.await?;
+
+		Ok(result.rows_affected)
+	}
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, DeriveColumn)]
+enum QueryAs {
+	IgnoreCount,
+}
+
+impl From<Model> for Ignore {
+	fn from(model: Model) -> Self {
+		Self {
+			phrase: model.phrase,
+			user_id: UserId::from_db(model.user_id),
+			guild_id: GuildId::from_db(model.guild_id),
+		}
+	}
+}
+
+impl From<Ignore> for Model {
+	fn from(ignore: Ignore) -> Self {
+		Self {
+			phrase: ignore.phrase,
+			user_id: ignore.user_id.into_db(),
+			guild_id: ignore.guild_id.into_db(),
+		}
 	}
 }

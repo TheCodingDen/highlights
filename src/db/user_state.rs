@@ -4,12 +4,31 @@
 //! Handling for user states; whether or not the last notification DM was
 //! successful.
 
-use anyhow::Result;
-use rusqlite::{params, OptionalExtension, Row};
+use anyhow::{bail, Result};
+use sea_orm::{
+	entity::prelude::{
+		DeriveActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey,
+		DeriveRelation, EntityTrait, EnumIter, IdenStatic, PrimaryKeyTrait,
+	},
+	sea_query::OnConflict,
+	IntoActiveModel,
+};
 use serenity::model::id::UserId;
 
-use super::IdI64Ext;
-use crate::{await_db, db::connection};
+use super::{connection, DbInt, IdDbExt};
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, DeriveEntityModel, DeriveActiveModelBehavior,
+)]
+#[sea_orm(table_name = "user_states")]
+pub struct Model {
+	#[sea_orm(primary_key)]
+	pub(crate) user_id: DbInt,
+	pub(crate) state: u8,
+}
+
+#[derive(Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
 
 /// Description of a user's state.
 #[derive(Debug, Clone)]
@@ -28,98 +47,69 @@ pub(crate) enum UserStateKind {
 impl UserState {
 	const CANNOT_DM_STATE: u8 = UserStateKind::CannotDm as u8;
 
-	/// Builds a [`UserState`] from a [`Row`], in this order:
-	/// - user_id: INTEGER
-	/// - state: INTEGER
-	fn from_row(row: &Row) -> rusqlite::Result<Self> {
-		let user_id = UserId::from_i64(row.get(0)?);
-		let state = match row.get(1)? {
-			Self::CANNOT_DM_STATE => UserStateKind::CannotDm,
-			other => {
-				return Err(rusqlite::Error::IntegralValueOutOfRange(
-					1,
-					other as i64,
-				));
-			}
-		};
-
-		Ok(Self { user_id, state })
-	}
-
-	/// Creates DB table for storing user states
-	pub(super) fn create_table() {
-		let conn = connection();
-		conn.execute(
-			"CREATE TABLE IF NOT EXISTS user_states (
-			user_id INTEGER PRIMARY KEY,
-			state INTEGER NOT NULL
-			)",
-			params![],
-		)
-		.expect("Failed to create user_states table");
-	}
-
 	/// Fetches the state of the user with the given ID from the DB.
 	///
 	/// Returns `None` if the user has no recorded state.
 	#[tracing::instrument]
 	pub(crate) async fn user_state(user_id: UserId) -> Result<Option<Self>> {
-		await_db!("user state": |conn| {
-
-			let mut stmt = conn.prepare(
-				"SELECT user_id, state
-				FROM user_states
-				WHERE user_id = ?"
-			)?;
-
-			stmt
-				.query_row(params![user_id.into_i64()], Self::from_row)
-				.optional()
-				.map_err(Into::into)
-		})
+		Entity::find_by_id(user_id.into_db())
+			.one(connection())
+			.await?
+			.map(Self::try_from)
+			.transpose()
 	}
 
 	/// Sets the state of the user in the DB.
 	#[tracing::instrument]
 	pub(crate) async fn set(self) -> Result<()> {
-		await_db!("set user state": |conn| {
-			conn.execute(
-				"INSERT INTO user_states (user_id, state)
-				VALUES (?, ?)
-				ON CONFLICT (user_id)
-					DO UPDATE SET state = excluded.state",
-				params![self.user_id.into_i64(), self.state as u8],
-			)?;
+		Entity::insert(Model::from(self).into_active_model())
+			.on_conflict(
+				OnConflict::column(Column::State)
+					.update_column(Column::State)
+					.to_owned(),
+			)
+			.exec(connection())
+			.await?;
 
-			Ok(())
-		})
+		Ok(())
 	}
 
 	/// Deletes this user state from the DB.
 	#[tracing::instrument]
 	pub(crate) async fn delete(self) -> Result<()> {
-		await_db!("delete user state": |conn| {
-			conn.execute(
-				"DELETE FROM user_states
-				WHERE user_id = ?",
-				params![self.user_id.into_i64()],
-			)?;
-
-			Ok(())
-		})
+		Self::clear(self.user_id).await
 	}
 
 	/// Clears any state of the user with the given ID.
 	#[tracing::instrument]
 	pub(crate) async fn clear(user_id: UserId) -> Result<()> {
-		await_db!("delete user state": |conn| {
-			conn.execute(
-				"DELETE FROM user_states
-				WHERE user_id = ?",
-				params![user_id.into_i64()],
-			)?;
+		Entity::delete_by_id(user_id.into_db())
+			.exec(connection())
+			.await?;
 
-			Ok(())
+		Ok(())
+	}
+}
+
+impl TryFrom<Model> for UserState {
+	type Error = anyhow::Error;
+
+	fn try_from(model: Model) -> Result<Self> {
+		Ok(Self {
+			user_id: UserId::from_db(model.user_id),
+			state: match model.state {
+				Self::CANNOT_DM_STATE => UserStateKind::CannotDm,
+				other => bail!("Unknown user state: {other}"),
+			},
 		})
+	}
+}
+
+impl From<UserState> for Model {
+	fn from(state: UserState) -> Self {
+		Model {
+			user_id: state.user_id.into_db(),
+			state: state.state as u8,
+		}
 	}
 }
