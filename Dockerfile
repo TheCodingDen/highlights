@@ -23,16 +23,16 @@ WORKDIR /highlights
 COPY ["Cargo.toml", "Cargo.lock", "./"]
 RUN cargo fetch ${RUSTTARGET:+--target $RUSTTARGET}
 RUN if [[ ! -z "$RUSTTARGET" ]]; then \
-        export CC=/$MUSLTARGET-cross/bin/$MUSLTARGET-gcc; \
+        export TARGET_CC=/$MUSLTARGET-cross/bin/$MUSLTARGET-gcc; \
         mkdir .cargo && \
         echo "[target.$RUSTTARGET]" > .cargo/config.toml && \
-        echo "linker = \"$CC\"" >> .cargo/config.toml; \
+        echo "linker = \"$TARGET_CC\"" >> .cargo/config.toml; \
     fi; \
     cargo build --release ${RUSTTARGET:+--target $RUSTTARGET} && \
     rm src/main.rs target/$RUSTTARGET/release/deps/highlights*
 COPY ["src", "./src"]
 RUN if [[ ! -z "$RUSTTARGET" ]]; then \
-        export CC=/$MUSLTARGET-cross/bin/$MUSLTARGET-gcc; \
+        export TARGET_CC=/$MUSLTARGET-cross/bin/$MUSLTARGET-gcc; \
     fi; \
     cargo build --release ${RUSTTARGET:+--target $RUSTTARGET} && \
     if [[ ! -z "$RUSTTARGET" ]]; then \
