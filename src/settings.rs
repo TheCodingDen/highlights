@@ -315,7 +315,7 @@ impl Settings {
 			Err(e) => return Err(ConfigError::Foreign(Box::new(e))),
 		}
 
-		b.add_source(Environment::with_prefix("HIGHLIGHTS"))
+		b.add_source(Environment::with_prefix("HIGHLIGHTS").separator("_"))
 			.build()?
 			.try_deserialize()
 	}
