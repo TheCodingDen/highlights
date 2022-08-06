@@ -7,7 +7,7 @@ license = "OSL-3.0"
 edition = "2021"
 
 [features]
-default = ["bot", "monitoring", "reporting", "sqlite", "backup", "postgresql"]
+default = ["bot", "reporting", "postgresql"]
 bot = [
     "indoc",
     "lazy-regex",
