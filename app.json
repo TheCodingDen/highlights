@@ -1,0 +1,13 @@
+{
+	"name": "Highlights",
+	"description": "A simple and flexible highlighting bot for Discord",
+	"repository": "https://github.com/ThatsNoMoon/highlights",
+	"buildpacks": [
+		{
+			"url": "https://github.com/emk/heroku-buildpack-rust"
+		}
+	],
+	"addons": [
+		"heroku-postgresql"
+	]
+}
