@@ -39,10 +39,10 @@ If you're contributing to highlights, I recommend moving the `pre-commit` file t
 
 ## Configuration
 
-Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION.PROPERTY`. Examples:
+Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION_PROPERTY`. Examples:
 ```
-HIGHLIGHTS_BOT.TOKEN="your bot token goes here"
-HIGHLIGHTS_DATABASE.PATH="highlights_data"
+HIGHLIGHTS_BOT_TOKEN="your bot token goes here"
+HIGHLIGHTS_DATABASE_PATH="highlights_data"
 ```
 
 ## Backups
