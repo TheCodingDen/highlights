@@ -27,6 +27,9 @@ The Dockerfile provided supports building to any architecture supported by both 
 - `--build-arg MUSLHOST=<musl host triple>` (ex: `x86_64-linux-musl`; see [supported musl.cc hosts](https://more.musl.cc/10.2.1))
 - `--build-arg MUSLTARGET=<musl target triple>` (ex: `aarch64-linux-musl`; for x86_64, see [supported musl.cc targets here](https://more.musl.cc/10.2.1/x86_64-linux-musl))
 
+## Heroku
+[![Deploy on Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ThatsNoMoon/highlights/tree/heroku)
+
 ## Download
 You can find downloads for 64 bit Windows and Linux, as well as 64 bit Linux ARM (for e.g. Raspberry Pi) on [the releases page](https://github.com/ThatsNoMoon/highlights/releases/).
 
