@@ -1,1 +1,1 @@
-worker: ./target/release/highlights
+worker: bash ./heroku_start.sh
