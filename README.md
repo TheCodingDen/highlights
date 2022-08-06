@@ -42,8 +42,10 @@ If you're contributing to highlights, I recommend moving the `pre-commit` file t
 Highlights is configured using a TOML file at `./config.toml` by default. To use a different path, set the `HIGHLIGHTS_CONFIG` environment variable. The default config with documentation is provided [here](example_config.toml). All options can be set using environment variables using this format: `HIGHLIGHTS_SECTION_PROPERTY`. Examples:
 ```
 HIGHLIGHTS_BOT_TOKEN="your bot token goes here"
+HIGHLIGHTS_BOT_APPLICATIONID="your discord application id (not bot token) here"
 HIGHLIGHTS_DATABASE_PATH="highlights_data"
 ```
+As in the above example, underscores in property names should be removed so that they aren't interpreted as section separators.
 
 ## Backups
 

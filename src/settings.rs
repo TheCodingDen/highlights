@@ -204,6 +204,7 @@ pub(crate) use user_address::UserAddress;
 #[derive(Debug, Deserialize)]
 pub(crate) struct BehaviorSettings {
 	/// Maximum number of keywords allowed for one user.
+	#[serde(alias = "maxkeywords")]
 	pub(crate) max_keywords: u32,
 
 	/// Duration to wait for activity before sending a notification.
@@ -222,11 +223,13 @@ pub(crate) struct BotSettings {
 	/// Bot token to log into Discord with.
 	pub(crate) token: String,
 	/// ID of the bot's application.
+	#[serde(alias = "applicationid")]
 	pub(crate) application_id: u64,
 	/// Whether this bot is private or not.
 	///
 	/// Controls whether the `about` command outputs an invite link.
 	pub(crate) private: bool,
+	#[serde(alias = "testguild")]
 	pub(crate) test_guild: Option<GuildId>,
 }
 
@@ -244,6 +247,7 @@ pub(crate) struct LoggingSettings {
 	///
 	/// See [`TraceIdRatioBased`](opentelemetry::sdk::trace::Sampler::TraceIdRatioBased).
 	#[cfg(feature = "monitoring")]
+	#[serde(alias = "sampleratio")]
 	pub(crate) sample_ratio: f64,
 
 	/// Global level that log messages should be filtered to.
