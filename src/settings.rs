@@ -196,6 +196,51 @@ mod level {
 }
 
 use level::{deserialize_level_filter, deserialize_level_filters};
+
+mod log_format {
+	use std::fmt;
+
+	use serde::{de, Deserialize, Deserializer};
+
+	#[derive(Debug)]
+	pub(crate) enum LogFormat {
+		Compact,
+		Pretty,
+		Json,
+	}
+
+	/// Visitor to deserialize a `LevelFilter` from a string.
+	struct LogFormatVisitor;
+	impl<'de> de::Visitor<'de> for LogFormatVisitor {
+		type Value = LogFormat;
+		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			write!(formatter, "a log format (compact, pretty, json)")
+		}
+
+		fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+		where
+			E: de::Error,
+		{
+			match v {
+				"compact" | "COMPACT" => Ok(LogFormat::Compact),
+				"pretty" | "PRETTY" => Ok(LogFormat::Pretty),
+				"json" | "JSON" => Ok(LogFormat::Json),
+				_ => Err(E::invalid_value(de::Unexpected::Str(v), &self)),
+			}
+		}
+	}
+
+	impl<'de> Deserialize<'de> for LogFormat {
+		fn deserialize<D>(d: D) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			d.deserialize_str(LogFormatVisitor)
+		}
+	}
+}
+
+pub(crate) use log_format::LogFormat;
 #[cfg(feature = "monitoring")]
 pub(crate) use user_address::UserAddress;
 
@@ -259,6 +304,8 @@ pub(crate) struct LoggingSettings {
 
 	/// Whether or not to use ANSI color codes.
 	pub(crate) color: bool,
+	/// Standard output logging format.
+	pub(crate) format: LogFormat,
 }
 
 /// Settings for the database.

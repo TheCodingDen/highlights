@@ -1,6 +1,6 @@
 [package]
 name = "highlights"
-version = "2.1.1"
+version = "2.1.2"
 authors = ["ThatsNoMoon <git@thatsnomoon.dev>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"
@@ -43,7 +43,7 @@ serde_json = { version = "1.0", optional = true }
 tinyvec = { version = "1.5", features = ["alloc"] }
 tracing = "0.1"
 tracing-opentelemetry = { version = "0.17", optional = true }
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["json"] }
 
 [dependencies.config]
 version = "0.13"

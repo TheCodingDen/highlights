@@ -6,14 +6,15 @@
 use anyhow::Result;
 #[cfg(any(feature = "monitoring", feature = "reporting"))]
 use tracing::warn;
-use tracing::Metadata;
+use tracing::{Metadata, Subscriber};
 use tracing_subscriber::{
 	filter::FilterFn,
-	layer::{Layer, SubscriberExt},
+	layer::{Layer, Layered, SubscriberExt},
+	registry::LookupSpan,
 	util::SubscriberInitExt,
 };
 
-use crate::settings::{settings, Settings};
+use crate::settings::{settings, LogFormat, Settings};
 
 #[cfg(feature = "monitoring")]
 mod monitoring;
@@ -49,38 +50,61 @@ fn use_filters(settings: &Settings, metadata: &Metadata) -> bool {
 /// This initializes [`reporting`] and [`monitoring`], if
 /// enabled, as well as basic stdout logging.
 pub(crate) fn init() -> Result<()> {
-	let subscriber = tracing_subscriber::registry().with(
-		tracing_subscriber::fmt::layer()
-			.with_ansi(settings().logging.color)
-			.with_filter({
-				let settings = settings();
-				FilterFn::new(|metadata| use_filters(settings, metadata))
-			}),
-	);
+	let fmt =
+		tracing_subscriber::fmt::layer().with_ansi(settings().logging.color);
 
-	#[cfg(feature = "monitoring")]
-	let (is_monitoring, subscriber) = {
-		let layer = monitoring::init()?;
-		(layer.is_some(), subscriber.with(layer))
+	let filter = {
+		let settings = settings();
+		FilterFn::new(|metadata| use_filters(settings, metadata))
 	};
 
-	#[cfg(feature = "reporting")]
-	let (is_reporting, subscriber) = {
-		let layer = reporting::init();
-		(layer.is_some(), subscriber.with(layer))
-	};
+	fn init_rest<L, S>(subscriber: Layered<L, S>) -> Result<()>
+	where
+		L: Layer<S> + Send + Sync + 'static,
+		S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync + 'static,
+	{
+		#[cfg(feature = "monitoring")]
+		let (is_monitoring, subscriber) = {
+			let layer = monitoring::init()?;
+			(layer.is_some(), subscriber.with(layer))
+		};
 
-	subscriber.try_init()?;
+		#[cfg(feature = "reporting")]
+		let (is_reporting, subscriber) = {
+			let layer = reporting::init();
+			(layer.is_some(), subscriber.with(layer))
+		};
 
-	#[cfg(feature = "monitoring")]
-	if !is_monitoring {
-		warn!("Jaeger agent address not provided; not reporting traces");
+		subscriber.try_init()?;
+
+		#[cfg(feature = "monitoring")]
+		if !is_monitoring {
+			warn!("Jaeger agent address not provided; not reporting traces");
+		}
+
+		#[cfg(feature = "reporting")]
+		if !is_reporting {
+			warn!("Webhook URL is not present, not reporting panics");
+		}
+
+		Ok(())
 	}
 
-	#[cfg(feature = "reporting")]
-	if !is_reporting {
-		warn!("Webhook URL is not present, not reporting panics");
+	match &settings().logging.format {
+		LogFormat::Compact => {
+			let subscriber = tracing_subscriber::registry()
+				.with(fmt.compact().with_filter(filter));
+			init_rest(subscriber)
+		}
+		LogFormat::Pretty => {
+			let subscriber = tracing_subscriber::registry()
+				.with(fmt.pretty().with_filter(filter));
+			init_rest(subscriber)
+		}
+		LogFormat::Json => {
+			let subscriber = tracing_subscriber::registry()
+				.with(fmt.json().with_filter(filter));
+			init_rest(subscriber)
+		}
 	}
-
-	Ok(())
 }

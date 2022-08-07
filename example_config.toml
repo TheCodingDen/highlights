@@ -26,6 +26,8 @@ sample_ratio = 1.0
 level = "WARN"
 # Whether or not to use ANSI color codes (may not work on Windows)
 color = true
+# Format of standard output logging (can be "compact", "pretty", or "json")
+format = "compact"
 [logging.filters]
 # The `highlights` crate will log at INFO instead
 highlights = "INFO"
