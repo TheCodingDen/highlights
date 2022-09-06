@@ -79,8 +79,11 @@ pub(crate) async fn init() -> Result<()> {
 
 				let db_path = data_dir.join("data.db");
 
-				init_connection(format!("sqlite://{}", db_path.display()))
-					.await?;
+				init_connection(format!(
+					"sqlite://{}?mode=rwc",
+					db_path.display()
+				))
+				.await?;
 
 				#[cfg(feature = "backup")]
 				if settings().database.backup != Some(false) {
