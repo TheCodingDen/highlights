@@ -201,7 +201,7 @@ pub(crate) async fn notify_keywords(
 						&ignores,
 					)
 					.await?
-					.then(|| keyword.keyword))
+					.then_some(keyword.keyword))
 				})
 				.try_collect::<TinyVec<[String; 2]>>()
 				.await?;
@@ -358,7 +358,7 @@ async fn build_notification_embed(
 
 	embed
 		.description(&message.content)
-		.timestamp(&message.timestamp)
+		.timestamp(message.timestamp)
 		.author(|a| {
 			a.name(title);
 			if let Some(url) = guild_icon {

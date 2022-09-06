@@ -270,7 +270,7 @@ pub(crate) async fn help(ctx: Context, command: Command) -> Result<()> {
 					r.interaction_response_data(|m| {
 						m.flags(MessageFlags::EPHEMERAL).embed(|e| {
 							e.title(format!("Help – {}", info.name))
-								.description(&info.long_desc)
+								.description(info.long_desc)
 								.color(EMBED_COLOR);
 
 							match info.examples.as_ref() {
@@ -752,7 +752,7 @@ static COMMAND_INFO: Lazy<[CommandInfo; 18], fn() -> [CommandInfo; 18]> =
 				.kind(CommandOptionType::String);
 
 			for command in &commands {
-				opt.add_string_choice(&command.name, &command.name);
+				opt.add_string_choice(command.name, command.name);
 			}
 
 			opt

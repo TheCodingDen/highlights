@@ -344,7 +344,7 @@ async fn handle_keywords(ctx: &Context, message: &Message, guild_id: GuildId) {
 						ignores,
 					)
 					.await?
-					.then(|| keyword))
+					.then_some(keyword))
 				})
 				.try_collect::<TinyVec<[Keyword; 2]>>()
 				.await?;
