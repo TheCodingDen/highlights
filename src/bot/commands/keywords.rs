@@ -88,10 +88,18 @@ pub(crate) async fn add(ctx: Context, command: Command) -> Result<()> {
 
 	let keyword = match command.data.resolved.channels.values().next() {
 		Some(channel) => {
-			let channel = ctx
-				.cache
-				.guild_channel(channel.id)
-				.context("Channel for keyword to add not cached")?;
+			let channel = match ctx.cache.guild_channel(channel.id) {
+				Some(c) if c.kind == ChannelType::Text => c,
+				_ => {
+					return respond_eph(
+						&ctx,
+						&command,
+						"❌ Please provide a text channel!",
+					)
+					.await
+				}
+			};
+
 			let self_id = ctx.cache.current_user_id();
 			match user_can_read_channel(&ctx, &channel, self_id).await {
 				Ok(Some(true)) => Keyword {
