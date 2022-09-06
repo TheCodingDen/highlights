@@ -352,7 +352,8 @@ impl Settings {
 		let mut b = b
 			.set_default("logging.level", "WARN")?
 			.set_default("logging.filters.highlights", "INFO")?
-			.set_default("logging.color", "true")?;
+			.set_default("logging.color", "true")?
+			.set_default("logging.format", "compact")?;
 
 		let filename = env::var("HIGHLIGHTS_CONFIG").or_else(|e| match e {
 			VarError::NotPresent => Ok("./config.toml".to_owned()),
