@@ -359,7 +359,7 @@ impl Settings {
 			VarError::NotPresent => Ok("./config.toml".to_owned()),
 			e => Err(ConfigError::Foreign(Box::new(e))),
 		})?;
-		match read_to_string(&filename) {
+		match read_to_string(filename) {
 			Ok(conf) => {
 				b = b.add_source(File::from_str(&conf, FileFormat::Toml));
 			}

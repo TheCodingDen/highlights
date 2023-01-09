@@ -25,6 +25,7 @@ pub struct Model {
 	pub(crate) original_message: DbInt,
 	#[sea_orm(primary_key)]
 	pub(crate) notification_message: DbInt,
+	#[sea_orm(primary_key)]
 	pub(crate) keyword: String,
 }
 
@@ -83,7 +84,8 @@ impl Notification {
 	pub(crate) async fn delete_notification_message(
 		message_id: MessageId,
 	) -> Result<()> {
-		Entity::delete_by_id(message_id.into_db())
+		Entity::delete_many()
+			.filter(Column::NotificationMessage.eq(message_id.into_db()))
 			.exec(connection())
 			.await?;
 
