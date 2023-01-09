@@ -79,6 +79,7 @@ impl MigrationTrait for Migration {
 			.create_table(
 				Table::create()
 					.table(ignore::Entity)
+					.if_not_exists()
 					.col(
 						ColumnDef::new(ignore::Column::Phrase)
 							.string()
@@ -108,6 +109,7 @@ impl MigrationTrait for Migration {
 			.create_table(
 				Table::create()
 					.table(mute::Entity)
+					.if_not_exists()
 					.col(
 						ColumnDef::new(mute::Column::UserId)
 							.big_integer()
@@ -131,6 +133,7 @@ impl MigrationTrait for Migration {
 			.create_table(
 				Table::create()
 					.table(block::Entity)
+					.if_not_exists()
 					.col(
 						ColumnDef::new(block::Column::UserId)
 							.big_integer()
@@ -154,6 +157,7 @@ impl MigrationTrait for Migration {
 			.create_table(
 				Table::create()
 					.table(notification::Entity)
+					.if_not_exists()
 					.col(
 						ColumnDef::new(notification::Column::UserId)
 							.big_integer()
@@ -185,6 +189,7 @@ impl MigrationTrait for Migration {
 			.create_table(
 				Table::create()
 					.table(opt_out::Entity)
+					.if_not_exists()
 					.col(
 						ColumnDef::new(opt_out::Column::UserId)
 							.big_integer()
@@ -199,6 +204,7 @@ impl MigrationTrait for Migration {
 			.create_table(
 				Table::create()
 					.table(user_state::Entity)
+					.if_not_exists()
 					.col(
 						ColumnDef::new(user_state::Column::UserId)
 							.big_integer()

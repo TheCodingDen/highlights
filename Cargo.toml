@@ -1,6 +1,6 @@
 [package]
 name = "highlights"
-version = "2.1.3"
+version = "2.1.4"
 authors = ["ThatsNoMoon <git@thatsnomoon.dev>"]
 repository = "https://github.com/ThatsNoMoon/highlights"
 license = "OSL-3.0"
