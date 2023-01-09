@@ -39,7 +39,7 @@ RUN if [[ ! -z "$RUSTTARGET" ]]; then \
         mv target/$RUSTTARGET/release/highlights target/release/highlights; \
     fi
 
-FROM alpine:3.15.0
+FROM alpine:3.17.0
 RUN apk add --no-cache --update tini=0.19.0-r1 && \
     addgroup -g 1000 highlights \
     && adduser -u 1000 -H -D -G highlights -s /bin/sh highlights
