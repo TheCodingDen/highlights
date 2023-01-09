@@ -8,7 +8,7 @@ use futures_util::TryStreamExt;
 use sea_orm::{
 	entity::prelude::{
 		DeriveActiveModelBehavior, DeriveColumn, DeriveEntityModel,
-		DerivePrimaryKey, DeriveRelation, EntityTrait, EnumIter, IdenStatic,
+		DerivePrimaryKey, DeriveRelation, EntityTrait, EnumIter,
 		PrimaryKeyTrait,
 	},
 	ColumnTrait, Condition, IntoActiveModel, QueryFilter, QuerySelect,

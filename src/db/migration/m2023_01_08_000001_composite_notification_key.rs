@@ -61,7 +61,7 @@ impl MigrationTrait for Migration {
 							])
 							.to_owned(),
 					)
-					.map_err(|e| DbErr::Query(e.to_string()))?
+					.map_err(|e| DbErr::Migration(e.to_string()))?
 					.to_owned(),
 			)
 			.await?;
@@ -125,7 +125,7 @@ impl MigrationTrait for Migration {
 							])
 							.to_owned(),
 					)
-					.map_err(|e| DbErr::Query(e.to_string()))?
+					.map_err(|e| DbErr::Migration(e.to_string()))?
 					.to_owned(),
 			)
 			.await?;

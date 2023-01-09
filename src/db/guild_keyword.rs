@@ -3,7 +3,7 @@
 
 use sea_orm::entity::prelude::{
 	DeriveActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey,
-	DeriveRelation, EntityTrait, EnumIter, IdenStatic, PrimaryKeyTrait,
+	DeriveRelation, EntityTrait, EnumIter, PrimaryKeyTrait,
 };
 
 use super::DbInt;

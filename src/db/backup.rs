@@ -124,7 +124,7 @@ async fn clean_backups(backup_dir: &Path) {
 					if gap < Duration::days(1) - Duration::minutes(1) {
 						debug!(
 							"Deleting old restart backup from {}",
-							time.date()
+							time.date_naive()
 						);
 						results.push(fs::remove_file(path).await);
 					} else {
@@ -135,7 +135,7 @@ async fn clean_backups(backup_dir: &Path) {
 					if gap < Duration::weeks(1) - Duration::minutes(10) {
 						debug!(
 							"Deleting old daily backup from {}",
-							time.date()
+							time.date_naive()
 						);
 						results.push(fs::remove_file(path).await);
 					} else {
@@ -146,7 +146,7 @@ async fn clean_backups(backup_dir: &Path) {
 					if gap < Duration::days(30) - Duration::minutes(30) {
 						debug!(
 							"Deleting old weekly backup from {}",
-							time.date()
+							time.date_naive()
 						);
 						results.push(fs::remove_file(path).await);
 					} else {
@@ -154,7 +154,10 @@ async fn clean_backups(backup_dir: &Path) {
 						monthly_found += 1;
 					}
 				} else if gap < Duration::days(364) {
-					debug!("Deleting old monthly backup from {}", time.date());
+					debug!(
+						"Deleting old monthly backup from {}",
+						time.date_naive()
+					);
 					results.push(fs::remove_file(path).await);
 				} else {
 					last_time = time;

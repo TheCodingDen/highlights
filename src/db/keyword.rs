@@ -7,8 +7,7 @@ use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
 use sea_orm::{
 	sea_query::Expr, ColumnTrait, Condition, DeriveColumn, EntityTrait,
-	EnumIter, IdenStatic, IntoActiveModel, QueryFilter, QuerySelect,
-	QueryTrait,
+	EnumIter, IntoActiveModel, QueryFilter, QuerySelect, QueryTrait,
 };
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use tracing::info_span;

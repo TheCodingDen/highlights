@@ -22,8 +22,8 @@ pub(crate) type Layer<S> = Filtered<OpenTelemetryLayer<S, Tracer>, FilterFn, S>;
 pub(crate) fn init<S: Subscriber + for<'span> LookupSpan<'span>>(
 ) -> Result<Option<Layer<S>>> {
 	if let Some(address) = settings().logging.jaeger {
-		let tracer = opentelemetry_jaeger::new_pipeline()
-			.with_agent_endpoint(address.socket_addr)
+		let tracer = opentelemetry_jaeger::new_agent_pipeline()
+			.with_endpoint(address.socket_addr)
 			.with_service_name(env!("CARGO_PKG_NAME"))
 			.with_trace_config(trace::config().with_sampler(
 				Sampler::TraceIdRatioBased(settings().logging.sample_ratio),
