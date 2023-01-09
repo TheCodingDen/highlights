@@ -1,13 +1,13 @@
-FROM --platform=$BUILDPLATFORM rust:1.61-slim-bullseye AS auditor
+FROM --platform=$BUILDPLATFORM rust:1.66-slim-bullseye AS auditor
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends pkg-config=0.29.2-1 libssl-dev=1.1.1n-1+deb11u1 && \
+    apt-get install -y --no-install-recommends pkg-config=0.29.2-1 libssl-dev=1.1.1n-0+deb11u3 && \
     USER=root cargo new --bin highlights && \
     cargo install cargo-audit
 COPY ["Cargo.*", "./"]
 RUN cargo audit -D unsound -D yanked
 
-FROM --platform=$BUILDPLATFORM rust:1.61-alpine3.15 AS builder
-RUN apk add --no-cache --update musl-dev=1.2.2-r7 && \
+FROM --platform=$BUILDPLATFORM rust:1.66-alpine3.17 AS builder
+RUN apk add --no-cache --update musl-dev=1.2.3-r4 && \
     USER=root cargo new --bin highlights
 
 ARG RUSTTARGET
@@ -40,7 +40,7 @@ RUN if [[ ! -z "$RUSTTARGET" ]]; then \
     fi
 
 FROM alpine:3.15.0
-RUN apk add --no-cache --update tini=0.19.0-r0 && \
+RUN apk add --no-cache --update tini=0.19.0-r1 && \
     addgroup -g 1000 highlights \
     && adduser -u 1000 -H -D -G highlights -s /bin/sh highlights
 ENTRYPOINT ["/sbin/tini", "--"]
