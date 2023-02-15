@@ -1,4 +1,4 @@
-// Copyright 2022 ThatsNoMoon
+// Copyright 2023 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Highlights is a simple but flexible keyword highlighting bot for Discord.
@@ -9,6 +9,9 @@
 #![allow(clippy::tabs_in_doc_comments)]
 
 use anyhow::Result;
+use tracing::warn;
+
+use crate::settings::settings;
 
 pub(crate) mod db;
 
@@ -28,6 +31,14 @@ async fn main() -> Result<()> {
 	settings::init()?;
 
 	logging::init()?;
+
+	if settings().behavior.patience_seconds.is_some() {
+		warn!(
+			"Your configuration includes behavior.patience_seconds. \
+			This setting is deprecated; please use behavior.patience instead. \
+			For example, patience = \"2m\"."
+		);
+	}
 
 	db::init().await?;
 

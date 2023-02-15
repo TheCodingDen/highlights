@@ -1,4 +1,4 @@
-// Copyright 2022 joshyrobot, ThatsNoMoon
+// Copyright 2023 joshyrobot, ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Handling of bot configuration for hosters.
@@ -48,11 +48,11 @@ mod duration_de {
 	}
 	pub(super) fn deserialize_duration<'de, D>(
 		d: D,
-	) -> Result<Duration, D::Error>
+	) -> Result<Option<Duration>, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		d.deserialize_u64(DurationVisitor)
+		d.deserialize_u64(DurationVisitor).map(Some)
 	}
 }
 
@@ -254,12 +254,18 @@ pub(crate) struct BehaviorSettings {
 	pub(crate) max_keywords: u32,
 
 	/// Duration to wait for activity before sending a notification.
-	#[serde(
-		rename = "patience_seconds",
-		deserialize_with = "deserialize_duration"
-	)]
+	#[serde(with = "humantime_serde")]
 	#[cfg(feature = "bot")]
 	pub(crate) patience: Duration,
+
+	/// Deprecated method to specify patience.
+	#[serde(
+		deserialize_with = "deserialize_duration",
+		alias = "patienceseconds",
+		default
+	)]
+	#[cfg(feature = "bot")]
+	pub(crate) patience_seconds: Option<Duration>,
 }
 
 /// Settings for the account of the bot.
@@ -344,7 +350,7 @@ impl Settings {
 
 		#[cfg(feature = "bot")]
 		let b = b.set_default("behavior.max_keywords", 100i64)?
-			.set_default("behavior.patience_seconds", 60i64 * 2)?
+			.set_default("behavior.patience", "2m")?
 			.set_default("bot.private", false)?;
 
 		#[cfg(feature = "monitoring")]
@@ -371,6 +377,12 @@ impl Settings {
 		b.add_source(Environment::with_prefix("HIGHLIGHTS").separator("_"))
 			.build()?
 			.try_deserialize()
+			.map(|mut settings: Settings| {
+				if let Some(old) = settings.behavior.patience_seconds {
+					settings.behavior.patience = old;
+				}
+				settings
+			})
 	}
 }
 

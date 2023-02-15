@@ -12,8 +12,10 @@ private = false
 [behavior]
 # Maximum amount of keywords users can subscribe to
 max_keywords = 100
-# Amount of seconds to wait for activity before sending a notification
-patience_seconds = 120
+# Amount of time to wait for activity before sending a notification
+# Other examples: "1m 30sec", "5minutes"
+# See https://docs.rs/humantime/latest/humantime/fn.parse_duration.html for complete list
+patience = "2m"
 
 [logging]
 # Discord webhook to send errors and panics to
