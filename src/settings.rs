@@ -14,6 +14,7 @@ use std::{
 	io::ErrorKind,
 };
 
+use anyhow::{bail, Result};
 use config::{
 	builder::DefaultState, ConfigBuilder, ConfigError, Environment, File,
 	FileFormat,
@@ -382,13 +383,14 @@ pub(crate) fn settings() -> &'static Settings {
 }
 
 /// Initialize the bot's [`Settings`].
-pub(crate) fn init() {
+pub(crate) fn init() -> Result<()> {
 	match Settings::new() {
 		Ok(settings) => {
 			let _ = SETTINGS.set(settings);
+			Ok(())
 		}
 		Err(e) => {
-			panic!("Failed to parse settings: {}", e);
+			bail!("Failed to parse settings: {}", e);
 		}
 	}
 }

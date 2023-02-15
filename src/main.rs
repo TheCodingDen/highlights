@@ -25,7 +25,7 @@ mod bot;
 /// Entrypoint function to initialize other modules.
 #[tokio::main]
 async fn main() -> Result<()> {
-	settings::init();
+	settings::init()?;
 
 	logging::init()?;
 
