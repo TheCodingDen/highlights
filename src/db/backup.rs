@@ -211,14 +211,10 @@ async fn clean_backups(backup_dir: &Path) {
 /// Creates `<data directory>/backup` if it doesn't exist already, creates a
 /// backup, cleans up old backups, and repeats once every 24hrs.
 pub(crate) fn start_backup_cycle(db_path: PathBuf, backup_dir: PathBuf) {
-	let _ = ensure_backup_dir_exists(&backup_dir);
-
 	task::spawn(async move {
 		let mut daily = interval(StdDuration::from_secs(60 * 60 * 24));
 
 		loop {
-			daily.tick().await;
-
 			info!("Backing up database...");
 			if let Err(error) = ensure_backup_dir_exists(&backup_dir).await {
 				error!("Failed to create backup directory: {0}\n{0:?}", error);
@@ -245,6 +241,8 @@ pub(crate) fn start_backup_cycle(db_path: PathBuf, backup_dir: PathBuf) {
 
 			info!("Cleaning up old backups...");
 			clean_backups(&backup_dir).await;
+
+			daily.tick().await;
 		}
 	});
 }

@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:1.66-slim-bullseye AS auditor
+FROM --platform=$BUILDPLATFORM rust:1.67-slim-bullseye AS auditor
 RUN apt-get update && \
     apt-get install -y --no-install-recommends pkg-config=0.29.2-1 libssl-dev=1.1.1n-0+deb11u3 && \
     USER=root cargo new --bin highlights && \
@@ -6,7 +6,7 @@ RUN apt-get update && \
 COPY ["Cargo.*", "./"]
 RUN cargo audit -D unsound -D yanked
 
-FROM --platform=$BUILDPLATFORM rust:1.66-alpine3.17 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.67-alpine3.17 AS builder
 RUN apk add --no-cache --update musl-dev=1.2.3-r4 && \
     USER=root cargo new --bin highlights
 
@@ -15,7 +15,7 @@ ARG MUSLHOST
 ARG MUSLTARGET
 RUN if [[ ! -z "$RUSTTARGET" ]]; then \
         rustup target add $RUSTTARGET && \
-        wget https://more.musl.cc/10.2.1/$MUSLHOST/$MUSLTARGET-cross.tgz && \
+        wget https://more.musl.cc/11.2.1/$MUSLHOST/$MUSLTARGET-cross.tgz && \
         tar xzf $MUSLTARGET-cross.tgz; \
     fi
 

@@ -90,9 +90,8 @@ impl Keyword {
 			mute::Entity::find()
 				.select_only()
 				.column(mute::Column::ChannelId)
-				.filter(Expr::tbl(mute::Entity, mute::Column::UserId).equals(
-					guild_keyword::Entity,
-					guild_keyword::Column::UserId,
+				.filter(Expr::col((mute::Entity, mute::Column::UserId)).equals(
+					(guild_keyword::Entity, guild_keyword::Column::UserId),
 				))
 				.into_query();
 
