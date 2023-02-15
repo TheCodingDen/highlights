@@ -1,4 +1,4 @@
-// Copyright 2022 ThatsNoMoon
+// Copyright 2023 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Discord client creation and behavior.
@@ -140,7 +140,9 @@ async fn ready(ctx: Context) {
 
 	ctx.set_activity(Activity::listening("/help")).await;
 
-	commands::create_commands(ctx).await;
+	if let Err(e) = commands::create_commands(ctx).await {
+		error!("{e}\n{e:?}");
+	}
 
 	let _ = STARTED.set(Instant::now());
 

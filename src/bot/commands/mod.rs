@@ -1,4 +1,4 @@
-// Copyright 2022 ThatsNoMoon
+// Copyright 2023 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Implementations of all of the explicit bot commands.
@@ -30,7 +30,7 @@ use serenity::{
 		Permissions,
 	},
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 pub(crate) use self::{
 	blocks::{block, blocks, unblock},
@@ -49,8 +49,8 @@ use crate::{
 };
 
 // Create all slash commands globally, and in a test guild if configured.
-pub(crate) async fn create_commands(ctx: Context) {
-	info!("Registering slash commands");
+pub(crate) async fn create_commands(ctx: Context) -> Result<()> {
+	debug!("Registering slash commands");
 	let commands = COMMAND_INFO
 		.iter()
 		.map(CommandInfo::create)
@@ -63,13 +63,15 @@ pub(crate) async fn create_commands(ctx: Context) {
 				create.set_application_commands(commands.clone())
 			})
 			.await
-			.expect("Failed to create guild application commands");
+			.context("Failed to create guild application commands")?;
 	}
 	ApplicationCommand::set_global_application_commands(&ctx, |create| {
 		create.set_application_commands(commands)
 	})
 	.await
-	.expect("Failed to set global application commands");
+	.context("Failed to set global application commands")?;
+
+	Ok(())
 }
 
 /// Display the API latency of the bot.
