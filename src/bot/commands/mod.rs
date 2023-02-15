@@ -49,7 +49,7 @@ use crate::{
 };
 
 // Create all slash commands globally, and in a test guild if configured.
-pub(crate) async fn create_commands(ctx: Context) -> Result<()> {
+pub(crate) async fn create_commands(ctx: &Context) -> Result<()> {
 	debug!("Registering slash commands");
 	let commands = COMMAND_INFO
 		.iter()
@@ -59,13 +59,13 @@ pub(crate) async fn create_commands(ctx: Context) -> Result<()> {
 		debug!("Registering commands in test guild");
 
 		guild
-			.set_application_commands(&ctx, |create| {
+			.set_application_commands(ctx, |create| {
 				create.set_application_commands(commands.clone())
 			})
 			.await
 			.context("Failed to create guild application commands")?;
 	}
-	ApplicationCommand::set_global_application_commands(&ctx, |create| {
+	ApplicationCommand::set_global_application_commands(ctx, |create| {
 		create.set_application_commands(commands)
 	})
 	.await

@@ -15,7 +15,11 @@ max_keywords = 100
 # Amount of time to wait for activity before sending a notification
 # Other examples: "1m 30sec", "5minutes"
 # See https://docs.rs/humantime/latest/humantime/fn.parse_duration.html for complete list
-patience = "2m"
+patience = "2min"
+# Amount of time to leave notifications visible
+# This uses the same format as patience
+# Other examples: "1y", "90d", "1M" (one month)
+#patience_lifetime = "1month"
 
 [logging]
 # Discord webhook to send errors and panics to

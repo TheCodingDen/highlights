@@ -258,6 +258,15 @@ pub(crate) struct BehaviorSettings {
 	#[cfg(feature = "bot")]
 	pub(crate) patience: Duration,
 
+	/// Duration to wait before deleting notifications.
+	#[serde(
+		alias = "notificationlifetime",
+		with = "humantime_serde::option",
+		default
+	)]
+	#[cfg(feature = "bot")]
+	pub(crate) notification_lifetime: Option<Duration>,
+
 	/// Deprecated method to specify patience.
 	#[serde(
 		deserialize_with = "deserialize_duration",

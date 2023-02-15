@@ -1,18 +1,22 @@
-// Copyright 2022 ThatsNoMoon
+// Copyright 2023 ThatsNoMoon
 // Licensed under the Open Software License version 3.0
 
 //! Functions for sending, editing, and deleting notifications.
 
-use std::{collections::HashMap, fmt::Write as _, ops::Range, time::Duration};
+use std::{
+	cmp::min, collections::HashMap, fmt::Write as _, ops::Range, time::Duration,
+};
 
-use anyhow::{anyhow, bail, Context as _, Result};
-use futures_util::{stream, StreamExt, TryStreamExt};
+use anyhow::{anyhow, bail, Context as _, Error, Result};
+use futures_util::{
+	stream, stream::FuturesUnordered, StreamExt, TryFutureExt, TryStreamExt,
+};
 use indoc::indoc;
 use lazy_regex::regex;
 use serenity::{
 	builder::{CreateEmbed, CreateMessage, EditMessage},
 	client::Context,
-	http::{error::ErrorResponse, HttpError},
+	http::{error::ErrorResponse, HttpError, StatusCode},
 	model::{
 		application::interaction::application_command::ApplicationCommandInteraction as Command,
 		channel::{Channel, Message},
@@ -22,8 +26,11 @@ use serenity::{
 	Error as SerenityError,
 };
 use tinyvec::TinyVec;
-use tokio::{select, time::sleep};
-use tracing::{debug, error};
+use tokio::{
+	select,
+	time::{interval, sleep},
+};
+use tracing::{debug, error, info_span};
 
 use crate::{
 	bot::util::{followup_eph, user_can_read_channel},
@@ -191,7 +198,7 @@ pub(crate) async fn notify_keywords(
 			message.content = content;
 
 			let keywords = stream::iter(keywords)
-				.map(Ok::<_, anyhow::Error>) // convert to a TryStream
+				.map(Ok::<_, Error>) // convert to a TryStream
 				.try_filter_map(|keyword| async {
 					Ok(should_notify_keyword(
 						&ctx,
@@ -473,32 +480,42 @@ async fn send_notification_message(
 
 /// Deletes the given notification messages sent to the corresponding users.
 #[tracing::instrument(skip(ctx))]
-pub(crate) async fn delete_sent_notifications(
+pub(crate) async fn clear_sent_notifications(
 	ctx: &Context,
 	notification_messages: &[(UserId, MessageId)],
 ) {
-	for (user_id, message_id) in notification_messages {
-		let result: Result<()> = async {
-			let dm_channel = user_id.create_dm_channel(ctx).await?;
-
-			dm_channel
-				.edit_message(ctx, message_id, |m| {
-					m.embed(|e| {
-						e.description("*Original message deleted*")
-							.color(ERROR_COLOR)
-					})
-				})
-				.await
-				.context("Failed to edit notification message")?;
-
-			Ok(())
-		}
-		.await;
-
-		if let Err(e) = result {
+	for &(user_id, message_id) in notification_messages {
+		if let Err(e) = clear_sent_notification(
+			ctx,
+			user_id,
+			message_id,
+			"*Original message deleted*",
+		)
+		.await
+		{
 			error!("{:?}", e);
 		}
 	}
+}
+
+/// Replaces the given direct message with the given placeholder.
+#[tracing::instrument(skip(ctx, placeholder))]
+async fn clear_sent_notification(
+	ctx: &Context,
+	user_id: UserId,
+	message_id: MessageId,
+	placeholder: impl ToString,
+) -> Result<()> {
+	let dm_channel = user_id.create_dm_channel(ctx).await?;
+
+	dm_channel
+		.edit_message(ctx, message_id, |m| {
+			m.embed(|e| e.description(placeholder).color(ERROR_COLOR))
+		})
+		.await
+		.context("Failed to edit notification message")?;
+
+	Ok(())
 }
 
 /// Updates sent notifications after a message edit.
@@ -576,7 +593,7 @@ pub(crate) async fn update_sent_notifications(
 		}
 	}
 
-	delete_sent_notifications(ctx, &to_delete).await;
+	clear_sent_notifications(ctx, &to_delete).await;
 
 	for (_, notification_message) in to_delete {
 		if let Err(e) =
@@ -701,6 +718,62 @@ pub(crate) async fn warn_for_failed_dm(
 		),
 	)
 	.await
+}
+
+pub(super) fn start_notification_clearing(ctx: Context) {
+	if let Some(lifetime) = settings().behavior.notification_lifetime {
+		debug!("Starting notification clearing");
+		tokio::spawn(async move {
+			let span = info_span!(parent: None, "notification_clearing");
+			let _entered = span.enter();
+			let step = min(lifetime / 2, Duration::from_secs(60 * 60));
+			let mut timer = interval(step);
+			loop {
+				if let Err(e) = clear_old_notifications(&ctx, lifetime).await {
+					error!("Failed to clear old notifications: {e}\n{e:?}");
+				}
+				timer.tick().await;
+			}
+		});
+	}
+}
+
+async fn clear_old_notifications(
+	ctx: &Context,
+	lifetime: Duration,
+) -> Result<()> {
+	debug!("Clearing old notifications");
+	Notification::old_notifications(lifetime)
+		.await?
+		.into_iter()
+		.map(|notification| {
+			clear_sent_notification(
+				ctx,
+				notification.user_id,
+				notification.notification_message,
+				"*Notification expired*",
+			)
+			.or_else(|e| async move {
+				match e.downcast_ref::<SerenityError>() {
+					Some(SerenityError::Http(inner)) => match &**inner {
+						HttpError::UnsuccessfulRequest(ErrorResponse {
+							status_code: StatusCode::NOT_FOUND,
+							..
+						}) => Ok(()),
+
+						_ => Err(e),
+					},
+					_ => Err(e),
+				}
+			})
+		})
+		.collect::<FuturesUnordered<_>>()
+		.try_for_each(|_| async { Ok(()) })
+		.await?;
+
+	Notification::delete_old_notifications(lifetime).await?;
+
+	Ok(())
 }
 
 #[cfg(test)]

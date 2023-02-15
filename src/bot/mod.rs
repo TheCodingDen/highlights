@@ -45,6 +45,7 @@ use tracing::{
 
 use self::highlighting::CachedMessages;
 use crate::{
+	bot::highlighting::start_notification_clearing,
 	db::{Ignore, Keyword, Notification},
 	global::ERROR_COLOR,
 	settings::settings,
@@ -140,11 +141,13 @@ async fn ready(ctx: Context) {
 
 	ctx.set_activity(Activity::listening("/help")).await;
 
-	if let Err(e) = commands::create_commands(ctx).await {
+	if let Err(e) = commands::create_commands(&ctx).await {
 		error!("{e}\n{e:?}");
 	}
 
 	let _ = STARTED.set(Instant::now());
+
+	start_notification_clearing(ctx);
 
 	info!("Ready to highlight!");
 }
@@ -230,7 +233,7 @@ async fn handle_update(
 }
 
 /// Finds notifications for a deleted message and uses
-/// [`delete_sent_notifications`](highlighting::delete_sent_notifications) to
+/// [`delete_sent_notifications`](highlighting::clear_sent_notifications) to
 /// delete them.
 async fn handle_deletion(
 	ctx: Context,
@@ -273,7 +276,7 @@ async fn handle_deletion(
 		return;
 	}
 
-	highlighting::delete_sent_notifications(&ctx, &notifications).await;
+	highlighting::clear_sent_notifications(&ctx, &notifications).await;
 
 	if let Err(e) =
 		Notification::delete_notifications_of_message(message_id).await
