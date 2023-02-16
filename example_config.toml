@@ -19,7 +19,7 @@ patience = "2min"
 # Amount of time to leave notifications visible
 # This uses the same format as patience
 # Other examples: "1y", "90d", "1M" (one month)
-#patience_lifetime = "1month"
+#notification_lifetime = "1month"
 
 [logging]
 # Discord webhook to send errors and panics to
