@@ -10,3 +10,5 @@ pub(crate) const NOTIFICATION_RETRIES: u8 = 5;
 pub(crate) const EMBED_COLOR: u32 = 0xefff47;
 /// Color of embeds reporting an error to the user.
 pub(crate) const ERROR_COLOR: u32 = 0xff4747;
+
+pub(crate) const DISCORD_EPOCH: u64 = 1420070400000;

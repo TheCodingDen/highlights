@@ -4,7 +4,11 @@
 //! Functions for sending, editing, and deleting notifications.
 
 use std::{
-	cmp::min, collections::HashMap, fmt::Write as _, ops::Range, time::Duration,
+	cmp::min,
+	collections::HashMap,
+	fmt::Write as _,
+	ops::Range,
+	time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
@@ -35,7 +39,7 @@ use tracing::{debug, error, info_span};
 use crate::{
 	bot::util::{followup_eph, user_can_read_channel},
 	db::{Ignore, Keyword, Notification, UserState, UserStateKind},
-	global::{EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
+	global::{DISCORD_EPOCH, EMBED_COLOR, ERROR_COLOR, NOTIFICATION_RETRIES},
 	settings::settings,
 };
 
@@ -76,6 +80,16 @@ pub(crate) async fn should_notify_keyword(
 	keyword: &Keyword,
 	ignores: &[Ignore],
 ) -> Result<bool> {
+	if let Some(lifetime) = settings().behavior.notification_lifetime {
+		let creation = (message.id.0 >> 22) + DISCORD_EPOCH;
+		let now =
+			SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
+		let age = Duration::from_millis(now.saturating_sub(creation));
+		if age > lifetime {
+			return Ok(false);
+		}
+	}
+
 	if message
 		.mentions
 		.iter()
@@ -743,37 +757,58 @@ async fn clear_old_notifications(
 	lifetime: Duration,
 ) -> Result<()> {
 	debug!("Clearing old notifications");
-	Notification::old_notifications(lifetime)
-		.await?
-		.into_iter()
-		.map(|notification| {
-			clear_sent_notification(
-				ctx,
-				notification.user_id,
-				notification.notification_message,
-				"*Notification expired*",
-			)
-			.or_else(|e| async move {
-				match e.downcast_ref::<SerenityError>() {
-					Some(SerenityError::Http(inner)) => match &**inner {
-						HttpError::UnsuccessfulRequest(ErrorResponse {
-							status_code: StatusCode::NOT_FOUND,
-							..
-						}) => Ok(()),
+	let cutoff_time = SystemTime::now() - lifetime;
 
+	loop {
+		let notifications =
+			Notification::notifications_before(5, cutoff_time).await?;
+
+		if notifications.is_empty() {
+			break Ok(());
+		}
+
+		let sent_ids = notifications
+			.iter()
+			.map(|n| n.notification_message)
+			.collect::<Vec<_>>();
+
+		debug!("Clearing {} notifications", notifications.len());
+
+		let wait_cycle = sleep(Duration::from_secs(2));
+
+		notifications
+			.iter()
+			.map(|notification| {
+				clear_sent_notification(
+					ctx,
+					notification.user_id,
+					notification.notification_message,
+					"*Notification expired*",
+				)
+				.or_else(|e| async move {
+					match e.downcast_ref::<SerenityError>() {
+						Some(SerenityError::Http(inner)) => match &**inner {
+							HttpError::UnsuccessfulRequest(ErrorResponse {
+								status_code: StatusCode::NOT_FOUND,
+								..
+							}) => Ok(()),
+
+							_ => Err(e),
+						},
 						_ => Err(e),
-					},
-					_ => Err(e),
-				}
+					}
+				})
 			})
-		})
-		.collect::<FuturesUnordered<_>>()
-		.try_for_each(|_| async { Ok(()) })
-		.await?;
+			.collect::<FuturesUnordered<_>>()
+			.try_for_each(|_| async { Ok(()) })
+			.await?;
 
-	Notification::delete_old_notifications(lifetime).await?;
+		Notification::delete_notifications(sent_ids).await?;
 
-	Ok(())
+		debug!("Waiting before clearing more notifications");
+
+		wait_cycle.await;
+	}
 }
 
 #[cfg(test)]

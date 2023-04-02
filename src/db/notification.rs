@@ -3,7 +3,7 @@
 
 //! Handling for sent notification messages.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use futures_util::TryStreamExt;
@@ -12,13 +12,13 @@ use sea_orm::{
 		DeriveActiveModelBehavior, DeriveEntityModel, DerivePrimaryKey,
 		DeriveRelation, EntityTrait, EnumIter, PrimaryKeyTrait,
 	},
-	ColumnTrait, IntoActiveModel, QueryFilter,
+	ColumnTrait, Condition, IntoActiveModel, QueryFilter, QueryOrder,
+	QuerySelect,
 };
 use serenity::model::id::{MessageId, UserId};
 
 use super::{connection, DbInt, IdDbExt};
-
-const DISCORD_EPOCH: u64 = 1420070400000;
+use crate::global::DISCORD_EPOCH;
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, DeriveEntityModel, DeriveActiveModelBehavior,
@@ -111,11 +111,14 @@ impl Notification {
 
 	/// Gets notifications older than a certain duration from the DB.
 	#[tracing::instrument]
-	pub(crate) async fn old_notifications(
-		age: Duration,
+	pub(crate) async fn notifications_before(
+		count: u64,
+		time: SystemTime,
 	) -> Result<Vec<Notification>> {
 		Entity::find()
-			.filter(Column::OriginalMessage.lte(age_to_oldest_snowflake(age)?))
+			.filter(Column::OriginalMessage.lte(time_to_max_snowflake(time)?))
+			.order_by_asc(Column::OriginalMessage)
+			.limit(count)
 			.stream(connection())
 			.await?
 			.map_err(Into::into)
@@ -124,11 +127,18 @@ impl Notification {
 			.await
 	}
 
-	/// Deletes notifications older than a certain duration from the DB.
-	#[tracing::instrument]
-	pub(crate) async fn delete_old_notifications(age: Duration) -> Result<()> {
+	/// Deletes a list of notifications from the DB.
+	#[tracing::instrument(skip_all)]
+	pub(crate) async fn delete_notifications(
+		message_ids: impl IntoIterator<Item = MessageId>,
+	) -> Result<()> {
 		Entity::delete_many()
-			.filter(Column::OriginalMessage.lte(age_to_oldest_snowflake(age)?))
+			.filter(message_ids.into_iter().fold(
+				Condition::any(),
+				|cond, id| {
+					cond.add(Column::NotificationMessage.eq(id.into_db()))
+				},
+			))
 			.exec(connection())
 			.await?;
 
@@ -136,12 +146,15 @@ impl Notification {
 	}
 }
 
-fn age_to_oldest_snowflake(age: Duration) -> Result<u64> {
-	let millis = age.as_millis() as u64;
-	let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
-	let oldest_unix = now - millis;
-	let oldest_discord = oldest_unix - DISCORD_EPOCH;
+fn time_to_min_snowflake(time: SystemTime) -> Result<u64> {
+	let unix = time.duration_since(UNIX_EPOCH)?.as_millis() as u64;
+	let oldest_discord = unix - DISCORD_EPOCH;
 	Ok(oldest_discord << 22)
+}
+
+fn time_to_max_snowflake(time: SystemTime) -> Result<u64> {
+	let min = time_to_min_snowflake(time)?;
+	Ok(min | (!0 >> 22))
 }
 
 impl From<Model> for Notification {

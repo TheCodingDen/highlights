@@ -94,14 +94,10 @@ mod user_address {
 		where
 			E: de::Error,
 		{
-			let socket_addr = v
-				.to_socket_addrs()
-				.map_err(E::custom)?
-				.into_iter()
-				.next()
-				.ok_or_else(|| {
-					E::custom("provided host did not resolve to an address")
-				})?;
+			let socket_addr =
+				v.to_socket_addrs().map_err(E::custom)?.next().ok_or_else(
+					|| E::custom("provided host did not resolve to an address"),
+				)?;
 
 			Ok(UserAddress { socket_addr })
 		}
