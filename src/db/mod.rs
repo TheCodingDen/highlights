@@ -27,6 +27,7 @@ use once_cell::sync::OnceCell;
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use serenity::model::id::{ChannelId, GuildId, MessageId, UserId};
+use tracing::info;
 
 use self::migration::Migrator;
 #[cfg(feature = "bot")]
@@ -114,7 +115,14 @@ pub(crate) async fn init() -> Result<()> {
 	#[cfg(not(feature = "sqlite"))]
 	init_connection(settings().database.url.to_string()).await?;
 
-	Migrator::up(connection(), None).await?;
+	let conn = connection();
+
+	let migrations = Migrator::get_pending_migrations(conn).await?.len();
+
+	if migrations > 0 {
+		info!("Applying {migrations} database migrations");
+		Migrator::up(conn, None).await?;
+	}
 
 	Ok(())
 }
