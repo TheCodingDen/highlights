@@ -1,12 +1,12 @@
-FROM --platform=$BUILDPLATFORM rust:1.67-slim-bullseye AS auditor
+FROM --platform=$BUILDPLATFORM rust:1.69-slim-bullseye AS auditor
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends pkg-config=0.29.2-1 libssl-dev=1.1.1n-0+deb11u3 && \
+    apt-get install -y --no-install-recommends pkg-config=0.29.2-1 libssl-dev=1.1.1n-0+deb11u4 && \
     USER=root cargo new --bin highlights && \
     cargo install cargo-audit
 COPY ["Cargo.*", "./"]
 RUN cargo audit -D unsound -D yanked
 
-FROM --platform=$BUILDPLATFORM rust:1.67-alpine3.17 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.69-alpine3.17 AS builder
 RUN apk add --no-cache --update musl-dev=1.2.3-r4 && \
     USER=root cargo new --bin highlights
 
