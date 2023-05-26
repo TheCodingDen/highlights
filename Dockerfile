@@ -7,7 +7,7 @@ COPY ["Cargo.*", "./"]
 RUN cargo audit -D unsound -D yanked
 
 FROM --platform=$BUILDPLATFORM rust:1.69-alpine3.17 AS builder
-RUN apk add --no-cache --update musl-dev=1.2.3-r4 && \
+RUN apk add --no-cache --update musl-dev=1.2.3-r5 && \
     USER=root cargo new --bin highlights
 
 ARG RUSTTARGET

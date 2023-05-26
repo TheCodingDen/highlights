@@ -1,6 +1,6 @@
 services:
   highlights:
-    image: thatsnomoon/highlights:2.0.0
+    image: thatsnomoon/highlights:2
     networks:
       - net
     secrets:
